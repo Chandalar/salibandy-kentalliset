@@ -306,7 +306,7 @@ body {
     background: rgba(139, 92, 246, 0.15);
 }
 
-/* Main Layout Grid */
+/* Main Layout Grid - Desktop Default */
 .main-workspace {
     flex: 1;
     display: grid;
@@ -1464,8 +1464,8 @@ body {
     }
 
     .pitch-outer-wrapper {
-        min-height: 380px !important;
-        height: 380px !important;
+        min-height: 350px !important;
+        height: 350px !important;
     }
 }
 
@@ -1513,10 +1513,17 @@ body {
         font-size: 0.72rem;
     }
 
+    /* CONSTRAINED COURT WIDTH FOR EASY FINGER SWIPING & SCROLLING ON SIDES */
     .pitch-outer-wrapper {
-        min-height: 340px !important;
-        height: 340px !important;
-        padding: 0.2rem !important;
+        min-height: 310px !important;
+        height: 310px !important;
+        padding: 0.4rem 1.4rem !important; /* Generous side padding for easy page scrolling */
+        justify-content: center;
+    }
+
+    .pitch-container {
+        max-width: 82% !important; /* Prevents pitch from touching screen edges! */
+        margin: 0 auto;
     }
 
     .court-player-node {
