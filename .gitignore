@@ -1,0 +1,5 @@
+# Git ignore for Salibandyn Kentälliset & Taktiikkataulu
+node_modules/
+.DS_Store
+*.log
+.system_generated/
