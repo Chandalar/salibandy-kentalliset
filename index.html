@@ -215,7 +215,7 @@
                 <button class="btn-sm btn-outline" id="btn-clear-lineup">Tyhjennä</button>
             </div>
 
-            <p class="panel-hint">Vedä pelaaja tähän kentälliseen:</p>
+            <p class="panel-hint">Vedä tai täppää pelaaja kentälliseen:</p>
 
             <div class="lineup-slots-grid" id="lineup-slots-container">
                 <!-- Dynamically populated lineup slots -->
@@ -228,7 +228,7 @@
             </div>
         </aside>
 
-        <!-- Dynamic Summary View (Hidden by default, shown when '📊 Yhteenveto' tab is clicked) -->
+        <!-- Dynamic Summary View -->
         <section class="panel summary-view-panel" id="summary-view-panel" style="display: none;">
             <div class="panel-header">
                 <h2>
@@ -244,13 +244,26 @@
                 </div>
             </div>
 
-            <!-- Grid displaying ALL lineups side-by-side -->
             <div class="summary-grid-container" id="summary-grid-container">
                 <!-- Dynamically rendered 6 lineup cards -->
             </div>
         </section>
 
     </main>
+
+    <!-- Modal: Tap-to-Assign Player to Lineup (Mobiilivalikko) -->
+    <div class="modal-overlay" id="assign-modal">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3 id="assign-modal-title">Sijoita pelaaja kentälliseen</h3>
+                <button class="close-btn" id="btn-close-assign-modal">&times;</button>
+            </div>
+            <p class="form-hint" id="assign-modal-player-info">Valitse paikka mihin pelaaja sijoitetaan:</p>
+            <div class="assign-options-grid" id="assign-options-grid">
+                <!-- Dynamically generated mobile assignment buttons -->
+            </div>
+        </div>
+    </div>
 
     <!-- Modal: Add / Edit Player -->
     <div class="modal-overlay" id="player-modal">

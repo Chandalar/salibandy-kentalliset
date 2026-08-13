@@ -1,6 +1,6 @@
 /**
  * Salibandyn Kentälliset & Taktiikkataulu - Advanced Logic & Interactive Engine
- * Täysi mobiili-kosketus- ja rullaustoimivuus (Touch & Scroll Optimized).
+ * Sisältää mobiilin täppäysvalikon (Tap-to-Assign) pelaajien sijoittamiseksi kentällisiin ilman vetämistä.
  */
 
 (function() {
@@ -134,6 +134,11 @@
     const countLoanEl = document.getElementById('count-loan');
 
     // Modals
+    const assignModal = document.getElementById('assign-modal');
+    const assignModalTitle = document.getElementById('assign-modal-title');
+    const assignModalPlayerInfo = document.getElementById('assign-modal-player-info');
+    const assignOptionsGrid = document.getElementById('assign-options-grid');
+
     const playerModal = document.getElementById('player-modal');
     const playerForm = document.getElementById('player-form');
     const modalTitle = document.getElementById('modal-title');
@@ -156,6 +161,7 @@
     const ocrResultsList = document.getElementById('ocr-results-list');
 
     let tempOcrParsedPlayers = [];
+    let selectedPlayerForAssignment = null;
 
     // ==========================================
     // INITIALIZATION
@@ -303,7 +309,7 @@
             card.dataset.playerId = player.id;
 
             card.innerHTML = `
-                <div class="player-card-info">
+                <div class="player-card-info" data-action="tap-assign" data-id="${player.id}">
                     <div class="player-num-circle">#${player.number}</div>
                     <div class="player-details">
                         <div class="player-name-row">
@@ -314,6 +320,7 @@
                     </div>
                 </div>
                 <div class="player-card-actions">
+                    <button class="btn-assign-quick" data-action="tap-assign" data-id="${player.id}">+ Sijoita</button>
                     <button class="mini-action-btn edit-btn" title="Muokkaa" data-action="edit" data-id="${player.id}">✏️</button>
                     <button class="mini-action-btn delete-btn" title="Poista" data-action="delete" data-id="${player.id}">🗑️</button>
                 </div>
@@ -346,6 +353,62 @@
     function escapeHtml(str) {
         return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
     }
+
+    // ==========================================
+    // TAP-TO-ASSIGN MOBILE SELECTION MENU
+    // ==========================================
+    function openAssignModal(player) {
+        selectedPlayerForAssignment = player;
+        assignModalTitle.textContent = `Sijoita kentälliseen`;
+        assignModalPlayerInfo.innerHTML = `Valitse paikka pelaajalle <strong>#${player.number} ${escapeHtml(player.name)}</strong>:`;
+
+        const lineupKeys = ['1', '2', '3', 'yv', 'av', '6v5'];
+        const slotTypes = ['MV', 'VP', 'OP', 'VH', 'KH', 'OH'];
+
+        assignOptionsGrid.innerHTML = '';
+
+        lineupKeys.forEach(lKey => {
+            const groupCard = document.createElement('div');
+            groupCard.className = 'assign-group-card';
+
+            let btnsHtml = '';
+            slotTypes.forEach(pos => {
+                const isMv = pos === 'MV';
+                const currentPid = (lineups[lKey] || {})[pos];
+                const occupant = roster.find(p => p.id === currentPid);
+                const isCurrent = currentPid === player.id;
+
+                btnsHtml += `
+                    <button class="assign-pos-btn ${isMv ? 'is-mv' : ''}" data-lineup="${lKey}" data-pos="${pos}">
+                        ${pos} ${isCurrent ? '✓' : (occupant ? '(' + occupant.number + ')' : '+')}
+                    </button>
+                `;
+            });
+
+            groupCard.innerHTML = `
+                <h4>${LINEUP_NAMES[lKey]}</h4>
+                <div class="assign-btn-row">
+                    ${btnsHtml}
+                </div>
+            `;
+
+            assignOptionsGrid.appendChild(groupCard);
+        });
+
+        assignModal.classList.add('active');
+    }
+
+    assignOptionsGrid.addEventListener('click', (e) => {
+        const btn = e.target.closest('.assign-pos-btn');
+        if (!btn || !selectedPlayerForAssignment) return;
+
+        const lKey = btn.dataset.lineup;
+        const pos = btn.dataset.pos;
+
+        assignPlayerToLineupSlot(lKey, pos, selectedPlayerForAssignment.id);
+        assignModal.classList.remove('active');
+        showToast(`Pelaaja #${selectedPlayerForAssignment.number} sijoitettu: ${LINEUP_NAMES[lKey]} - ${pos}`);
+    });
 
     // ==========================================
     // LINEUP SLOTS RENDER & DRAG DROP
@@ -391,7 +454,7 @@
                     </div>
                 `;
             } else {
-                dropzoneContent = `<span class="slot-placeholder">+ Vedä ${slot.pos} tähän</span>`;
+                dropzoneContent = `<span class="slot-placeholder">+ Täppää tai vedä ${slot.pos} tähän</span>`;
             }
 
             slotEl.innerHTML = `
@@ -439,7 +502,6 @@
             renderActiveLineupSlots();
             renderCourtPlayers();
         }
-        showToast(`Pelaaja sijoitettu paikkaan ${pos}`);
     }
 
     // ==========================================
@@ -537,7 +599,7 @@
     });
 
     // ==========================================
-    // TACTICAL COURT & DYNAMIC LINEUP PLAYERS (COMPACT MOBILE NODES)
+    // TACTICAL COURT & DYNAMIC LINEUP PLAYERS
     // ==========================================
     function renderCourtPlayers() {
         courtPlayersLayer.innerHTML = '';
@@ -656,7 +718,7 @@
     });
 
     // ==========================================
-    // CANVAS TACTICAL DRAWING SYSTEM (TOUCH & MOBILE PAGE SCROLL SAFETY)
+    // CANVAS TACTICAL DRAWING SYSTEM
     // ==========================================
     function setupCanvas() {
         window.addEventListener('resize', resizeCanvas);
@@ -665,7 +727,7 @@
         canvas.addEventListener('pointerdown', (e) => {
             if (drawingTool === 'select' || activeLineupKey === 'summary') return;
             isDrawing = true;
-            e.preventDefault(); // Prevents page from scrolling while drawing arrows!
+            e.preventDefault();
             canvas.setPointerCapture(e.pointerId);
             const rect = canvas.getBoundingClientRect();
             currentPath = [{ x: e.clientX - rect.left, y: e.clientY - rect.top }];
@@ -673,14 +735,14 @@
 
         canvas.addEventListener('pointermove', (e) => {
             if (!isDrawing) return;
-            e.preventDefault(); // Prevents page from scrolling while drawing arrows!
+            e.preventDefault();
             const rect = canvas.getBoundingClientRect();
             currentPath.push({ x: e.clientX - rect.left, y: e.clientY - rect.top });
             drawCanvasLines();
             drawPreviewPath(currentPath);
         });
 
-        canvas.addEventListener('pointerup', (e) => {
+        canvas.addEventListener('pointerup', () => {
             if (!isDrawing) return;
             isDrawing = false;
             if (currentPath.length > 1) {
@@ -807,6 +869,7 @@
         playerModal.classList.remove('active');
         teamModal.classList.remove('active');
         photoModal.classList.remove('active');
+        assignModal.classList.remove('active');
     }
 
     playerForm.addEventListener('submit', (e) => {
@@ -1034,6 +1097,7 @@
 
         document.getElementById('btn-close-team-modal').addEventListener('click', closeModal);
         document.getElementById('btn-cancel-team-modal').addEventListener('click', closeModal);
+        document.getElementById('btn-close-assign-modal')?.addEventListener('click', closeModal);
 
         document.getElementById('btn-import-photo').addEventListener('click', () => {
             photoPreviewStep.style.display = 'none';
@@ -1091,7 +1155,16 @@
             });
         });
 
+        // Roster Tap & Action Delegate (Support mobile tap-to-assign!)
         rosterListContainer.addEventListener('click', (e) => {
+            const tapAssignTrigger = e.target.closest('[data-action="tap-assign"]');
+            if (tapAssignTrigger) {
+                const id = tapAssignTrigger.dataset.id;
+                const player = roster.find(p => p.id === id);
+                if (player) openAssignModal(player);
+                return;
+            }
+
             const actionBtn = e.target.closest('.mini-action-btn');
             if (!actionBtn) return;
             const action = actionBtn.dataset.action;
