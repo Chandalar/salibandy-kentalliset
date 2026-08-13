@@ -1,6 +1,6 @@
 /**
  * Salibandyn Kentälliset & Taktiikkataulu - Advanced Logic & Interactive Engine
- * Kentälliskohtaiset taktiikkapiirrokset ja automaattinen pelaajien sijoittuminen kentälle.
+ * Kentälliskohtaiset taktiikkapiirrokset, mobiili-kosketusoptimointi ja automaattinen sijoittelu.
  */
 
 (function() {
@@ -57,7 +57,6 @@
         'custom': { MV: '', VP: '', OP: '', VH: '', KH: '', OH: '' }
     };
 
-    // Default tactical coordinates per position (for Horizontal & Vertical court modes)
     const DEFAULT_POS_COORDS = {
         horizontal: {
             MV: { x: 12, y: 50 },
@@ -94,12 +93,10 @@
     let roster = loadFromStorage(`salibandy_roster_${currentTeamId}`, DEFAULT_ROSTER);
     let lineups = loadFromStorage(`salibandy_lineups_${currentTeamId}`, DEFAULT_LINEUPS);
     
-    // Isolated drawings per lineup
     let lineupDrawings = loadFromStorage(`salibandy_drawings_${currentTeamId}`, {
         '1': [], '2': [], '3': [], 'yv': [], 'av': [], '6v5': [], 'custom': []
     });
 
-    // Custom dragged positions per lineup
     let lineupCourtPositions = loadFromStorage(`salibandy_positions_${currentTeamId}`, {});
 
     let activeLineupKey = '1';
@@ -109,7 +106,7 @@
     let isDrawing = false;
     let currentPath = [];
     let labelMode = 'full'; // 'full', 'num', 'name'
-    let orientationMode = 'horizontal'; // 'horizontal' (40x20) or 'vertical' (20x40)
+    let orientationMode = window.innerWidth <= 600 ? 'vertical' : 'horizontal';
 
     // DOM Elements
     const teamSelect = document.getElementById('team-select');
@@ -446,7 +443,7 @@
     }
 
     // ==========================================
-    // SUMMARY VIEW (ALL LINEUPS SIMULTANEOUSLY)
+    // SUMMARY VIEW
     // ==========================================
     function renderSummaryView() {
         summaryGridContainer.innerHTML = '';
@@ -540,7 +537,7 @@
     });
 
     // ==========================================
-    // TACTICAL COURT & DYNAMIC LINEUP PLAYERS
+    // TACTICAL COURT & DYNAMIC LINEUP PLAYERS (TOUCH OPTIMIZED)
     // ==========================================
     function renderCourtPlayers() {
         courtPlayersLayer.innerHTML = '';
@@ -556,7 +553,6 @@
             const player = roster.find(p => p.id === playerId);
             if (!player) return;
 
-            // Get saved custom position or fallback to default tactical formation
             let defaultCoords = DEFAULT_POS_COORDS[orientationMode][pos];
             let posKeyStore = `${activeLineupKey}_${pos}_${orientationMode}`;
             let coords = lineupCourtPositions[posKeyStore] || defaultCoords;
@@ -582,12 +578,12 @@
                 </div>
             `;
 
-            setupNodeDragging(node, coords, posKeyStore);
+            setupNodeTouchDragging(node, coords, posKeyStore);
             courtPlayersLayer.appendChild(node);
         });
     }
 
-    function setupNodeDragging(node, coords, posKeyStore) {
+    function setupNodeTouchDragging(node, coords, posKeyStore) {
         let isDragging = false;
 
         const onPointerDown = (e) => {
@@ -599,10 +595,13 @@
 
             node.addEventListener('pointermove', onPointerMove);
             node.addEventListener('pointerup', onPointerUp);
+            node.addEventListener('pointercancel', onPointerUp);
         };
 
         const onPointerMove = (e) => {
             if (!isDragging) return;
+            e.preventDefault();
+
             const rect = floorballCourt.getBoundingClientRect();
             let newX = ((e.clientX - rect.left) / rect.width) * 100;
             let newY = ((e.clientY - rect.top) / rect.height) * 100;
@@ -623,6 +622,7 @@
             isDragging = false;
             node.removeEventListener('pointermove', onPointerMove);
             node.removeEventListener('pointerup', onPointerUp);
+            node.removeEventListener('pointercancel', onPointerUp);
             saveState();
         };
 
@@ -641,7 +641,6 @@
         const player = roster.find(p => p.id === playerId);
         if (!player) return;
 
-        // Auto assign to best available position slot in active lineup
         let targetPos = player.position === 'MV' ? 'MV' : 'KH';
         const lineup = lineups[activeLineupKey] || {};
         
@@ -657,7 +656,7 @@
     });
 
     // ==========================================
-    // CANVAS TACTICAL DRAWING SYSTEM (ISOLATED PER LINEUP)
+    // CANVAS TACTICAL DRAWING SYSTEM (TOUCH & MOUSE)
     // ==========================================
     function setupCanvas() {
         window.addEventListener('resize', resizeCanvas);
@@ -666,12 +665,14 @@
         canvas.addEventListener('pointerdown', (e) => {
             if (drawingTool === 'select' || activeLineupKey === 'summary') return;
             isDrawing = true;
+            canvas.setPointerCapture(e.pointerId);
             const rect = canvas.getBoundingClientRect();
             currentPath = [{ x: e.clientX - rect.left, y: e.clientY - rect.top }];
         });
 
         canvas.addEventListener('pointermove', (e) => {
             if (!isDrawing) return;
+            e.preventDefault();
             const rect = canvas.getBoundingClientRect();
             currentPath.push({ x: e.clientX - rect.left, y: e.clientY - rect.top });
             drawCanvasLines();
@@ -694,6 +695,12 @@
                 });
                 saveState();
             }
+            currentPath = [];
+            drawCanvasLines();
+        });
+
+        canvas.addEventListener('pointercancel', () => {
+            isDrawing = false;
             currentPath = [];
             drawCanvasLines();
         });
@@ -1061,7 +1068,6 @@
             });
         });
 
-        // Tab Switching Logic (Loads isolated lineup players & isolated lineup drawings!)
         lineupTabBtns.forEach(btn => {
             btn.addEventListener('click', () => {
                 lineupTabBtns.forEach(b => b.classList.remove('active'));
