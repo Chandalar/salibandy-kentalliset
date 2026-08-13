@@ -1,6 +1,6 @@
 /**
  * Salibandyn Kentälliset & Taktiikkataulu - Advanced Logic & Interactive Engine
- * Kentälliskohtaiset taktiikkapiirrokset, mobiili-kosketusoptimointi ja automaattinen sijoittelu.
+ * Täysi mobiili-kosketus- ja rullaustoimivuus (Touch & Scroll Optimized).
  */
 
 (function() {
@@ -537,7 +537,7 @@
     });
 
     // ==========================================
-    // TACTICAL COURT & DYNAMIC LINEUP PLAYERS (TOUCH OPTIMIZED)
+    // TACTICAL COURT & DYNAMIC LINEUP PLAYERS (COMPACT MOBILE NODES)
     // ==========================================
     function renderCourtPlayers() {
         courtPlayersLayer.innerHTML = '';
@@ -656,7 +656,7 @@
     });
 
     // ==========================================
-    // CANVAS TACTICAL DRAWING SYSTEM (TOUCH & MOUSE)
+    // CANVAS TACTICAL DRAWING SYSTEM (TOUCH & MOBILE PAGE SCROLL SAFETY)
     // ==========================================
     function setupCanvas() {
         window.addEventListener('resize', resizeCanvas);
@@ -665,6 +665,7 @@
         canvas.addEventListener('pointerdown', (e) => {
             if (drawingTool === 'select' || activeLineupKey === 'summary') return;
             isDrawing = true;
+            e.preventDefault(); // Prevents page from scrolling while drawing arrows!
             canvas.setPointerCapture(e.pointerId);
             const rect = canvas.getBoundingClientRect();
             currentPath = [{ x: e.clientX - rect.left, y: e.clientY - rect.top }];
@@ -672,14 +673,14 @@
 
         canvas.addEventListener('pointermove', (e) => {
             if (!isDrawing) return;
-            e.preventDefault();
+            e.preventDefault(); // Prevents page from scrolling while drawing arrows!
             const rect = canvas.getBoundingClientRect();
             currentPath.push({ x: e.clientX - rect.left, y: e.clientY - rect.top });
             drawCanvasLines();
             drawPreviewPath(currentPath);
         });
 
-        canvas.addEventListener('pointerup', () => {
+        canvas.addEventListener('pointerup', (e) => {
             if (!isDrawing) return;
             isDrawing = false;
             if (currentPath.length > 1) {
@@ -1196,9 +1197,11 @@
         
         if (tool === 'select') {
             canvas.style.pointerEvents = 'none';
+            canvas.style.touchAction = 'auto';
             floorballCourt.classList.remove('drawing-active');
         } else {
             canvas.style.pointerEvents = 'auto';
+            canvas.style.touchAction = 'none';
             floorballCourt.classList.add('drawing-active');
         }
     }
