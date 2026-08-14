@@ -1,6 +1,6 @@
 /**
  * Salibandyn Kentälliset & Taktiikkataulu - Advanced Logic & Interactive Engine
- * Sisältää ultra-kevyen 64x64 PNG -salibandypallon (ball.png) ja 60 FPS requestAnimationFrame -liikutuksen.
+ * Sisältää tyhjän pelaajaringin uusille joukkueille sekä pelaajien tuonnin aikaisemmista joukkueista.
  */
 
 (function() {
@@ -90,12 +90,11 @@
     let teams = loadFromStorage('salibandy_teams_v1', DEFAULT_TEAMS);
     let currentTeamId = loadFromStorage('salibandy_active_team_id', 'team_edustus');
 
-    let roster = loadFromStorage(`salibandy_roster_${currentTeamId}`, DEFAULT_ROSTER);
+    let roster = loadRosterForTeam(currentTeamId);
     let lineupConfigs = loadLineupConfigs(currentTeamId);
-    let lineups = loadFromStorage(`salibandy_lineups_${currentTeamId}`, DEFAULT_LINEUPS);
+    let lineups = loadLineupsForTeam(currentTeamId, lineupConfigs);
     
     let lineupDrawings = loadFromStorage(`salibandy_drawings_${currentTeamId}`, {});
-
     let lineupCourtPositions = loadFromStorage(`salibandy_positions_${currentTeamId}`, {});
     let lineupBalls = loadFromStorage(`salibandy_balls_${currentTeamId}`, { '1': [{ id: 'ball_default', x: 55, y: 50 }] });
 
@@ -137,6 +136,13 @@
     const manageLineupsModal = document.getElementById('manage-lineups-modal');
     const reorderLineupsList = document.getElementById('reorder-lineups-list');
     const btnResetDefaultLineups = document.getElementById('btn-reset-default-lineups');
+
+    const importPlayersModal = document.getElementById('import-players-modal');
+    const importSourceTeamSelect = document.getElementById('import-source-team-select');
+    const importPlayerChecklist = document.getElementById('import-player-checklist');
+    const btnConfirmImportPlayers = document.getElementById('btn-confirm-import-players');
+    const btnImportSelectAll = document.getElementById('btn-import-select-all');
+    const btnImportDeselectAll = document.getElementById('btn-import-deselect-all');
 
     const lineupConfigModal = document.getElementById('lineup-config-modal');
     const lineupConfigForm = document.getElementById('lineup-config-form');
@@ -206,6 +212,31 @@
         }
     }
 
+    function loadRosterForTeam(teamId) {
+        // Default roster ONLY for the primary demo team if empty, EMPTY [] FOR ANY NEW TEAM!
+        if (teamId === 'team_edustus') {
+            return loadFromStorage(`salibandy_roster_${teamId}`, DEFAULT_ROSTER);
+        }
+        return loadFromStorage(`salibandy_roster_${teamId}`, []);
+    }
+
+    function createEmptyLineupSlots() {
+        return { MV: '', VP: '', OP: '', VH: '', KH: '', OH: '' };
+    }
+
+    function loadLineupsForTeam(teamId, configs) {
+        const stored = loadFromStorage(`salibandy_lineups_${teamId}`, null);
+        if (stored) return stored;
+
+        if (teamId === 'team_edustus') return JSON.parse(JSON.stringify(DEFAULT_LINEUPS));
+
+        const emptyLineups = {};
+        configs.forEach(c => {
+            emptyLineups[c.id] = createEmptyLineupSlots();
+        });
+        return emptyLineups;
+    }
+
     function loadLineupConfigs(teamId) {
         let configs = loadFromStorage(`salibandy_lineup_configs_${teamId}`, null);
         if (!configs || !Array.isArray(configs)) {
@@ -258,9 +289,9 @@
         currentTeamId = teamId;
         saveState();
         
-        roster = loadFromStorage(`salibandy_roster_${currentTeamId}`, DEFAULT_ROSTER);
+        roster = loadRosterForTeam(currentTeamId);
         lineupConfigs = loadLineupConfigs(currentTeamId);
-        lineups = loadFromStorage(`salibandy_lineups_${currentTeamId}`, DEFAULT_LINEUPS);
+        lineups = loadLineupsForTeam(currentTeamId, lineupConfigs);
         lineupDrawings = loadFromStorage(`salibandy_drawings_${currentTeamId}`, {});
         lineupCourtPositions = loadFromStorage(`salibandy_positions_${currentTeamId}`, {});
         lineupBalls = loadFromStorage(`salibandy_balls_${currentTeamId}`, { '1': [{ id: 'ball_default', x: 55, y: 50 }] });
@@ -378,6 +409,31 @@
     function renderRoster() {
         rosterListContainer.innerHTML = '';
 
+        if (roster.length === 0) {
+            rosterListContainer.innerHTML = `
+                <div style="text-align:center; padding: 1.8rem 0.8rem; color: var(--text-muted);">
+                    <p style="font-size: 0.9rem; font-weight: 700; color: var(--text-primary); margin-bottom: 0.4rem;">Joukkueessa ei ole vielä pelaajia 👥</p>
+                    <p style="font-size: 0.76rem; margin-bottom: 1.2rem; color: var(--text-secondary);">
+                        Voit lisätä uusia pelaajia, lukea kokoonpanon valokuvasta tai tuoda pelaajia muista joukkueista!
+                    </p>
+                    <div style="display: flex; flex-direction: column; gap: 0.5rem; max-width: 230px; margin: 0 auto;">
+                        <button class="btn btn-primary btn-sm" id="btn-empty-add-player">+ Lisää uusi pelaaja</button>
+                        <button class="btn btn-secondary btn-sm" id="btn-empty-import-players">📥 Tuo muista joukkueista</button>
+                        <button class="btn btn-photo btn-sm" id="btn-empty-photo">📷 Lue lista kuvasta</button>
+                    </div>
+                </div>
+            `;
+
+            document.getElementById('btn-empty-add-player')?.addEventListener('click', () => openModal());
+            document.getElementById('btn-empty-import-players')?.addEventListener('click', () => openImportPlayersModal());
+            document.getElementById('btn-empty-photo')?.addEventListener('click', () => {
+                photoPreviewStep.style.display = 'none';
+                ocrStatus.style.display = 'none';
+                photoModal.classList.add('active');
+            });
+            return;
+        }
+
         const filtered = roster.filter(player => {
             if (activeFilter === 'mv' && player.position !== 'MV') return false;
             if (activeFilter === 'field' && player.position === 'MV') return false;
@@ -453,6 +509,116 @@
     function escapeHtml(str) {
         return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
     }
+
+    // ==========================================
+    // IMPORT PLAYERS FROM OTHER TEAMS LOGIC
+    // ==========================================
+    function openImportPlayersModal() {
+        const otherTeams = teams.filter(t => t.id !== currentTeamId);
+
+        if (otherTeams.length === 0) {
+            showToast('Ei muita joukkueita joista tuoda pelaajia. Luotavissa uusi joukkue! 🏑');
+            return;
+        }
+
+        importSourceTeamSelect.innerHTML = '';
+        otherTeams.forEach(t => {
+            const opt = document.createElement('option');
+            opt.value = t.id;
+            opt.textContent = t.name;
+            importSourceTeamSelect.appendChild(opt);
+        });
+
+        renderImportChecklist(otherTeams[0].id);
+        importPlayersModal.classList.add('active');
+    }
+
+    function renderImportChecklist(sourceTeamId) {
+        const sourceRoster = loadRosterForTeam(sourceTeamId);
+        importPlayerChecklist.innerHTML = '';
+
+        if (sourceRoster.length === 0) {
+            importPlayerChecklist.innerHTML = `
+                <div style="text-align:center; color: var(--text-muted); padding: 1.5rem;">
+                    Valitulla lähdejoukkueella ei ole vielä pelaajia ringissä.
+                </div>
+            `;
+            return;
+        }
+
+        sourceRoster.forEach(player => {
+            const isMv = player.position === 'MV';
+            const row = document.createElement('label');
+            row.className = 'import-player-row';
+
+            row.innerHTML = `
+                <input type="checkbox" value="${player.id}" class="import-checkbox" checked>
+                <div class="player-num-circle" style="background: ${isMv ? 'var(--accent-mv)' : 'var(--accent-field)'}; color: ${isMv ? '#022c22' : '#fff'}; width:24px; height:24px; font-size:0.75rem;">
+                    #${player.number}
+                </div>
+                <div class="player-details" style="flex:1;">
+                    <div class="player-name-row">
+                        <span class="player-name">${escapeHtml(player.name)}</span>
+                        ${player.isLoan ? '<span class="loan-badge">⭐ LAINA</span>' : ''}
+                    </div>
+                    <span class="player-submeta">${getPosLabel(player.position)}</span>
+                </div>
+            `;
+
+            importPlayerChecklist.appendChild(row);
+        });
+    }
+
+    importSourceTeamSelect?.addEventListener('change', (e) => {
+        renderImportChecklist(e.target.value);
+    });
+
+    btnImportSelectAll?.addEventListener('click', () => {
+        importPlayerChecklist.querySelectorAll('.import-checkbox').forEach(cb => cb.checked = true);
+    });
+
+    btnImportDeselectAll?.addEventListener('click', () => {
+        importPlayerChecklist.querySelectorAll('.import-checkbox').forEach(cb => cb.checked = false);
+    });
+
+    btnConfirmImportPlayers?.addEventListener('click', () => {
+        const sourceTeamId = importSourceTeamSelect.value;
+        const sourceRoster = loadRosterForTeam(sourceTeamId);
+
+        const checkedCheckboxes = importPlayerChecklist.querySelectorAll('.import-checkbox:checked');
+        if (checkedCheckboxes.length === 0) {
+            showToast('Valitse vähintään yksi tuotava pelaaja.');
+            return;
+        }
+
+        let importedCount = 0;
+        checkedCheckboxes.forEach(cb => {
+            const targetId = cb.value;
+            const original = sourceRoster.find(p => p.id === targetId);
+            if (original) {
+                // Copy as a new player entry into active team roster
+                const newPlayer = {
+                    ...original,
+                    id: 'p_imp_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4)
+                };
+                roster.push(newPlayer);
+                importedCount++;
+            }
+        });
+
+        saveState();
+        updateRosterCounters();
+        renderRoster();
+        if (activeLineupKey === 'summary') {
+            renderSummaryView();
+        } else {
+            renderActiveLineupSlots();
+            renderCourtPlayers();
+        }
+
+        closeModal();
+        showToast(`${importedCount} pelaajaa tuotu onnistuneesti uuteen joukkueeseen! 🎉`);
+    });
 
     // ==========================================
     // REORDER & MANAGE LINEUPS (Mobile-Friendly ⬆️ ⬇️ + Delete ANY Lineup)
@@ -584,7 +750,7 @@
             showToast('Kentällisen nimi päivitetty!');
         } else {
             lineupConfigs.push({ id, name, type: 'user' });
-            lineups[id] = { MV: '', VP: '', OP: '', VH: '', KH: '', OH: '' };
+            lineups[id] = createEmptyLineupSlots();
             activeLineupKey = id;
             showToast(`Uusi kentällinen '${name}' luotu!`);
         }
@@ -650,6 +816,16 @@
         });
 
         slotPickerPlayerList.innerHTML = '';
+
+        if (sortedRoster.length === 0) {
+            slotPickerPlayerList.innerHTML = `
+                <div style="text-align:center; color: var(--text-muted); padding: 1rem;">
+                    Joukkueessa ei ole vielä pelaajia. Lisää ensin pelaajia rinkiin!
+                </div>
+            `;
+            slotPickerModal.classList.add('active');
+            return;
+        }
 
         sortedRoster.forEach(player => {
             const isPlayerMv = player.position === 'MV';
@@ -832,7 +1008,7 @@
     }
 
     function assignPlayerToLineupSlot(lineupKey, pos, playerId) {
-        if (!lineups[lineupKey]) lineups[lineupKey] = {};
+        if (!lineups[lineupKey]) lineups[lineupKey] = createEmptyLineupSlots();
         
         Object.keys(lineups[lineupKey]).forEach(k => {
             if (lineups[lineupKey][k] === playerId) {
@@ -965,7 +1141,7 @@
             const lKey = clearBtn.dataset.lineup;
             const lName = getLineupName(lKey);
             if (confirm(`Tyhjennetäänkö ${lName}?`)) {
-                lineups[lKey] = { MV: '', VP: '', OP: '', VH: '', KH: '', OH: '' };
+                lineups[lKey] = createEmptyLineupSlots();
                 saveState();
                 renderSummaryView();
                 showToast(`${lName} tyhjennetty.`);
@@ -1038,7 +1214,6 @@
 
         lineupBalls[activeLineupKey].push(newBall);
         
-        // Always switch tool to 'select' (Liikuta) so user can drag ball immediately!
         setDrawingTool('select', document.getElementById('tool-select'));
 
         saveState();
@@ -1058,7 +1233,7 @@
 
             ballNode.innerHTML = `
                 <div class="ball-circle" title="Salibandypallo">
-                    <img src="ball.png?v=4.0" class="floorball-png-icon" alt="Pallo">
+                    <img src="ball.png?v=5.0" class="floorball-png-icon" alt="Pallo">
                     <button class="ball-remove-btn" data-action="remove-ball" data-ball-id="${ball.id}">✕</button>
                 </div>
             `;
@@ -1351,6 +1526,7 @@
         slotPickerModal.classList.remove('active');
         lineupConfigModal.classList.remove('active');
         manageLineupsModal.classList.remove('active');
+        importPlayersModal.classList.remove('active');
     }
 
     playerForm.addEventListener('submit', (e) => {
@@ -1415,10 +1591,21 @@
         if (!name) return;
         const newTeamId = 'team_' + Date.now();
         teams.push({ id: newTeamId, name: name });
+
+        // GUARANTEE NEW CREATED TEAM HAS EMPTY ROSTER AND EMPTY LINEUPS!
+        localStorage.setItem(`salibandy_roster_${newTeamId}`, JSON.stringify([]));
+        
+        const emptyLineups = {};
+        DEFAULT_LINEUP_CONFIGS.forEach(c => {
+            emptyLineups[c.id] = createEmptyLineupSlots();
+        });
+        localStorage.setItem(`salibandy_lineups_${newTeamId}`, JSON.stringify(emptyLineups));
+
         saveState();
         renderTeamDropdown();
         switchTeam(newTeamId);
         closeModal();
+        showToast(`Uusi tyhjä joukkue '${name}' luotu!`);
     });
 
     photoFileInput.addEventListener('change', (e) => {
@@ -1585,6 +1772,10 @@
         document.getElementById('btn-cancel-lineup-config-modal')?.addEventListener('click', closeModal);
         document.getElementById('btn-close-manage-lineups-modal')?.addEventListener('click', closeModal);
         document.getElementById('btn-close-manage-done')?.addEventListener('click', closeModal);
+        document.getElementById('btn-close-import-modal')?.addEventListener('click', closeModal);
+        document.getElementById('btn-cancel-import-modal')?.addEventListener('click', closeModal);
+
+        document.getElementById('btn-open-import-modal')?.addEventListener('click', openImportPlayersModal);
 
         document.getElementById('btn-add-lineup-summary')?.addEventListener('click', () => openLineupConfigModal());
         document.getElementById('btn-manage-lineups-summary')?.addEventListener('click', () => openManageLineupsModal());
@@ -1723,21 +1914,7 @@
         document.getElementById('btn-clear-pitch').addEventListener('click', () => {
             const lName = getLineupName(activeLineupKey);
             if (confirm(`Tyhjennetäänkö ${lName} kentältä?`)) {
-                lineups[activeLineupKey] = { MV: '', VP: '', OP: '', VH: '', KH: '', OH: '' };
-                lineupDrawings[activeLineupKey] = [];
-                lineupBalls[activeLineupKey] = [];
-                saveState();
-                renderActiveLineupSlots();
-                renderCourtPlayers();
-                drawCanvasLines();
-                showToast('Kentällinen ja pallot tyhjennetty.');
-            }
-        });
-
-        document.getElementById('btn-clear-lineup').addEventListener('click', () => {
-            const lName = getLineupName(activeLineupKey);
-            if (confirm(`Tyhjennetäänkö valittu ${lName}?`)) {
-                lineups[activeLineupKey] = { MV: '', VP: '', OP: '', VH: '', KH: '', OH: '' };
+                lineups[activeLineupKey] = createEmptyLineupSlots();
                 lineupDrawings[activeLineupKey] = [];
                 lineupBalls[activeLineupKey] = [];
                 saveState();

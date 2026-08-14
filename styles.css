@@ -431,7 +431,7 @@ body {
 
 .roster-header-btns {
     display: flex;
-    gap: 0.35rem;
+    gap: 0.3rem;
 }
 
 .panel-hint {
@@ -638,6 +638,32 @@ body {
     font-size: 0.82rem;
     border-radius: var(--radius-sm);
     touch-action: manipulation;
+}
+
+/* IMPORT PLAYERS CHECKLIST ROW STYLES */
+.import-player-row {
+    background: var(--bg-card-light);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 0.5rem 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    user-select: none;
+}
+
+.import-player-row:hover {
+    background: var(--bg-card-hover);
+    border-color: var(--border-highlight);
+}
+
+.import-player-row input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    accent-color: var(--accent-field);
 }
 
 /* TAP-TO-ASSIGN MOBILE MODAL STYLES */
@@ -1319,7 +1345,7 @@ body {
 }
 
 .summary-grid-container {
-    display: grid;
+    display grid;
     grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
     gap: 0.8rem;
     padding: 0.8rem;
