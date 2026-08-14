@@ -1,6 +1,6 @@
 /**
  * Salibandyn Kentälliset & Taktiikkataulu - Advanced Logic & Interactive Engine
- * Sisältää täysin puhtaan tekstitömän Unihoc 3D -vektorisalibandypallon (floorball-ball.svg).
+ * Sisältää ultra-kevyen 64x64 PNG -salibandypallon (ball.png) ja 60 FPS requestAnimationFrame -liikutuksen.
  */
 
 (function() {
@@ -1020,7 +1020,7 @@
             courtPlayersLayer.appendChild(node);
         });
 
-        // 2. Render Floorball Balls (MATCHES PLAYER CIRCLE SIZE EXACTLY)
+        // 2. Render Floorball Balls (ULTRA-FAST PNG RENDER)
         renderCourtBalls();
     }
 
@@ -1057,8 +1057,8 @@
             ballNode.dataset.ballId = ball.id;
 
             ballNode.innerHTML = `
-                <div class="ball-circle" title="Salibandypallo (Liikuteltava)">
-                    <img src="floorball-ball.svg" class="floorball-svg-icon" alt="Pallo">
+                <div class="ball-circle" title="Salibandypallo">
+                    <img src="ball.png?v=4.0" class="floorball-png-icon" alt="Pallo">
                     <button class="ball-remove-btn" data-action="remove-ball" data-ball-id="${ball.id}">✕</button>
                 </div>
             `;
@@ -1070,6 +1070,7 @@
 
     function setupBallTouchDragging(ballNode, ballObj) {
         let isDragging = false;
+        let rafId = null;
 
         const onPointerDown = (e) => {
             if (drawingTool !== 'select') return;
@@ -1097,13 +1098,17 @@
             ballObj.x = newX;
             ballObj.y = newY;
 
-            ballNode.style.left = newX + '%';
-            ballNode.style.top = newY + '%';
+            if (rafId) cancelAnimationFrame(rafId);
+            rafId = requestAnimationFrame(() => {
+                ballNode.style.left = newX + '%';
+                ballNode.style.top = newY + '%';
+            });
         };
 
         const onPointerUp = (e) => {
             if (!isDragging) return;
             isDragging = false;
+            if (rafId) cancelAnimationFrame(rafId);
             ballNode.removeEventListener('pointermove', onPointerMove);
             ballNode.removeEventListener('pointerup', onPointerUp);
             ballNode.removeEventListener('pointercancel', onPointerUp);
@@ -1115,6 +1120,7 @@
 
     function setupNodeTouchDragging(node, coords, posKeyStore) {
         let isDragging = false;
+        let rafId = null;
 
         const onPointerDown = (e) => {
             if (drawingTool !== 'select') return;
@@ -1143,13 +1149,17 @@
             coords.y = newY;
             lineupCourtPositions[posKeyStore] = { x: newX, y: newY };
 
-            node.style.left = newX + '%';
-            node.style.top = newY + '%';
+            if (rafId) cancelAnimationFrame(rafId);
+            rafId = requestAnimationFrame(() => {
+                node.style.left = newX + '%';
+                node.style.top = newY + '%';
+            });
         };
 
         const onPointerUp = (e) => {
             if (!isDragging) return;
             isDragging = false;
+            if (rafId) cancelAnimationFrame(rafId);
             node.removeEventListener('pointermove', onPointerMove);
             node.removeEventListener('pointerup', onPointerUp);
             node.removeEventListener('pointercancel', onPointerUp);
