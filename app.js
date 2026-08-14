@@ -304,13 +304,6 @@
         addBtn.addEventListener('click', () => openLineupConfigModal());
         tabsScrollContainer.appendChild(addBtn);
 
-        // Add "⚙️ Hallitse" button tab for reordering/deleting ANY tab on mobile
-        const manageBtn = document.createElement('button');
-        manageBtn.className = 'tab-btn btn-manage-tab';
-        manageBtn.innerHTML = '⚙️ Hallitse';
-        manageBtn.addEventListener('click', () => openManageLineupsModal());
-        tabsScrollContainer.appendChild(manageBtn);
-
         // Add "📊 Yhteenveto (Kaikki kentälliset)" tab
         const summaryBtn = document.createElement('button');
         summaryBtn.className = `tab-btn highlight-summary ${activeLineupKey === 'summary' ? 'active' : ''}`;
@@ -318,6 +311,13 @@
         summaryBtn.textContent = '📊 Yhteenveto (Kaikki kentälliset)';
         summaryBtn.addEventListener('click', () => switchTab('summary'));
         tabsScrollContainer.appendChild(summaryBtn);
+
+        // Add "⚙️ Hallitse kentällisiä" button tab LAST (Right-hand side after Yhteenveto)
+        const manageBtn = document.createElement('button');
+        manageBtn.className = 'tab-btn btn-manage-tab';
+        manageBtn.innerHTML = '⚙️ Hallitse kentällisiä';
+        manageBtn.addEventListener('click', () => openManageLineupsModal());
+        tabsScrollContainer.appendChild(manageBtn);
     }
 
     function switchTab(key) {
