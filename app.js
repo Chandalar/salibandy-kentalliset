@@ -269,12 +269,14 @@
         if (!cloudSyncBadge) return;
         if (isCloudActive) {
             cloudSyncBadge.className = 'cloud-sync-badge';
-            cloudSyncBadge.innerHTML = '☁️ Synkronoitu';
-            cloudSyncBadge.title = 'Tiedot tallennettu pilveen. Klikkaa synkronoidaksesi kaksi suuntaisesti.';
+            cloudSyncBadge.innerHTML = '☁️ Synkronoi nyt';
+            cloudSyncBadge.title = 'Klikkaa tästä tallentaaksesi kaikki koneen joukkueet ja kentälliset pilveen!';
+            cloudSyncBadge.style.cursor = 'pointer';
         } else {
             cloudSyncBadge.className = 'cloud-sync-badge is-offline';
             cloudSyncBadge.innerHTML = '💻 Paikallinen';
             cloudSyncBadge.title = 'Kirjaudu sisään synkronoidaksesi pilveen';
+            cloudSyncBadge.style.cursor = 'pointer';
         }
     }
 
@@ -337,10 +339,16 @@
         const db = window.SalibandyFirebase.getDb();
         const payload = buildFullCloudPayload();
 
+        let totalPlayersCount = 0;
+        teams.forEach(t => {
+            const r = (t.id === currentTeamId) ? roster : loadRosterForTeam(t.id);
+            totalPlayersCount += r.length;
+        });
+
         db.collection('users').doc(currentUser.uid).set(payload, { merge: true })
             .then(() => {
                 updateCloudSyncBadge(true);
-                showToast('☁️ Kaikki tietokoneen joukkueet ja kentälliset tallennettu pilveen!');
+                showToast(`🎉 Kaikki ${teams.length} joukkuetta, ${totalPlayersCount} pelaajaa ja kentälliset tallennettu pilveen!`);
             })
             .catch(err => {
                 console.error('Firestore force sync error:', err);
@@ -375,11 +383,17 @@
             const cloudData = doc.data();
             if (!cloudData) return;
 
-            isCloudLoading = true;
+            // If the document existed previously without rosters dictionary, auto-upgrade it immediately!
+            if (!cloudData.rosters || !cloudData.lineups) {
+                console.log('🔥 Upgrading Firestore doc with full rosters, lineups, drawings, positions, and balls...');
+                const fullPayload = buildFullCloudPayload();
+                userRef.set(fullPayload, { merge: true });
+            }
 
+            isCloudLoading = true;
             let needCloudUpdateBack = false;
 
-            // 1. INTELLIGENT TEAMS MERGE (Merge local teams with cloud teams so desktop creation is never lost)
+            // 1. INTELLIGENT TEAMS MERGE
             if (cloudData.teams && Array.isArray(cloudData.teams)) {
                 const mergedTeams = [...cloudData.teams];
                 teams.forEach(localT => {
@@ -423,6 +437,9 @@
                         needCloudUpdateBack = true;
                     }
                 });
+            } else {
+                // If cloudData didn't have rosters, push local rosters to cloud!
+                needCloudUpdateBack = true;
             }
 
             if (cloudData.lineupConfigs) {
@@ -479,7 +496,7 @@
             if (needCloudUpdateBack) {
                 const mergedPayload = buildFullCloudPayload();
                 userRef.set(mergedPayload, { merge: true }).then(() => {
-                    console.log('☁️ Merged local desktop data successfully with Cloud Firestore!');
+                    console.log('☁️ Auto-upgraded and merged local data into Cloud Firestore!');
                     isCloudLoading = false;
                 }).catch(() => {
                     isCloudLoading = false;
@@ -595,7 +612,7 @@
         toastEl.classList.add('show');
         setTimeout(() => {
             toastEl.classList.remove('show');
-        }, 2800);
+        }, 3200);
     }
 
     function renderTeamDropdown() {
@@ -1661,7 +1678,7 @@
 
             ballNode.innerHTML = `
                 <div class="ball-circle" title="Salibandypallo">
-                    <img src="ball.png?v=12.0" class="floorball-png-icon" alt="Pallo">
+                    <img src="ball.png?v=13.0" class="floorball-png-icon" alt="Pallo">
                     <button class="ball-remove-btn" data-action="remove-ball" data-ball-id="${ball.id}">✕</button>
                 </div>
             `;
