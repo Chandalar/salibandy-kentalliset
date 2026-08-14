@@ -1,6 +1,6 @@
 /**
  * Salibandyn Kentälliset & Taktiikkataulu - Advanced Logic & Interactive Engine
- * Sisältää täysileveän rinnakkaisen yhteenvetonäkymän yhdellä silmäyksellä.
+ * Sisältää täysileveän rinnakkaisen yhteenvetonäkymän ja Firebase-pilvisynkronoinnin.
  */
 
 (function() {
@@ -86,6 +86,9 @@
         }
     };
 
+    // Firebase Auth User State
+    let currentUser = null;
+
     // Global State
     let teams = loadFromStorage('salibandy_teams_v1', DEFAULT_TEAMS);
     let currentTeamId = loadFromStorage('salibandy_active_team_id', 'team_edustus');
@@ -103,10 +106,10 @@
     let activeLineupKey = '1';
     let activeFilter = 'all';
     let searchQuery = '';
-    let drawingTool = 'select'; // 'select', 'pass', 'run', 'shot'
+    let drawingTool = 'select';
     let isDrawing = false;
     let currentPath = [];
-    let labelMode = 'full'; // 'full', 'num', 'name'
+    let labelMode = 'full';
     let orientationMode = window.innerWidth <= 600 ? 'vertical' : 'horizontal';
 
     // DOM Elements
@@ -131,12 +134,20 @@
     const summaryViewPanel = document.getElementById('summary-view-panel');
     const summaryGridContainer = document.getElementById('summary-grid-container');
 
-    // Counters
+    // Counters & Status Badges
     const countMvEl = document.getElementById('count-mv');
     const countFieldEl = document.getElementById('count-field');
     const countLoanEl = document.getElementById('count-loan');
+    const cloudSyncBadge = document.getElementById('cloud-sync-badge');
+    const userAuthStatusWrapper = document.getElementById('user-auth-status');
 
     // Modals
+    const authModal = document.getElementById('auth-modal');
+    const authTabLogin = document.getElementById('auth-tab-login');
+    const authTabRegister = document.getElementById('auth-tab-register');
+    const loginForm = document.getElementById('login-form');
+    const registerForm = document.getElementById('register-form');
+
     const manageLineupsModal = document.getElementById('manage-lineups-modal');
     const reorderLineupsList = document.getElementById('reorder-lineups-list');
     const btnResetDefaultLineups = document.getElementById('btn-reset-default-lineups');
@@ -191,7 +202,7 @@
     let selectedSlotTarget = { lineupKey: '', pos: '' };
 
     // ==========================================
-    // INITIALIZATION & TAB AUTO-HEALING
+    // INITIALIZATION & FIREBASE AUTH SETUP
     // ==========================================
     function init() {
         renderTeamDropdown();
@@ -199,11 +210,106 @@
         applyOrientation();
         setupCanvas();
         bindEvents();
+        initFirebaseAuth();
         updateRosterCounters();
         renderRoster();
         renderActiveLineupSlots();
         renderCourtPlayers();
         drawCanvasLines();
+    }
+
+    function initFirebaseAuth() {
+        if (window.SalibandyFirebase && window.SalibandyFirebase.isReady()) {
+            const auth = window.SalibandyFirebase.getAuth();
+            auth.onAuthStateChanged((user) => {
+                currentUser = user;
+                updateAuthUI();
+                if (user) {
+                    syncWithCloudFirestore(user);
+                } else {
+                    updateCloudSyncBadge(false);
+                }
+            });
+        } else {
+            updateCloudSyncBadge(false);
+        }
+    }
+
+    function updateAuthUI() {
+        if (currentUser) {
+            userAuthStatusWrapper.innerHTML = `
+                <div class="user-profile-badge">
+                    <span>👤</span>
+                    <span class="user-email-text" title="${currentUser.email}">${currentUser.email}</span>
+                    <button class="btn-xs btn-outline danger-text" id="btn-user-logout" title="Kirjaudu ulos">🔴 Ulos</button>
+                </div>
+            `;
+            document.getElementById('btn-user-logout')?.addEventListener('click', handleLogout);
+            updateCloudSyncBadge(true);
+        } else {
+            userAuthStatusWrapper.innerHTML = `
+                <button class="btn btn-sm btn-outline" id="btn-open-auth-modal">
+                    🔑 Kirjaudu pilveen
+                </button>
+            `;
+            document.getElementById('btn-open-auth-modal')?.addEventListener('click', () => {
+                authModal.classList.add('active');
+            });
+            updateCloudSyncBadge(false);
+        }
+    }
+
+    function updateCloudSyncBadge(isCloudActive) {
+        if (!cloudSyncBadge) return;
+        if (isCloudActive) {
+            cloudSyncBadge.className = 'cloud-sync-badge';
+            cloudSyncBadge.innerHTML = '☁️ Synkronoitu';
+        } else {
+            cloudSyncBadge.className = 'cloud-sync-badge is-offline';
+            cloudSyncBadge.innerHTML = '💻 Paikallinen';
+        }
+    }
+
+    function handleLogout() {
+        if (window.SalibandyFirebase && window.SalibandyFirebase.isReady()) {
+            window.SalibandyFirebase.getAuth().signOut().then(() => {
+                showToast('Kirjauduttu ulos pilvipalvelusta.');
+                currentUser = null;
+                updateAuthUI();
+            });
+        }
+    }
+
+    function syncWithCloudFirestore(user) {
+        if (!window.SalibandyFirebase || !window.SalibandyFirebase.isReady()) return;
+        const db = window.SalibandyFirebase.getDb();
+        const userRef = db.collection('users').doc(user.uid);
+
+        userRef.get().then((doc) => {
+            if (doc.exists) {
+                const cloudData = doc.data();
+                if (cloudData && cloudData.teams && cloudData.teams.length > 0) {
+                    teams = cloudData.teams;
+                    currentTeamId = cloudData.currentTeamId || teams[0].id;
+                    saveStateLocalOnly();
+                    switchTeam(currentTeamId);
+                    showToast('Omat joukkueet ladattu pilvestä! ☁️');
+                }
+            } else {
+                // First time cloud user: Offer to save local teams to Cloud Firestore
+                userRef.set({
+                    email: user.email,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    teams: teams,
+                    currentTeamId: currentTeamId
+                }).then(() => {
+                    saveState();
+                    showToast('Laitteesi joukkueet synkronoitu pilvitilillesi! 🎉');
+                });
+            }
+        }).catch(err => {
+            console.warn('Firestore fetch error:', err);
+        });
     }
 
     function cleanCorruptedUserTeams() {
@@ -265,7 +371,7 @@
         return configs;
     }
 
-    function saveState() {
+    function saveStateLocalOnly() {
         try {
             localStorage.setItem('salibandy_teams_v1', JSON.stringify(teams));
             localStorage.setItem('salibandy_active_team_id', JSON.stringify(currentTeamId));
@@ -277,6 +383,22 @@
             localStorage.setItem(`salibandy_balls_${currentTeamId}`, JSON.stringify(lineupBalls));
         } catch (e) {
             console.error('LocalStorage save error', e);
+        }
+    }
+
+    function saveState() {
+        saveStateLocalOnly();
+
+        if (currentUser && window.SalibandyFirebase && window.SalibandyFirebase.isReady()) {
+            const db = window.SalibandyFirebase.getDb();
+            db.collection('users').doc(currentUser.uid).set({
+                email: currentUser.email,
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                teams: teams,
+                currentTeamId: currentTeamId
+            }, { merge: true }).catch(err => {
+                console.warn('Cloud Firestore save error:', err);
+            });
         }
     }
 
@@ -368,7 +490,6 @@
             lineupConfigs = loadLineupConfigs(currentTeamId);
         }
 
-        // 1. Lineup Preset Buttons
         lineupConfigs.forEach(config => {
             const btn = document.createElement('button');
             btn.className = `tab-btn ${activeLineupKey === config.id ? 'active' : ''}`;
@@ -383,14 +504,12 @@
             tabsScrollContainer.appendChild(btn);
         });
 
-        // 2. Add "+ Uusi kentällinen" button tab
         const addBtn = document.createElement('button');
         addBtn.className = 'tab-btn btn-add-tab';
         addBtn.innerHTML = '+ Uusi kentällinen';
         addBtn.addEventListener('click', () => openLineupConfigModal());
         tabsScrollContainer.appendChild(addBtn);
 
-        // 3. Add "📊 Yhteenveto (Kaikki kentälliset)" tab BEFORE Hallitse
         const summaryBtn = document.createElement('button');
         summaryBtn.className = `tab-btn highlight-summary ${activeLineupKey === 'summary' ? 'active' : ''}`;
         summaryBtn.dataset.lineup = 'summary';
@@ -398,7 +517,6 @@
         summaryBtn.addEventListener('click', () => switchTab('summary'));
         tabsScrollContainer.appendChild(summaryBtn);
 
-        // 4. Add "⚙️ Hallitse kentällisiä" button tab ABSOLUTELY LAST!
         const manageBtn = document.createElement('button');
         manageBtn.className = 'tab-btn btn-manage-tab';
         manageBtn.innerHTML = '⚙️ Hallitse kentällisiä';
@@ -564,6 +682,80 @@
     }
 
     // ==========================================
+    // AUTH MODAL LOGIC (LOGIN / REGISTER / GOOGLE)
+    // ==========================================
+    authTabLogin?.addEventListener('click', () => {
+        authTabLogin.classList.add('active');
+        authTabRegister.classList.remove('active');
+        loginForm.style.display = 'block';
+        registerForm.style.display = 'none';
+    });
+
+    authTabRegister?.addEventListener('click', () => {
+        authTabRegister.classList.add('active');
+        authTabLogin.classList.remove('active');
+        registerForm.style.display = 'block';
+        loginForm.style.display = 'none';
+    });
+
+    loginForm?.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const email = document.getElementById('login-email').value.trim();
+        const pass = document.getElementById('login-password').value;
+
+        if (!window.SalibandyFirebase || !window.SalibandyFirebase.isReady()) {
+            showToast('Firebase-palvelu ei ole käytettävissä offline-tilassa.');
+            return;
+        }
+
+        window.SalibandyFirebase.getAuth().signInWithEmailAndPassword(email, pass)
+            .then((userCredential) => {
+                closeModal();
+                showToast(`Tervetuloa takaisin, ${userCredential.user.email}! 🔒`);
+            })
+            .catch((err) => {
+                alert(`Kirjautumisvirhe: ${err.message}`);
+            });
+    });
+
+    registerForm?.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const email = document.getElementById('reg-email').value.trim();
+        const pass = document.getElementById('reg-password').value;
+
+        if (!window.SalibandyFirebase || !window.SalibandyFirebase.isReady()) {
+            showToast('Firebase-palvelu ei ole käytettävissä offline-tilassa.');
+            return;
+        }
+
+        window.SalibandyFirebase.getAuth().createUserWithEmailAndPassword(email, pass)
+            .then((userCredential) => {
+                closeModal();
+                showToast(`Tili luotu onnistuneesti: ${userCredential.user.email}! ✨`);
+            })
+            .catch((err) => {
+                alert(`Tilin luontivirhe: ${err.message}`);
+            });
+    });
+
+    document.getElementById('btn-google-login')?.addEventListener('click', () => {
+        if (!window.SalibandyFirebase || !window.SalibandyFirebase.isReady()) {
+            showToast('Firebase-palvelu ei ole käytettävissä offline-tilassa.');
+            return;
+        }
+
+        const provider = new firebase.auth.GoogleAuthProvider();
+        window.SalibandyFirebase.getAuth().signInWithPopup(provider)
+            .then((result) => {
+                closeModal();
+                showToast(`Kirjauduttu Google-tilillä: ${result.user.email} 🎉`);
+            })
+            .catch((err) => {
+                alert(`Google-kirjautumisvirhe: ${err.message}`);
+            });
+    });
+
+    // ==========================================
     // IMPORT PLAYERS FROM OTHER TEAMS LOGIC
     // ==========================================
     function openImportPlayersModal() {
@@ -673,7 +865,7 @@
     });
 
     // ==========================================
-    // REORDER & MANAGE LINEUPS (Mobile-Friendly ⬆️ ⬇️ + Delete ANY Lineup)
+    // REORDER & MANAGE LINEUPS
     // ==========================================
     function openManageLineupsModal() {
         renderReorderList();
@@ -774,7 +966,7 @@
     });
 
     // ==========================================
-    // LINEUP CONFIGURATION (Add / Edit / Delete Lineups)
+    // LINEUP CONFIGURATION
     // ==========================================
     function openLineupConfigModal(lineupConfig = null) {
         if (lineupConfig) {
@@ -1208,7 +1400,6 @@
         courtPlayersLayer.innerHTML = '';
         if (activeLineupKey === 'summary') return;
 
-        // 1. Render Player Nodes
         const currentLineup = lineups[activeLineupKey] || {};
         const posKeys = ['MV', 'VP', 'OP', 'VH', 'KH', 'OH'];
 
@@ -1248,7 +1439,6 @@
             courtPlayersLayer.appendChild(node);
         });
 
-        // 2. Render Floorball Balls (ULTRA-FAST PNG RENDER)
         renderCourtBalls();
     }
 
@@ -1579,6 +1769,7 @@
         lineupConfigModal.classList.remove('active');
         manageLineupsModal.classList.remove('active');
         importPlayersModal.classList.remove('active');
+        authModal?.classList.remove('active');
     }
 
     playerForm.addEventListener('submit', (e) => {
@@ -1826,6 +2017,7 @@
         document.getElementById('btn-close-manage-done')?.addEventListener('click', closeModal);
         document.getElementById('btn-close-import-modal')?.addEventListener('click', closeModal);
         document.getElementById('btn-cancel-import-modal')?.addEventListener('click', closeModal);
+        document.getElementById('btn-close-auth-modal')?.addEventListener('click', closeModal);
 
         document.getElementById('btn-open-import-modal')?.addEventListener('click', openImportPlayersModal);
 
@@ -1877,7 +2069,6 @@
             });
         });
 
-        // Roster Tap & Action Delegate
         rosterListContainer.addEventListener('click', (e) => {
             const tapAssignTrigger = e.target.closest('[data-action="tap-assign"]');
             if (tapAssignTrigger) {
@@ -1900,7 +2091,6 @@
             }
         });
 
-        // Single Lineup Slots Panel Click Delegate
         lineupSlotsContainer.addEventListener('click', (e) => {
             const removeBtn = e.target.closest('[data-action="remove-slot"]');
             if (removeBtn) {
