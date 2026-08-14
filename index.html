@@ -215,7 +215,7 @@
                 <button class="btn-sm btn-outline" id="btn-clear-lineup">Tyhjennä</button>
             </div>
 
-            <p class="panel-hint">Vedä tai täppää pelaaja kentälliseen:</p>
+            <p class="panel-hint">Täppää tai vedä pelaaja kentälliseen:</p>
 
             <div class="lineup-slots-grid" id="lineup-slots-container">
                 <!-- Dynamically populated lineup slots -->
@@ -250,6 +250,23 @@
         </section>
 
     </main>
+
+    <!-- Modal: Slot Player Picker (Täppää paikkaa valitaksesi pelaajan) -->
+    <div class="modal-overlay" id="slot-picker-modal">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3 id="slot-picker-title">Valitse pelaaja paikkaan</h3>
+                <button class="close-btn" id="btn-close-slot-picker-modal">&times;</button>
+            </div>
+            <p class="form-hint" id="slot-picker-info">Valitse ringistä pelaaja tälle paikalle:</p>
+            <div class="slot-picker-player-list" id="slot-picker-player-list">
+                <!-- Dynamically populated roster options -->
+            </div>
+            <div class="modal-actions" style="margin-top: 0.8rem;">
+                <button type="button" class="btn btn-secondary danger-text" id="btn-clear-slot-picker">🚫 Tyhjennä paikka</button>
+            </div>
+        </div>
+    </div>
 
     <!-- Modal: Tap-to-Assign Player to Lineup (Mobiilivalikko) -->
     <div class="modal-overlay" id="assign-modal">

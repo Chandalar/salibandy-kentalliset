@@ -1,6 +1,6 @@
 /**
  * Salibandyn Kentälliset & Taktiikkataulu - Advanced Logic & Interactive Engine
- * Sisältää mobiilin täppäysvalikon (Tap-to-Assign) pelaajien sijoittamiseksi kentällisiin ilman vetämistä.
+ * Sisältää mobiilin täppäysvalikon (Tap-to-Assign) ja Paikkakohtaisen pelaajavalitsimen (Slot-Picker) kaikissa näkymissä.
  */
 
 (function() {
@@ -134,6 +134,12 @@
     const countLoanEl = document.getElementById('count-loan');
 
     // Modals
+    const slotPickerModal = document.getElementById('slot-picker-modal');
+    const slotPickerTitle = document.getElementById('slot-picker-title');
+    const slotPickerInfo = document.getElementById('slot-picker-info');
+    const slotPickerPlayerList = document.getElementById('slot-picker-player-list');
+    const btnClearSlotPicker = document.getElementById('btn-clear-slot-picker');
+
     const assignModal = document.getElementById('assign-modal');
     const assignModalTitle = document.getElementById('assign-modal-title');
     const assignModalPlayerInfo = document.getElementById('assign-modal-player-info');
@@ -162,6 +168,7 @@
 
     let tempOcrParsedPlayers = [];
     let selectedPlayerForAssignment = null;
+    let selectedSlotTarget = { lineupKey: '', pos: '' };
 
     // ==========================================
     // INITIALIZATION
@@ -355,6 +362,82 @@
     }
 
     // ==========================================
+    // SLOT-PICKER PLAYER MODAL (Täppää paikkaa valitaksesi pelaajan)
+    // ==========================================
+    function openSlotPickerModal(lineupKey, pos) {
+        selectedSlotTarget = { lineupKey, pos };
+        const isMv = pos === 'MV';
+        const lineupName = LINEUP_NAMES[lineupKey] || 'Kentällinen';
+
+        slotPickerTitle.textContent = `Valitse pelaaja: ${lineupName} - ${pos}`;
+        slotPickerInfo.textContent = `Valitse pelaaja ringistä paikkaan ${pos}:`;
+
+        const currentOccupantId = (lineups[lineupKey] || {})[pos];
+
+        // Sort roster: Goalkeepers first if MV slot, otherwise field players
+        const sortedRoster = [...roster].sort((a, b) => {
+            if (isMv) {
+                if (a.position === 'MV' && b.position !== 'MV') return -1;
+                if (a.position !== 'MV' && b.position === 'MV') return 1;
+            } else {
+                if (a.position !== 'MV' && b.position === 'MV') return -1;
+                if (a.position === 'MV' && b.position !== 'MV') return 1;
+            }
+            return a.number - b.number;
+        });
+
+        slotPickerPlayerList.innerHTML = '';
+
+        sortedRoster.forEach(player => {
+            const isPlayerMv = player.position === 'MV';
+            const isSelected = player.id === currentOccupantId;
+
+            const row = document.createElement('div');
+            row.className = `slot-picker-row ${isSelected ? 'is-selected' : ''}`;
+            row.dataset.playerId = player.id;
+
+            row.innerHTML = `
+                <div class="player-card-info">
+                    <div class="player-num-circle" style="background: ${isPlayerMv ? 'var(--accent-mv)' : 'var(--accent-field)'}; color: ${isPlayerMv ? '#022c22' : '#fff'}">#${player.number}</div>
+                    <div class="player-details">
+                        <div class="player-name-row">
+                            <span class="player-name">${escapeHtml(player.name)}</span>
+                            ${player.isLoan ? '<span class="loan-badge">⭐ LAINA</span>' : ''}
+                        </div>
+                        <span class="player-submeta">${getPosLabel(player.position)}</span>
+                    </div>
+                </div>
+                <button class="btn-xs ${isSelected ? 'btn-primary' : 'btn-outline'}">${isSelected ? 'Valittu ✓' : '+ Valitse'}</button>
+            `;
+
+            row.addEventListener('click', () => {
+                assignPlayerToLineupSlot(lineupKey, pos, player.id);
+                slotPickerModal.classList.remove('active');
+                showToast(`Pelaaja #${player.number} asetettu paikkaan ${lineupName} - ${pos}`);
+            });
+
+            slotPickerPlayerList.appendChild(row);
+        });
+
+        slotPickerModal.classList.add('active');
+    }
+
+    btnClearSlotPicker.addEventListener('click', () => {
+        if (selectedSlotTarget.lineupKey && selectedSlotTarget.pos) {
+            lineups[selectedSlotTarget.lineupKey][selectedSlotTarget.pos] = '';
+            saveState();
+            if (activeLineupKey === 'summary') {
+                renderSummaryView();
+            } else {
+                renderActiveLineupSlots();
+                renderCourtPlayers();
+            }
+            slotPickerModal.classList.remove('active');
+            showToast('Paikka tyhjennetty.');
+        }
+    });
+
+    // ==========================================
     // TAP-TO-ASSIGN MOBILE SELECTION MENU
     // ==========================================
     function openAssignModal(player) {
@@ -525,7 +608,7 @@
 
                 if (player) {
                     rowsHtml += `
-                        <div class="summary-slot-row ${isMv ? 'is-mv' : 'is-field'}" data-lineup="${lKey}" data-pos="${pos}">
+                        <div class="summary-slot-row ${isMv ? 'is-mv' : 'is-field'}" data-action="pick-summary-slot" data-lineup="${lKey}" data-pos="${pos}">
                             <span class="summary-pos-tag">${pos}</span>
                             <span class="summary-player-val">#${player.number} ${escapeHtml(player.name)} ${player.isLoan ? '⭐' : ''}</span>
                             <button class="mini-action-btn delete-btn" data-action="remove-summary-slot" data-lineup="${lKey}" data-pos="${pos}">✕</button>
@@ -533,9 +616,9 @@
                     `;
                 } else {
                     rowsHtml += `
-                        <div class="summary-slot-row ${isMv ? 'is-mv' : 'is-field'}" data-lineup="${lKey}" data-pos="${pos}">
+                        <div class="summary-slot-row ${isMv ? 'is-mv' : 'is-field'}" data-action="pick-summary-slot" data-lineup="${lKey}" data-pos="${pos}">
                             <span class="summary-pos-tag">${pos}</span>
-                            <span class="summary-player-val empty-val">+ Tyhjä (${pos})</span>
+                            <span class="summary-player-val empty-val">+ Täppää valitaksesi (${pos})</span>
                         </div>
                     `;
                 }
@@ -578,11 +661,20 @@
     summaryGridContainer?.addEventListener('click', (e) => {
         const removeBtn = e.target.closest('[data-action="remove-summary-slot"]');
         if (removeBtn) {
+            e.stopPropagation();
             const lKey = removeBtn.dataset.lineup;
             const pos = removeBtn.dataset.pos;
             if (lineups[lKey]) lineups[lKey][pos] = '';
             saveState();
             renderSummaryView();
+            return;
+        }
+
+        const pickSlotRow = e.target.closest('[data-action="pick-summary-slot"]');
+        if (pickSlotRow) {
+            const lKey = pickSlotRow.dataset.lineup;
+            const pos = pickSlotRow.dataset.pos;
+            openSlotPickerModal(lKey, pos);
             return;
         }
 
@@ -870,6 +962,7 @@
         teamModal.classList.remove('active');
         photoModal.classList.remove('active');
         assignModal.classList.remove('active');
+        slotPickerModal.classList.remove('active');
     }
 
     playerForm.addEventListener('submit', (e) => {
@@ -1098,6 +1191,7 @@
         document.getElementById('btn-close-team-modal').addEventListener('click', closeModal);
         document.getElementById('btn-cancel-team-modal').addEventListener('click', closeModal);
         document.getElementById('btn-close-assign-modal')?.addEventListener('click', closeModal);
+        document.getElementById('btn-close-slot-picker-modal')?.addEventListener('click', closeModal);
 
         document.getElementById('btn-import-photo').addEventListener('click', () => {
             photoPreviewStep.style.display = 'none';
@@ -1178,14 +1272,23 @@
             }
         });
 
+        // Single Lineup Slots Panel Click Delegate
         lineupSlotsContainer.addEventListener('click', (e) => {
             const removeBtn = e.target.closest('[data-action="remove-slot"]');
             if (removeBtn) {
+                e.stopPropagation();
                 const pos = removeBtn.dataset.pos;
                 lineups[activeLineupKey][pos] = '';
                 saveState();
                 renderActiveLineupSlots();
                 renderCourtPlayers();
+                return;
+            }
+
+            const slotEl = e.target.closest('.lineup-slot');
+            if (slotEl) {
+                const pos = slotEl.dataset.position;
+                if (pos) openSlotPickerModal(activeLineupKey, pos);
             }
         });
 
