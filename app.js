@@ -457,9 +457,14 @@
 
             if (cloudData.rosters) {
                 Object.keys(cloudData.rosters).forEach(tId => {
-                    const cloudRoster = cloudData.rosters[tId] || [];
-                    const localRoster = loadFromStorage(`salibandy_roster_${tId}`, []);
+                    let cloudRoster = cloudData.rosters[tId] || [];
+                    let localRoster = loadFromStorage(`salibandy_roster_${tId}`, []);
                     
+                    if (tId === 'team_edustus' && cloudRoster.length === 0 && localRoster.length === 0) {
+                        cloudRoster = JSON.parse(JSON.stringify(DEFAULT_ROSTER));
+                        needCloudUpdateBack = true;
+                    }
+
                     const mergedRosterMap = {};
                     cloudRoster.forEach(p => { mergedRosterMap[p.id] = p; });
                     localRoster.forEach(p => {
@@ -599,10 +604,14 @@
     }
 
     function loadRosterForTeam(teamId) {
+        const stored = loadFromStorage(`salibandy_roster_${teamId}`, null);
         if (teamId === 'team_edustus') {
-            return loadFromStorage(`salibandy_roster_${teamId}`, DEFAULT_ROSTER);
+            if (!stored || !Array.isArray(stored) || stored.length === 0) {
+                return JSON.parse(JSON.stringify(DEFAULT_ROSTER));
+            }
+            return stored;
         }
-        return loadFromStorage(`salibandy_roster_${teamId}`, []);
+        return stored || [];
     }
 
     function createEmptyLineupSlots() {
@@ -611,14 +620,23 @@
 
     function loadLineupsForTeam(teamId, configs) {
         const stored = loadFromStorage(`salibandy_lineups_${teamId}`, null);
-        if (stored) return stored;
+        if (stored && typeof stored === 'object' && Object.keys(stored).length > 0) {
+            if (configs && Array.isArray(configs)) {
+                configs.forEach(c => {
+                    if (!stored[c.id]) stored[c.id] = createEmptyLineupSlots();
+                });
+            }
+            return stored;
+        }
 
         if (teamId === 'team_edustus') return JSON.parse(JSON.stringify(DEFAULT_LINEUPS));
 
         const emptyLineups = {};
-        configs.forEach(c => {
-            emptyLineups[c.id] = createEmptyLineupSlots();
-        });
+        if (configs && Array.isArray(configs)) {
+            configs.forEach(c => {
+                emptyLineups[c.id] = createEmptyLineupSlots();
+            });
+        }
         return emptyLineups;
     }
 
@@ -2520,6 +2538,19 @@
         document.getElementById('btn-close-auth-modal')?.addEventListener('click', closeModal);
 
         document.getElementById('btn-open-import-modal')?.addEventListener('click', openImportPlayersModal);
+
+        document.getElementById('btn-reset-defaults')?.addEventListener('click', () => {
+            if (confirm('Haluatko palauttaa 19 oletuspelaajaa ja valmiit 1., 2. & YV/AV-kentälliset?')) {
+                roster = JSON.parse(JSON.stringify(DEFAULT_ROSTER));
+                lineups = JSON.parse(JSON.stringify(DEFAULT_LINEUPS));
+                saveState();
+                updateRosterCounters();
+                renderRoster();
+                renderActiveLineupSlots();
+                renderCourtBoards();
+                showToast('Oletuspelaajat ja kentälliset palautettu! 🎉');
+            }
+        });
 
         document.getElementById('btn-add-lineup-summary')?.addEventListener('click', () => openLineupConfigModal());
         document.getElementById('btn-manage-lineups-summary')?.addEventListener('click', () => openManageLineupsModal());
