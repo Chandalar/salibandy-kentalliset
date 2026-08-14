@@ -1,6 +1,6 @@
 /**
  * Salibandyn Kentälliset & Taktiikkataulu - Advanced Logic & Interactive Engine
- * Auto-healing välilehtipalkki takaa kaikkienkentällisten näkyvyyden tismalleen kuten kuvassa.
+ * Sisältää mobiiliystävällisen kentällisten järjestelyn (Reorder ⬆️ ⬇️) ja kaikkien kentällisten poiston.
  */
 
 (function() {
@@ -133,6 +133,10 @@
     const countLoanEl = document.getElementById('count-loan');
 
     // Modals
+    const manageLineupsModal = document.getElementById('manage-lineups-modal');
+    const reorderLineupsList = document.getElementById('reorder-lineups-list');
+    const btnResetDefaultLineups = document.getElementById('btn-reset-default-lineups');
+
     const lineupConfigModal = document.getElementById('lineup-config-modal');
     const lineupConfigForm = document.getElementById('lineup-config-form');
     const lineupConfigModalTitle = document.getElementById('lineup-config-modal-title');
@@ -203,11 +207,8 @@
 
     function loadLineupConfigs(teamId) {
         let configs = loadFromStorage(`salibandy_lineup_configs_${teamId}`, null);
-        
-        // Check that all standard default tabs exist
-        if (!configs || !Array.isArray(configs) || configs.length < DEFAULT_LINEUP_CONFIGS.length) {
-            const customTabs = (configs && Array.isArray(configs)) ? configs.filter(c => c.type === 'user') : [];
-            configs = JSON.parse(JSON.stringify(DEFAULT_LINEUP_CONFIGS)).concat(customTabs);
+        if (!configs || !Array.isArray(configs)) {
+            configs = JSON.parse(JSON.stringify(DEFAULT_LINEUP_CONFIGS));
             localStorage.setItem(`salibandy_lineup_configs_${teamId}`, JSON.stringify(configs));
         }
         return configs;
@@ -278,7 +279,7 @@
         if (!tabsScrollContainer) return;
         tabsScrollContainer.innerHTML = '';
 
-        if (!lineupConfigs || !Array.isArray(lineupConfigs) || lineupConfigs.length < DEFAULT_LINEUP_CONFIGS.length) {
+        if (!lineupConfigs || !Array.isArray(lineupConfigs)) {
             lineupConfigs = loadLineupConfigs(currentTeamId);
         }
 
@@ -292,18 +293,6 @@
             btn.dataset.lineup = config.id;
             btn.innerHTML = `<span>${escapeHtml(config.name)}</span>`;
 
-            if (config.type === 'user') {
-                const delIcon = document.createElement('span');
-                delIcon.className = 'tab-delete-icon';
-                delIcon.innerHTML = ' ✕';
-                delIcon.title = 'Poista kentällinen';
-                delIcon.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    deleteLineupConfig(config.id);
-                });
-                btn.appendChild(delIcon);
-            }
-
             btn.addEventListener('click', () => switchTab(config.id));
             tabsScrollContainer.appendChild(btn);
         });
@@ -314,6 +303,13 @@
         addBtn.innerHTML = '+ Uusi kentällinen';
         addBtn.addEventListener('click', () => openLineupConfigModal());
         tabsScrollContainer.appendChild(addBtn);
+
+        // Add "⚙️ Hallitse" button tab for reordering/deleting ANY tab on mobile
+        const manageBtn = document.createElement('button');
+        manageBtn.className = 'tab-btn btn-manage-tab';
+        manageBtn.innerHTML = '⚙️ Hallitse';
+        manageBtn.addEventListener('click', () => openManageLineupsModal());
+        tabsScrollContainer.appendChild(manageBtn);
 
         // Add "📊 Yhteenveto (Kaikki kentälliset)" tab
         const summaryBtn = document.createElement('button');
@@ -455,6 +451,107 @@
     }
 
     // ==========================================
+    // REORDER & MANAGE LINEUPS (Mobile-Friendly ⬆️ ⬇️ + Delete ANY Lineup)
+    // ==========================================
+    function openManageLineupsModal() {
+        renderReorderList();
+        manageLineupsModal.classList.add('active');
+    }
+
+    function renderReorderList() {
+        reorderLineupsList.innerHTML = '';
+
+        if (lineupConfigs.length === 0) {
+            reorderLineupsList.innerHTML = `
+                <div style="text-align:center; color: var(--text-muted); padding: 1rem;">
+                    Ei kentällisiä. Voit luoda uuden kentällisen tai palauttaa oletuskentät.
+                </div>
+            `;
+            return;
+        }
+
+        lineupConfigs.forEach((config, idx) => {
+            const row = document.createElement('div');
+            row.className = 'reorder-item-row';
+
+            row.innerHTML = `
+                <div class="reorder-arrows-group">
+                    <button class="reorder-btn" data-action="move-up" data-index="${idx}" ${idx === 0 ? 'disabled style="opacity:0.3;"' : ''}>⬆️</button>
+                    <button class="reorder-btn" data-action="move-down" data-index="${idx}" ${idx === lineupConfigs.length - 1 ? 'disabled style="opacity:0.3;"' : ''}>⬇️</button>
+                </div>
+                <span class="reorder-item-title">${escapeHtml(config.name)}</span>
+                <div class="reorder-item-actions">
+                    <button class="btn-xs btn-outline" data-action="edit-config" data-id="${config.id}">✏️</button>
+                    <button class="btn-xs btn-outline danger-text" data-action="delete-config" data-id="${config.id}">🗑️</button>
+                </div>
+            `;
+
+            reorderLineupsList.appendChild(row);
+        });
+    }
+
+    reorderLineupsList.addEventListener('click', (e) => {
+        const moveUpBtn = e.target.closest('[data-action="move-up"]');
+        if (moveUpBtn) {
+            const idx = parseInt(moveUpBtn.dataset.index, 10);
+            if (idx > 0) {
+                const temp = lineupConfigs[idx];
+                lineupConfigs[idx] = lineupConfigs[idx - 1];
+                lineupConfigs[idx - 1] = temp;
+                saveState();
+                renderTabs();
+                renderReorderList();
+                if (activeLineupKey === 'summary') renderSummaryView();
+            }
+            return;
+        }
+
+        const moveDownBtn = e.target.closest('[data-action="move-down"]');
+        if (moveDownBtn) {
+            const idx = parseInt(moveDownBtn.dataset.index, 10);
+            if (idx < lineupConfigs.length - 1) {
+                const temp = lineupConfigs[idx];
+                lineupConfigs[idx] = lineupConfigs[idx + 1];
+                lineupConfigs[idx + 1] = temp;
+                saveState();
+                renderTabs();
+                renderReorderList();
+                if (activeLineupKey === 'summary') renderSummaryView();
+            }
+            return;
+        }
+
+        const editBtn = e.target.closest('[data-action="edit-config"]');
+        if (editBtn) {
+            const id = editBtn.dataset.id;
+            const config = lineupConfigs.find(c => c.id === id);
+            if (config) openLineupConfigModal(config);
+            return;
+        }
+
+        const deleteBtn = e.target.closest('[data-action="delete-config"]');
+        if (deleteBtn) {
+            const id = deleteBtn.dataset.id;
+            deleteLineupConfig(id);
+            renderReorderList();
+            return;
+        }
+    });
+
+    btnResetDefaultLineups?.addEventListener('click', () => {
+        if (confirm('Palautetaanko standardit oletuskentät (1. Kenttä, 2. Kenttä, 3. Kenttä, YV, AV, 6v5, Taktiikka)?')) {
+            lineupConfigs = JSON.parse(JSON.stringify(DEFAULT_LINEUP_CONFIGS));
+            activeLineupKey = '1';
+            saveState();
+            renderTabs();
+            renderReorderList();
+            if (activeLineupKey === 'summary') renderSummaryView();
+            else switchTab('1');
+            showToast('Oletuskentät palautettu.');
+        }
+    });
+
+    // ==========================================
     // LINEUP CONFIGURATION (Add / Edit / Delete Lineups)
     // ==========================================
     function openLineupConfigModal(lineupConfig = null) {
@@ -490,6 +587,7 @@
 
         saveState();
         renderTabs();
+        renderReorderList();
         if (activeLineupKey === 'summary') {
             renderSummaryView();
         } else {
@@ -508,7 +606,7 @@
             delete lineupDrawings[id];
 
             if (activeLineupKey === id) {
-                activeLineupKey = lineupConfigs[0] ? lineupConfigs[0].id : '1';
+                activeLineupKey = lineupConfigs[0] ? lineupConfigs[0].id : 'summary';
             }
 
             saveState();
@@ -789,7 +887,7 @@
                     <h3>${escapeHtml(cConfig.name)}</h3>
                     <div class="summary-card-header-actions">
                         <button class="btn-xs btn-outline" data-action="edit-summary-lineup-name" data-lineup="${lKey}" title="Muokkaa nimeä">✏️</button>
-                        ${cConfig.type === 'user' ? `<button class="btn-xs btn-outline danger-text" data-action="delete-summary-lineup" data-lineup="${lKey}" title="Poista kentällinen">🗑️</button>` : ''}
+                        <button class="btn-xs btn-outline danger-text" data-action="delete-summary-lineup" data-lineup="${lKey}" title="Poista kentällinen">🗑️</button>
                         <button class="btn-xs btn-outline" data-action="clear-summary-lineup" data-lineup="${lKey}" title="Tyhjennä pelaajat">Tyhjennä</button>
                     </div>
                 </div>
@@ -1144,6 +1242,7 @@
         assignModal.classList.remove('active');
         slotPickerModal.classList.remove('active');
         lineupConfigModal.classList.remove('active');
+        manageLineupsModal.classList.remove('active');
     }
 
     playerForm.addEventListener('submit', (e) => {
@@ -1376,11 +1475,19 @@
         document.getElementById('btn-close-slot-picker-modal')?.addEventListener('click', closeModal);
         document.getElementById('btn-close-lineup-config-modal')?.addEventListener('click', closeModal);
         document.getElementById('btn-cancel-lineup-config-modal')?.addEventListener('click', closeModal);
+        document.getElementById('btn-close-manage-lineups-modal')?.addEventListener('click', closeModal);
+        document.getElementById('btn-close-manage-done')?.addEventListener('click', closeModal);
 
         document.getElementById('btn-add-lineup-summary')?.addEventListener('click', () => openLineupConfigModal());
+        document.getElementById('btn-manage-lineups-summary')?.addEventListener('click', () => openManageLineupsModal());
+        
         document.getElementById('btn-edit-active-lineup-name')?.addEventListener('click', () => {
             const config = lineupConfigs.find(c => c.id === activeLineupKey);
             if (config) openLineupConfigModal(config);
+        });
+
+        document.getElementById('btn-delete-active-lineup')?.addEventListener('click', () => {
+            deleteLineupConfig(activeLineupKey);
         });
 
         document.getElementById('btn-import-photo').addEventListener('click', () => {

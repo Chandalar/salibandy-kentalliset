@@ -81,6 +81,7 @@
             <button class="tab-btn highlight-6v5" data-lineup="6v5">🔥 6v5 (Ilman MV)</button>
             <button class="tab-btn" data-lineup="custom">📐 Taktiikka</button>
             <button class="tab-btn btn-add-tab" id="btn-add-new-lineup-tab">+ Uusi kentällinen</button>
+            <button class="tab-btn btn-manage-tab" id="btn-manage-lineups-tab">⚙️ Hallitse kentällisiä</button>
             <button class="tab-btn highlight-summary" data-lineup="summary">📊 Yhteenveto (Kaikki kentälliset)</button>
         </div>
     </nav>
@@ -215,6 +216,7 @@
                 </h2>
                 <div style="display: flex; gap: 0.3rem;">
                     <button class="btn-xs btn-outline" id="btn-edit-active-lineup-name" title="Muokkaa nimeä">✏️</button>
+                    <button class="btn-xs btn-outline danger-text" id="btn-delete-active-lineup" title="Poista tämä kentällinen">🗑️</button>
                     <button class="btn-xs btn-outline" id="btn-clear-lineup">Tyhjennä</button>
                 </div>
             </div>
@@ -242,6 +244,9 @@
                     <button class="btn btn-sm btn-primary" id="btn-add-lineup-summary">
                         + Lisää kentällinen
                     </button>
+                    <button class="btn btn-sm btn-outline" id="btn-manage-lineups-summary">
+                        ⚙️ Järjestä / Poista
+                    </button>
                     <button class="btn btn-sm btn-secondary" id="btn-copy-all-summary">
                         📋 Kopioi tekstinä
                     </button>
@@ -257,6 +262,24 @@
         </section>
 
     </main>
+
+    <!-- Modal: Reorder / Manage Lineups (Mobiiliystävällinen kentällisten järjestely) -->
+    <div class="modal-overlay" id="manage-lineups-modal">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3>⚙️ Hallitse & Järjestä Kentällisiä</h3>
+                <button class="close-btn" id="btn-close-manage-lineups-modal">&times;</button>
+            </div>
+            <p class="form-hint">Siirrä kentällisten järjestystä nuolilla (⬆️ / ⬇️) tai poista/muokkaa mitä tahansa kentällistä:</p>
+            <div class="reorder-lineups-list" id="reorder-lineups-list">
+                <!-- Dynamically populated reorder list -->
+            </div>
+            <div class="modal-actions" style="margin-top: 1rem; justify-content: space-between;">
+                <button type="button" class="btn btn-xs btn-outline" id="btn-reset-default-lineups">🔄 Palauta oletuskentät</button>
+                <button type="button" class="btn btn-primary" id="btn-close-manage-done">Valmis</button>
+            </div>
+        </div>
+    </div>
 
     <!-- Modal: Add / Edit Lineup -->
     <div class="modal-overlay" id="lineup-config-modal">

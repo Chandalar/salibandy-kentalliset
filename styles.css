@@ -318,6 +318,78 @@ body {
     color: #022c22;
 }
 
+.tab-btn.btn-manage-tab {
+    color: var(--text-secondary);
+    border: 1px solid var(--border-color);
+    border-bottom: none;
+    background: var(--bg-main);
+}
+
+.tab-btn.btn-manage-tab:hover {
+    background: var(--bg-card-hover);
+    color: #fff;
+}
+
+/* REORDER & MANAGE LINEUPS MODAL STYLES */
+.reorder-lineups-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    max-height: 55vh;
+    overflow-y: auto;
+    padding: 0.5rem 0;
+    -webkit-overflow-scrolling: touch;
+}
+
+.reorder-item-row {
+    background: var(--bg-card-light);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 0.5rem 0.7rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+.reorder-arrows-group {
+    display: flex;
+    gap: 0.2rem;
+}
+
+.reorder-btn {
+    background: var(--bg-main);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    width: 32px;
+    height: 32px;
+    border-radius: var(--radius-sm);
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    touch-action: manipulation;
+}
+
+.reorder-btn:hover, .reorder-btn:active {
+    background: var(--accent-field);
+    border-color: var(--accent-field);
+    color: #fff;
+}
+
+.reorder-item-title {
+    flex: 1;
+    font-weight: 700;
+    font-size: 0.85rem;
+    color: var(--text-primary);
+}
+
+.reorder-item-actions {
+    display: flex;
+    gap: 0.3rem;
+}
+
 /* Main Layout Grid - Desktop Default */
 .main-workspace {
     flex: 1;
@@ -1177,6 +1249,7 @@ body {
 .summary-actions {
     display: flex;
     gap: 0.4rem;
+    flex-wrap: wrap;
 }
 
 .summary-grid-container {
