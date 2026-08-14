@@ -1,0 +1,53 @@
+<svg viewBox="0 0 100 100" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="unihocBallShade" cx="35%" cy="35%" r="65%">
+      <stop offset="0%" stop-color="#FFFFFF" />
+      <stop offset="45%" stop-color="#F1F5F9" />
+      <stop offset="75%" stop-color="#CBD5E1" />
+      <stop offset="100%" stop-color="#94A3B8" />
+    </radialGradient>
+    <radialGradient id="unihocHoleDepth" cx="30%" cy="30%" r="70%">
+      <stop offset="0%" stop-color="#0F172A" />
+      <stop offset="65%" stop-color="#1E293B" />
+      <stop offset="100%" stop-color="#334155" />
+    </radialGradient>
+  </defs>
+
+  <!-- Spherical Ball Body (Clean white plastic, no text) -->
+  <circle cx="50" cy="50" r="46" fill="url(#unihocBallShade)" stroke="#1E293B" stroke-width="2.5"/>
+
+  <!-- Dimple Micro-texture -->
+  <g fill="#94A3B8" opacity="0.55">
+    <circle cx="50" cy="18" r="1.5"/>
+    <circle cx="34" cy="22" r="1.5"/>
+    <circle cx="66" cy="22" r="1.5"/>
+    <circle cx="22" cy="34" r="1.5"/>
+    <circle cx="78" cy="34" r="1.5"/>
+    <circle cx="18" cy="50" r="1.5"/>
+    <circle cx="82" cy="50" r="1.5"/>
+    <circle cx="22" cy="66" r="1.5"/>
+    <circle cx="78" cy="66" r="1.5"/>
+    <circle cx="34" cy="78" r="1.5"/>
+    <circle cx="66" cy="78" r="1.5"/>
+    <circle cx="50" cy="82" r="1.5"/>
+  </g>
+
+  <!-- 3D Aerodynamic Air Holes (Unihoc hole pattern, NO text) -->
+  <ellipse cx="50" cy="50" rx="7.5" ry="7.5" fill="url(#unihocHoleDepth)" stroke="#FFFFFF" stroke-width="1.2"/>
+  
+  <ellipse cx="50" cy="30" rx="6.5" ry="6" fill="url(#unihocHoleDepth)" stroke="#FFFFFF" stroke-width="1"/>
+  <ellipse cx="68" cy="40" rx="6" ry="6.5" fill="url(#unihocHoleDepth)" stroke="#FFFFFF" stroke-width="1"/>
+  <ellipse cx="68" cy="60" rx="6" ry="6.5" fill="url(#unihocHoleDepth)" stroke="#FFFFFF" stroke-width="1"/>
+  <ellipse cx="50" cy="70" rx="6.5" ry="6" fill="url(#unihocHoleDepth)" stroke="#FFFFFF" stroke-width="1"/>
+  <ellipse cx="32" cy="60" rx="6" ry="6.5" fill="url(#unihocHoleDepth)" stroke="#FFFFFF" stroke-width="1"/>
+  <ellipse cx="32" cy="40" rx="6" ry="6.5" fill="url(#unihocHoleDepth)" stroke="#FFFFFF" stroke-width="1"/>
+
+  <ellipse cx="50" cy="13" rx="5.5" ry="3" fill="url(#unihocHoleDepth)"/>
+  <ellipse cx="76" cy="22" rx="5" ry="4" fill="url(#unihocHoleDepth)"/>
+  <ellipse cx="87" cy="48" rx="3" ry="5.5" fill="url(#unihocHoleDepth)"/>
+  <ellipse cx="76" cy="76" rx="5" ry="4" fill="url(#unihocHoleDepth)"/>
+  <ellipse cx="50" cy="87" rx="5.5" ry="3" fill="url(#unihocHoleDepth)"/>
+  <ellipse cx="24" cy="76" rx="5" ry="4" fill="url(#unihocHoleDepth)"/>
+  <ellipse cx="13" cy="48" rx="3" ry="5.5" fill="url(#unihocHoleDepth)"/>
+  <ellipse cx="24" cy="22" rx="5" ry="4" fill="url(#unihocHoleDepth)"/>
+</svg>

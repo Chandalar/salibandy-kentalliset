@@ -1,6 +1,6 @@
 /**
  * Salibandyn Kentälliset & Taktiikkataulu - Advanced Logic & Interactive Engine
- * Sisältää tarkan Unihoc 3D -vektorisalibandypallon piirroksen (⚪ + Pallo).
+ * Sisältää täysin puhtaan tekstitömän Unihoc 3D -vektorisalibandypallon (floorball-ball.svg).
  */
 
 (function() {
@@ -1020,7 +1020,7 @@
             courtPlayersLayer.appendChild(node);
         });
 
-        // 2. Render Unihoc Floorball Balls (MATCHES PLAYER CIRCLE SIZE EXACTLY)
+        // 2. Render Floorball Balls (MATCHES PLAYER CIRCLE SIZE EXACTLY)
         renderCourtBalls();
     }
 
@@ -1057,60 +1057,8 @@
             ballNode.dataset.ballId = ball.id;
 
             ballNode.innerHTML = `
-                <div class="ball-circle" title="Salibandypallo (Unihoc 3D)">
-                    <svg class="floorball-svg-icon" viewBox="0 0 100 100" width="100%" height="100%">
-                      <defs>
-                        <radialGradient id="ballShade_${ball.id}" cx="35%" cy="35%" r="65%">
-                          <stop offset="0%" stop-color="#ffffff" />
-                          <stop offset="50%" stop-color="#f8fafc" />
-                          <stop offset="80%" stop-color="#cbd5e1" />
-                          <stop offset="100%" stop-color="#94a3b8" />
-                        </radialGradient>
-                        <radialGradient id="holeDepth_${ball.id}" cx="30%" cy="30%" r="70%">
-                          <stop offset="0%" stop-color="#0f172a" />
-                          <stop offset="70%" stop-color="#1e293b" />
-                          <stop offset="100%" stop-color="#334155" />
-                        </radialGradient>
-                      </defs>
-
-                      <!-- Main Unihoc Ball Sphere Body -->
-                      <circle cx="50" cy="50" r="46" fill="url(#ballShade_${ball.id})" stroke="#1e293b" stroke-width="2.5"/>
-
-                      <!-- Dimple texture dots -->
-                      <g fill="#cbd5e1" opacity="0.75">
-                        <circle cx="50" cy="18" r="1.5"/>
-                        <circle cx="34" cy="22" r="1.5"/>
-                        <circle cx="66" cy="22" r="1.5"/>
-                        <circle cx="22" cy="34" r="1.5"/>
-                        <circle cx="78" cy="34" r="1.5"/>
-                        <circle cx="18" cy="50" r="1.5"/>
-                        <circle cx="82" cy="50" r="1.5"/>
-                        <circle cx="22" cy="66" r="1.5"/>
-                        <circle cx="78" cy="66" r="1.5"/>
-                        <circle cx="34" cy="78" r="1.5"/>
-                        <circle cx="66" cy="78" r="1.5"/>
-                        <circle cx="50" cy="82" r="1.5"/>
-                      </g>
-
-                      <!-- 3D Unihoc Aerodynamic Floorball Air Holes -->
-                      <ellipse cx="50" cy="50" rx="7.5" ry="7.5" fill="url(#holeDepth_${ball.id})" stroke="#f8fafc" stroke-width="1"/>
-
-                      <ellipse cx="50" cy="30" rx="6.5" ry="6" fill="url(#holeDepth_${ball.id})" stroke="#f8fafc" stroke-width="0.8"/>
-                      <ellipse cx="68" cy="40" rx="6" ry="6.5" fill="url(#holeDepth_${ball.id})" stroke="#f8fafc" stroke-width="0.8"/>
-                      <ellipse cx="68" cy="60" rx="6" ry="6.5" fill="url(#holeDepth_${ball.id})" stroke="#f8fafc" stroke-width="0.8"/>
-                      <ellipse cx="50" cy="70" rx="6.5" ry="6" fill="url(#holeDepth_${ball.id})" stroke="#f8fafc" stroke-width="0.8"/>
-                      <ellipse cx="32" cy="60" rx="6" ry="6.5" fill="url(#holeDepth_${ball.id})" stroke="#f8fafc" stroke-width="0.8"/>
-                      <ellipse cx="32" cy="40" rx="6" ry="6.5" fill="url(#holeDepth_${ball.id})" stroke="#f8fafc" stroke-width="0.8"/>
-
-                      <ellipse cx="50" cy="13" rx="5.5" ry="3" fill="url(#holeDepth_${ball.id})"/>
-                      <ellipse cx="76" cy="22" rx="5" ry="4" fill="url(#holeDepth_${ball.id})"/>
-                      <ellipse cx="87" cy="48" rx="3" ry="5.5" fill="url(#holeDepth_${ball.id})"/>
-                      <ellipse cx="76" cy="76" rx="5" ry="4" fill="url(#holeDepth_${ball.id})"/>
-                      <ellipse cx="50" cy="87" rx="5.5" ry="3" fill="url(#holeDepth_${ball.id})"/>
-                      <ellipse cx="24" cy="76" rx="5" ry="4" fill="url(#holeDepth_${ball.id})"/>
-                      <ellipse cx="13" cy="48" rx="3" ry="5.5" fill="url(#holeDepth_${ball.id})"/>
-                      <ellipse cx="24" cy="22" rx="5" ry="4" fill="url(#holeDepth_${ball.id})"/>
-                    </svg>
+                <div class="ball-circle" title="Salibandypallo (Liikuteltava)">
+                    <img src="floorball-ball.svg" class="floorball-svg-icon" alt="Pallo">
                     <button class="ball-remove-btn" data-action="remove-ball" data-ball-id="${ball.id}">✕</button>
                 </div>
             `;
