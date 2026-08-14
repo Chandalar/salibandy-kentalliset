@@ -1025,19 +1025,29 @@
     }
 
     function addBallToActiveLineup() {
-        if (!lineupBalls[activeLineupKey]) lineupBalls[activeLineupKey] = [];
+        if (!lineupBalls || typeof lineupBalls !== 'object') lineupBalls = {};
+        if (!lineupBalls[activeLineupKey] || !Array.isArray(lineupBalls[activeLineupKey])) {
+            lineupBalls[activeLineupKey] = [];
+        }
+
         const newBall = {
-            id: 'ball_' + Date.now(),
+            id: 'ball_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
             x: 50,
             y: 50
         };
+
         lineupBalls[activeLineupKey].push(newBall);
+        
+        // Always switch tool to 'select' (Liikuta) so user can drag ball immediately!
+        setDrawingTool('select', document.getElementById('tool-select'));
+
         saveState();
         renderCourtPlayers();
         showToast('Pallo lisätty kentälle! ⚪');
     }
 
     function renderCourtBalls() {
+        if (!lineupBalls || typeof lineupBalls !== 'object') return;
         const balls = lineupBalls[activeLineupKey] || [];
         balls.forEach(ball => {
             const ballNode = document.createElement('div');
@@ -1048,7 +1058,7 @@
 
             ballNode.innerHTML = `
                 <div class="ball-circle" title="Salibandypallo (Liikuteltava)">
-                    <div class="ball-holes-icon"></div>
+                    <div class="ball-holes-icon">⚪</div>
                     <button class="ball-remove-btn" data-action="remove-ball" data-ball-id="${ball.id}">✕</button>
                 </div>
             `;
