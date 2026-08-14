@@ -1,6 +1,6 @@
 /**
  * Salibandyn Kentälliset & Taktiikkataulu - Advanced Logic & Interactive Engine
- * Sisältää täysileveän rinnakkaisen yhteenvetonäkymän ja reaaliaikaisen Firebase-pilvisynkronoinnin.
+ * Sisältää täysileveän rinnakkaisen yhteenvetonäkymän, pystypinotut taktiikkakentät ja reaaliaikaisen Firebase-pilvisynkronoinnin.
  */
 
 (function() {
@@ -126,101 +126,13 @@
     let activeFilter = 'all';
     let searchQuery = '';
     let labelMode = 'full';
-    let orientationMode = window.innerWidth <= 600 ? 'vertical' : 'horizontal';
+    let orientationMode = (typeof window !== 'undefined' && window.innerWidth <= 600) ? 'vertical' : 'horizontal';
     let activeSelectedElementId = null;
 
     // Per-court state maps
     let courtDrawingTools = {};
     let courtIsDrawingMap = {};
     let courtPathPctMap = {};
-
-    // DOM Elements
-    const teamSelect = document.getElementById('team-select');
-    const btnDeleteTeam = document.getElementById('btn-delete-team');
-    const rosterListContainer = document.getElementById('roster-list-container');
-    const rosterSearchInput = document.getElementById('roster-search');
-    const filterPillBtns = document.querySelectorAll('.pill-btn');
-    const tabsScrollContainer = document.getElementById('tabs-scroll-container');
-    const activeLineupTitle = document.getElementById('active-lineup-title');
-    const lineupSlotsContainer = document.getElementById('lineup-slots-container');
-
-    const pagesScrollContainer = document.getElementById('pages-scroll-container');
-    const btnAddTacticPage = document.getElementById('btn-add-tactic-page');
-    const btnDeleteTacticPage = document.getElementById('btn-delete-tactic-page');
-    const courtsVerticalList = document.getElementById('courts-vertical-list');
-    const btnAddCourtBoard = document.getElementById('btn-add-court-board');
-
-    const toastEl = document.getElementById('toast');
-
-    // Main Sections
-    const rosterPanelSection = document.getElementById('roster-panel-section');
-    const pitchPanelSection = document.getElementById('pitch-panel-section');
-    const lineupPanelSection = document.getElementById('lineup-panel-section');
-    const summaryViewPanel = document.getElementById('summary-view-panel');
-    const summaryGridContainer = document.getElementById('summary-grid-container');
-
-    // Counters & Status Badges
-    const countMvEl = document.getElementById('count-mv');
-    const countFieldEl = document.getElementById('count-field');
-    const countLoanEl = document.getElementById('count-loan');
-    const cloudSyncBadge = document.getElementById('cloud-sync-badge');
-    const userAuthStatusWrapper = document.getElementById('user-auth-status');
-
-    // Modals
-    const authModal = document.getElementById('auth-modal');
-    const authTabLogin = document.getElementById('auth-tab-login');
-    const authTabRegister = document.getElementById('auth-tab-register');
-    const loginForm = document.getElementById('login-form');
-    const registerForm = document.getElementById('register-form');
-
-    const manageLineupsModal = document.getElementById('manage-lineups-modal');
-    const reorderLineupsList = document.getElementById('reorder-lineups-list');
-    const btnResetDefaultLineups = document.getElementById('btn-reset-default-lineups');
-
-    const importPlayersModal = document.getElementById('import-players-modal');
-    const importSourceTeamSelect = document.getElementById('import-source-team-select');
-    const importPlayerChecklist = document.getElementById('import-player-checklist');
-    const btnConfirmImportPlayers = document.getElementById('btn-confirm-import-players');
-    const btnImportSelectAll = document.getElementById('btn-import-select-all');
-    const btnImportDeselectAll = document.getElementById('btn-import-deselect-all');
-
-    const lineupConfigModal = document.getElementById('lineup-config-modal');
-    const lineupConfigForm = document.getElementById('lineup-config-form');
-    const lineupConfigModalTitle = document.getElementById('lineup-config-modal-title');
-    const formLineupId = document.getElementById('form-lineup-id');
-    const formLineupName = document.getElementById('form-lineup-name');
-
-    const slotPickerModal = document.getElementById('slot-picker-modal');
-    const slotPickerTitle = document.getElementById('slot-picker-title');
-    const slotPickerInfo = document.getElementById('slot-picker-info');
-    const slotPickerPlayerList = document.getElementById('slot-picker-player-list');
-    const btnClearSlotPicker = document.getElementById('btn-clear-slot-picker');
-
-    const assignModal = document.getElementById('assign-modal');
-    const assignModalTitle = document.getElementById('assign-modal-title');
-    const assignModalPlayerInfo = document.getElementById('assign-modal-player-info');
-    const assignOptionsGrid = document.getElementById('assign-options-grid');
-
-    const playerModal = document.getElementById('player-modal');
-    const playerForm = document.getElementById('player-form');
-    const modalTitle = document.getElementById('modal-title');
-    const formPlayerId = document.getElementById('form-player-id');
-    const formName = document.getElementById('form-name');
-    const formNumber = document.getElementById('form-number');
-    const formPosition = document.getElementById('form-position');
-    const formIsLoan = document.getElementById('form-is-loan');
-    const formNotes = document.getElementById('form-notes');
-
-    const teamModal = document.getElementById('team-modal');
-    const teamForm = document.getElementById('team-form');
-    const teamNameInput = document.getElementById('team-name-input');
-
-    const photoModal = document.getElementById('photo-modal');
-    const photoFileInput = document.getElementById('photo-file-input');
-    const ocrStatus = document.getElementById('ocr-status');
-    const ocrStatusText = document.getElementById('ocr-status-text');
-    const photoPreviewStep = document.getElementById('photo-preview-step');
-    const ocrResultsList = document.getElementById('ocr-results-list');
 
     let tempOcrParsedPlayers = [];
     let selectedPlayerForAssignment = null;
@@ -272,7 +184,7 @@
     }
 
     function initFirebaseAuth() {
-        if (window.SalibandyFirebase && window.SalibandyFirebase.isReady()) {
+        if (typeof window !== 'undefined' && window.SalibandyFirebase && window.SalibandyFirebase.isReady()) {
             const auth = window.SalibandyFirebase.getAuth();
             auth.onAuthStateChanged((user) => {
                 currentUser = user;
@@ -293,6 +205,8 @@
     }
 
     function updateAuthUI() {
+        const userAuthStatusWrapper = document.getElementById('user-auth-status');
+        if (!userAuthStatusWrapper) return;
         if (currentUser) {
             userAuthStatusWrapper.innerHTML = `
                 <div class="user-profile-badge">
@@ -310,13 +224,14 @@
                 </button>
             `;
             document.getElementById('btn-open-auth-modal')?.addEventListener('click', () => {
-                authModal?.classList.add('active');
+                document.getElementById('auth-modal')?.classList.add('active');
             });
             updateCloudSyncBadge(false);
         }
     }
 
     function updateCloudSyncBadge(isCloudActive) {
+        const cloudSyncBadge = document.getElementById('cloud-sync-badge');
         if (!cloudSyncBadge) return;
         if (isCloudActive) {
             cloudSyncBadge.className = 'cloud-sync-badge';
@@ -332,7 +247,7 @@
     }
 
     function handleLogout() {
-        if (window.SalibandyFirebase && window.SalibandyFirebase.isReady()) {
+        if (typeof window !== 'undefined' && window.SalibandyFirebase && window.SalibandyFirebase.isReady()) {
             if (unsubscribeFirestore) {
                 unsubscribeFirestore();
                 unsubscribeFirestore = null;
@@ -346,7 +261,7 @@
     }
 
     // ==========================================
-    // COMPLETE REAL-TIME BI-DIRECTIONAL CLOUD SYNC WITH INTELLIGENT MERGE
+    // COMPLETE REAL-TIME BI-DIRECTIONAL CLOUD SYNC
     // ==========================================
     function buildFullCloudPayload() {
         const rostersMap = {};
@@ -372,7 +287,7 @@
             pagesMap[tId] = (tId === currentTeamId) ? lineupPages : loadFromStorage(`salibandy_pages_${tId}`, {});
         });
 
-        const serverTs = (window.firebase && window.firebase.firestore && window.firebase.firestore.FieldValue)
+        const serverTs = (typeof window !== 'undefined' && window.firebase && window.firebase.firestore && window.firebase.firestore.FieldValue)
             ? window.firebase.firestore.FieldValue.serverTimestamp() : new Date();
 
         return {
@@ -395,7 +310,7 @@
     function forceCloudSync() {
         if (!currentUser || !window.SalibandyFirebase || !window.SalibandyFirebase.isReady()) {
             showToast('Kirjaudu sisään synkronoidaksesi pilveen.');
-            authModal?.classList.add('active');
+            document.getElementById('auth-modal')?.classList.add('active');
             return;
         }
 
@@ -446,7 +361,6 @@
             if (!cloudData) return;
 
             if (!cloudData.rosters || !cloudData.lineups) {
-                console.log('🔥 Upgrading Firestore doc with full rosters, lineups, drawings, positions, balls, cones, opponents, and pages...');
                 const fullPayload = buildFullCloudPayload();
                 userRef.set(fullPayload, { merge: true });
             }
@@ -492,16 +406,6 @@
                     const finalRoster = Object.values(mergedRosterMap);
                     localStorage.setItem(`salibandy_roster_${tId}`, JSON.stringify(finalRoster));
                 });
-
-                teams.forEach(t => {
-                    if (!cloudData.rosters[t.id]) {
-                        const localRoster = loadFromStorage(`salibandy_roster_${t.id}`, []);
-                        cloudData.rosters[t.id] = localRoster;
-                        needCloudUpdateBack = true;
-                    }
-                });
-            } else {
-                needCloudUpdateBack = true;
             }
 
             if (cloudData.lineupConfigs) {
@@ -576,7 +480,6 @@
             if (needCloudUpdateBack) {
                 const mergedPayload = buildFullCloudPayload();
                 userRef.set(mergedPayload, { merge: true }).then(() => {
-                    console.log('☁️ Auto-upgraded and merged local data into Cloud Firestore!');
                     isCloudLoading = false;
                 }).catch(() => {
                     isCloudLoading = false;
@@ -598,7 +501,6 @@
             if (t.id !== 'team_edustus') {
                 const storedRoster = loadFromStorage(`salibandy_roster_${t.id}`, null);
                 if (storedRoster && Array.isArray(storedRoster) && storedRoster.some(p => p.id === 'p_mv23')) {
-                    console.log(`Auto-clearing corrupted demo roster for team: ${t.name} (${t.id})`);
                     localStorage.setItem(`salibandy_roster_${t.id}`, JSON.stringify([]));
                     const emptyLineups = {};
                     DEFAULT_LINEUP_CONFIGS.forEach(c => { emptyLineups[c.id] = createEmptyLineupSlots(); });
@@ -613,7 +515,6 @@
             const data = localStorage.getItem(key);
             return data ? JSON.parse(data) : fallback;
         } catch (e) {
-            console.error('LocalStorage load error', e);
             return fallback;
         }
     }
@@ -685,7 +586,7 @@
     function saveState() {
         saveStateLocalOnly();
 
-        if (currentUser && window.SalibandyFirebase && window.SalibandyFirebase.isReady() && !isCloudLoading) {
+        if (currentUser && typeof window !== 'undefined' && window.SalibandyFirebase && window.SalibandyFirebase.isReady() && !isCloudLoading) {
             const db = window.SalibandyFirebase.getDb();
             const payload = buildFullCloudPayload();
             db.collection('users').doc(currentUser.uid).set(payload, { merge: true })
@@ -704,6 +605,7 @@
     }
 
     function showToast(message) {
+        const toastEl = document.getElementById('toast');
         if (!toastEl) return;
         toastEl.textContent = message;
         toastEl.classList.add('show');
@@ -713,6 +615,7 @@
     }
 
     function renderTeamDropdown() {
+        const teamSelect = document.getElementById('team-select');
         if (!teamSelect) return;
         teamSelect.innerHTML = '';
         teams.forEach(t => {
@@ -790,6 +693,7 @@
     }
 
     function renderTabs() {
+        const tabsScrollContainer = document.getElementById('tabs-scroll-container');
         if (!tabsScrollContainer) return;
         tabsScrollContainer.innerHTML = '';
 
@@ -837,6 +741,11 @@
         renderTabs();
         renderTacticalPageBadges();
 
+        const rosterPanelSection = document.getElementById('roster-panel-section');
+        const pitchPanelSection = document.getElementById('pitch-panel-section');
+        const lineupPanelSection = document.getElementById('lineup-panel-section');
+        const summaryViewPanel = document.getElementById('summary-view-panel');
+
         if (activeLineupKey === 'summary') {
             if (rosterPanelSection) rosterPanelSection.style.display = 'none';
             if (pitchPanelSection) pitchPanelSection.style.display = 'none';
@@ -863,6 +772,11 @@
                 { id: 'p1', name: 'Sivu 1', courts: [{ id: 'c1', title: 'Kenttä 1' }] }
             ];
         }
+        lineupPages[activeLineupKey].forEach((p, idx) => {
+            if (!p.courts || !Array.isArray(p.courts) || p.courts.length === 0) {
+                p.courts = [{ id: 'c1', title: 'Kenttä 1' }];
+            }
+        });
         return lineupPages[activeLineupKey];
     }
 
@@ -880,6 +794,7 @@
     }
 
     function renderTacticalPageBadges() {
+        const pagesScrollContainer = document.getElementById('pages-scroll-container');
         if (!pagesScrollContainer) return;
         pagesScrollContainer.innerHTML = '';
 
@@ -911,7 +826,8 @@
             pagesScrollContainer.appendChild(badge);
         });
 
-        if (btnDeleteTacticPage) {
+        const btnDeleteTacticPage = document.getElementById('btn-delete-tactic-page');
+        if (btnDeleteTacticPage && btnDeleteTacticPage.style) {
             btnDeleteTacticPage.style.display = pages.length > 1 ? 'inline-block' : 'none';
         }
     }
@@ -974,6 +890,9 @@
     // ==========================================
     function addCourtToActivePage() {
         const page = getCurrentPage();
+        if (!page.courts || !Array.isArray(page.courts)) {
+            page.courts = [{ id: 'c1', title: 'Kenttä 1' }];
+        }
         const nextNum = page.courts.length + 1;
         const newCourtId = 'c_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4);
 
@@ -984,12 +903,20 @@
 
         saveState();
         renderCourtBoards();
+
+        requestAnimationFrame(() => {
+            const addedCard = document.querySelector(`.court-board-card[data-court-id="${newCourtId}"]`);
+            if (addedCard && addedCard.scrollIntoView) {
+                addedCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        });
+
         showToast(`Uusi piirtoalusta / kenttä lisätty alapuolelle! 🏒`);
     }
 
     function deleteCourtFromActivePage(courtId) {
         const page = getCurrentPage();
-        if (page.courts.length <= 1) {
+        if (!page.courts || page.courts.length <= 1) {
             showToast('Et voi poistaa ainoaa piirtoalustaa sivulta.');
             return;
         }
@@ -1028,6 +955,7 @@
     }
 
     function renderCourtBoards() {
+        const courtsVerticalList = document.getElementById('courts-vertical-list');
         if (!courtsVerticalList) return;
         courtsVerticalList.innerHTML = '';
 
@@ -1078,7 +1006,7 @@
 
                     <div class="toolbar-group">
                         <button class="tool-btn highlight-ball" data-action="add-ball" data-court-id="${courtId}" title="Lisää pallo kentälle">
-                            <img src="ball.png?v=21.0" width="18" height="18" alt="Pallo" style="vertical-align: middle; display: inline-block;"> + Pallo
+                            <img src="ball.png?v=22.0" width="18" height="18" alt="Pallo" style="vertical-align: middle; display: inline-block;"> + Pallo
                         </button>
                         <button class="tool-btn highlight-cone" data-action="add-cone" data-court-id="${courtId}" title="Lisää harjoitustötterö kentälle">
                             🔶 + Tötterö
@@ -1140,8 +1068,10 @@
         const layersEl = document.getElementById(`court-players-layer-${courtId}`);
 
         if (!courtContainer || !canvasEl || !layersEl) return;
+        if (typeof canvasEl.getContext !== 'function') return;
 
         const ctxEl = canvasEl.getContext('2d');
+        if (!ctxEl) return;
         let courtRect = courtContainer.getBoundingClientRect();
 
         if (courtRect.width === 0 || courtRect.height === 0) {
@@ -1160,8 +1090,6 @@
 
     function renderCourtNodesForInstance(courtId, layersEl) {
         layersEl.innerHTML = '';
-        const courtKey = getCourtKey(courtId);
-
         renderLineupPlayerNodesForInstance(courtId, layersEl);
         renderCourtBallsForInstance(courtId, layersEl);
         renderCourtConesForInstance(courtId, layersEl);
@@ -1224,7 +1152,7 @@
 
             ballNode.innerHTML = `
                 <div class="ball-circle" title="Salibandypallo">
-                    <img src="ball.png?v=21.0" class="floorball-png-icon" alt="Pallo">
+                    <img src="ball.png?v=22.0" class="floorball-png-icon" alt="Pallo">
                     <button class="ball-remove-btn" data-action="remove-ball" data-ball-id="${ball.id}" data-court-id="${courtId}">✕</button>
                 </div>
             `;
@@ -2125,6 +2053,10 @@
         const fieldCount = roster.filter(p => p.position !== 'MV').length;
         const loanCount = roster.filter(p => p.isLoan).length;
 
+        const countMvEl = document.getElementById('count-mv');
+        const countFieldEl = document.getElementById('count-field');
+        const countLoanEl = document.getElementById('count-loan');
+
         if (countMvEl) countMvEl.textContent = `${mvCount} MV`;
         if (countFieldEl) countFieldEl.textContent = `${fieldCount} KENTTÄ`;
         if (countLoanEl) countLoanEl.textContent = `${loanCount} LAINA`;
@@ -2145,6 +2077,7 @@
     }
 
     function renderRoster() {
+        const rosterListContainer = document.getElementById('roster-list-container');
         if (!rosterListContainer) return;
         rosterListContainer.innerHTML = '';
 
@@ -2235,6 +2168,8 @@
     }
 
     function renderActiveLineupSlots() {
+        const activeLineupTitle = document.getElementById('active-lineup-title');
+        const lineupSlotsContainer = document.getElementById('lineup-slots-container');
         if (!activeLineupTitle || !lineupSlotsContainer) return;
         activeLineupTitle.textContent = getLineupName(activeLineupKey);
         const currentLineup = lineups[activeLineupKey] || {};
@@ -2276,6 +2211,7 @@
     // SUMMARY VIEW (Kaikki kentälliset rinnakkain)
     // ==========================================
     function renderSummaryView() {
+        const summaryGridContainer = document.getElementById('summary-grid-container');
         if (!summaryGridContainer) return;
         summaryGridContainer.innerHTML = '';
 
@@ -2364,19 +2300,24 @@
             return;
         }
 
-        importSourceTeamSelect.innerHTML = '';
-        otherTeams.forEach(t => {
-            const opt = document.createElement('option');
-            opt.value = t.id;
-            opt.textContent = t.name;
-            importSourceTeamSelect.appendChild(opt);
-        });
+        const importSourceTeamSelect = document.getElementById('import-source-team-select');
+        if (importSourceTeamSelect) {
+            importSourceTeamSelect.innerHTML = '';
+            otherTeams.forEach(t => {
+                const opt = document.createElement('option');
+                opt.value = t.id;
+                opt.textContent = t.name;
+                importSourceTeamSelect.appendChild(opt);
+            });
+        }
 
         renderImportChecklist(otherTeams[0].id);
-        importPlayersModal.classList.add('active');
+        document.getElementById('import-players-modal')?.classList.add('active');
     }
 
     function renderImportChecklist(sourceTeamId) {
+        const importPlayerChecklist = document.getElementById('import-player-checklist');
+        if (!importPlayerChecklist) return;
         importPlayerChecklist.innerHTML = '';
         const sourceRoster = loadRosterForTeam(sourceTeamId);
 
@@ -2403,10 +2344,12 @@
 
     function openManageLineupsModal() {
         renderReorderList();
-        manageLineupsModal.classList.add('active');
+        document.getElementById('manage-lineups-modal')?.classList.add('active');
     }
 
     function renderReorderList() {
+        const reorderLineupsList = document.getElementById('reorder-lineups-list');
+        if (!reorderLineupsList) return;
         reorderLineupsList.innerHTML = '';
 
         if (lineupConfigs.length === 0) {
@@ -2434,16 +2377,21 @@
     }
 
     function openLineupConfigModal(lineupConfig = null) {
+        const lineupConfigModalTitle = document.getElementById('lineup-config-modal-title');
+        const formLineupId = document.getElementById('form-lineup-id');
+        const formLineupName = document.getElementById('form-lineup-name');
+        const lineupConfigForm = document.getElementById('lineup-config-form');
+
         if (lineupConfig) {
-            lineupConfigModalTitle.textContent = 'Muokkaa kentällisen nimeä';
-            formLineupId.value = lineupConfig.id;
-            formLineupName.value = lineupConfig.name;
+            if (lineupConfigModalTitle) lineupConfigModalTitle.textContent = 'Muokkaa kentällisen nimeä';
+            if (formLineupId) formLineupId.value = lineupConfig.id;
+            if (formLineupName) formLineupName.value = lineupConfig.name;
         } else {
-            lineupConfigModalTitle.textContent = 'Uusi kentällinen';
-            lineupConfigForm.reset();
-            formLineupId.value = '';
+            if (lineupConfigModalTitle) lineupConfigModalTitle.textContent = 'Uusi kentällinen';
+            lineupConfigForm?.reset();
+            if (formLineupId) formLineupId.value = '';
         }
-        lineupConfigModal.classList.add('active');
+        document.getElementById('lineup-config-modal')?.classList.add('active');
     }
 
     function deleteLineupConfig(id) {
@@ -2487,8 +2435,12 @@
         const isMv = pos === 'MV';
         const lineupName = getLineupName(lineupKey);
 
-        slotPickerTitle.textContent = `Valitse pelaaja: ${lineupName} - ${pos}`;
-        slotPickerInfo.textContent = `Valitse pelaaja ringistä paikkaan ${pos}:`;
+        const slotPickerTitle = document.getElementById('slot-picker-title');
+        const slotPickerInfo = document.getElementById('slot-picker-info');
+        const slotPickerPlayerList = document.getElementById('slot-picker-player-list');
+
+        if (slotPickerTitle) slotPickerTitle.textContent = `Valitse pelaaja: ${lineupName} - ${pos}`;
+        if (slotPickerInfo) slotPickerInfo.textContent = `Valitse pelaaja ringistä paikkaan ${pos}:`;
 
         const currentOccupantId = (lineups[lineupKey] || {})[pos];
 
@@ -2500,86 +2452,92 @@
             return a.number - b.number;
         });
 
-        slotPickerPlayerList.innerHTML = '';
+        if (slotPickerPlayerList) {
+            slotPickerPlayerList.innerHTML = '';
+            sortedRoster.forEach(player => {
+                const item = document.createElement('div');
+                const isAssignedToThis = player.id === currentOccupantId;
+                item.className = `slot-picker-item ${player.position === 'MV' ? 'is-mv' : 'is-field'} ${isAssignedToThis ? 'is-current' : ''}`;
 
-        sortedRoster.forEach(player => {
-            const item = document.createElement('div');
-            const isAssignedToThis = player.id === currentOccupantId;
-            item.className = `slot-picker-item ${player.position === 'MV' ? 'is-mv' : 'is-field'} ${isAssignedToThis ? 'is-current' : ''}`;
+                item.innerHTML = `
+                    <div class="slot-picker-num">#${player.number}</div>
+                    <div class="slot-picker-info">
+                        <span class="slot-picker-name">${escapeHtml(player.name)}</span>
+                        <span class="pos-badge">${getPosLabel(player.position)}</span>
+                        ${player.isLoan ? '<span class="loan-pill-tiny">LAINA</span>' : ''}
+                    </div>
+                    ${isAssignedToThis ? '<span style="font-size:0.75rem; color:var(--accent-field);">✓ Valittu</span>' : ''}
+                `;
 
-            item.innerHTML = `
-                <div class="slot-picker-num">#${player.number}</div>
-                <div class="slot-picker-info">
-                    <span class="slot-picker-name">${escapeHtml(player.name)}</span>
-                    <span class="pos-badge">${getPosLabel(player.position)}</span>
-                    ${player.isLoan ? '<span class="loan-pill-tiny">LAINA</span>' : ''}
-                </div>
-                ${isAssignedToThis ? '<span style="font-size:0.75rem; color:var(--accent-field);">✓ Valittu</span>' : ''}
-            `;
+                item.addEventListener('click', () => {
+                    assignPlayerToLineupSlot(lineupKey, pos, player.id);
+                    closeModal();
+                });
 
-            item.addEventListener('click', () => {
-                assignPlayerToLineupSlot(lineupKey, pos, player.id);
-                closeModal();
+                slotPickerPlayerList.appendChild(item);
             });
+        }
 
-            slotPickerPlayerList.appendChild(item);
-        });
-
-        slotPickerModal.classList.add('active');
+        document.getElementById('slot-picker-modal')?.classList.add('active');
     }
 
     function openAssignModal(player) {
         selectedPlayerForAssignment = player;
-        assignModalTitle.textContent = 'Sijoita kentälliseen';
-        assignModalPlayerInfo.innerHTML = `Valitse paikka pelaajalle <strong>#${player.number} ${escapeHtml(player.name)}</strong>:`;
+        const assignModalTitle = document.getElementById('assign-modal-title');
+        const assignModalPlayerInfo = document.getElementById('assign-modal-player-info');
+        const assignOptionsGrid = document.getElementById('assign-options-grid');
+
+        if (assignModalTitle) assignModalTitle.textContent = 'Sijoita kentälliseen';
+        if (assignModalPlayerInfo) assignModalPlayerInfo.innerHTML = `Valitse paikka pelaajalle <strong>#${player.number} ${escapeHtml(player.name)}</strong>:`;
 
         const slotTypes = ['MV', 'VP', 'OP', 'VH', 'KH', 'OH'];
-        assignOptionsGrid.innerHTML = '';
+        if (assignOptionsGrid) {
+            assignOptionsGrid.innerHTML = '';
+            lineupConfigs.forEach(cConfig => {
+                const lKey = cConfig.id;
+                const lName = cConfig.name;
+                const curL = lineups[lKey] || {};
 
-        lineupConfigs.forEach(cConfig => {
-            const lKey = cConfig.id;
-            const lName = cConfig.name;
-            const curL = lineups[lKey] || {};
+                const section = document.createElement('div');
+                section.className = 'assign-lineup-group';
+                section.innerHTML = `<div class="assign-lineup-title">${escapeHtml(lName)}</div>`;
 
-            const section = document.createElement('div');
-            section.className = 'assign-lineup-group';
-            section.innerHTML = `<div class="assign-lineup-title">${escapeHtml(lName)}</div>`;
+                const btnGrid = document.createElement('div');
+                btnGrid.className = 'assign-slots-row';
 
-            const btnGrid = document.createElement('div');
-            btnGrid.className = 'assign-slots-row';
+                slotTypes.forEach(pos => {
+                    const btn = document.createElement('button');
+                    const isSelectedHere = curL[pos] === player.id;
+                    btn.className = `assign-slot-btn ${isSelectedHere ? 'is-active' : ''}`;
+                    btn.innerHTML = `<strong>${pos}</strong>`;
 
-            slotTypes.forEach(pos => {
-                const btn = document.createElement('button');
-                const isSelectedHere = curL[pos] === player.id;
-                btn.className = `assign-slot-btn ${isSelectedHere ? 'is-active' : ''}`;
-                btn.innerHTML = `<strong>${pos}</strong>`;
+                    btn.addEventListener('click', () => {
+                        if (isSelectedHere) {
+                            lineups[lKey][pos] = '';
+                            showToast(`Poistettu: ${lName} - ${pos}`);
+                        } else {
+                            assignPlayerToLineupSlot(lKey, pos, player.id);
+                        }
+                        saveState();
+                        renderRoster();
+                        if (activeLineupKey === 'summary') {
+                            renderSummaryView();
+                        } else {
+                            renderActiveLineupSlots();
+                            renderCourtBoards();
+                        }
+                        closeModal();
+                    });
 
-                btn.addEventListener('click', () => {
-                    if (isSelectedHere) {
-                        lineups[lKey][pos] = '';
-                        showToast(`Poistettu: ${lName} - ${pos}`);
-                    } else {
-                        assignPlayerToLineupSlot(lKey, pos, player.id);
-                    }
-                    saveState();
-                    renderRoster();
-                    if (activeLineupKey === 'summary') {
-                        renderSummaryView();
-                    } else {
-                        renderActiveLineupSlots();
-                        renderCourtBoards();
-                    }
-                    closeModal();
+                    btnGrid.appendChild(btn);
                 });
 
-                btnGrid.appendChild(btn);
+                section.appendChild(btnGrid);
+                assignOptionsGrid.appendChild(section);
             });
+        }
 
-            section.appendChild(btnGrid);
-            assignOptionsGrid.appendChild(section);
-        });
-
-        assignModal.classList.add('active');
+        document.getElementById('assign-modal')?.classList.add('active');
     }
 
     function assignPlayerToLineupSlot(lineupKey, pos, playerId) {
@@ -2598,69 +2556,36 @@
     }
 
     function openModal(editPlayer = null) {
+        const modalTitle = document.getElementById('modal-title');
+        const formPlayerId = document.getElementById('form-player-id');
+        const formName = document.getElementById('form-name');
+        const formNumber = document.getElementById('form-number');
+        const formPosition = document.getElementById('form-position');
+        const formIsLoan = document.getElementById('form-is-loan');
+        const formNotes = document.getElementById('form-notes');
+        const playerForm = document.getElementById('player-form');
+
         if (editPlayer) {
-            modalTitle.textContent = 'Muokkaa pelaajaa';
-            formPlayerId.value = editPlayer.id;
-            formName.value = editPlayer.name;
-            formNumber.value = editPlayer.number;
-            formPosition.value = editPlayer.position;
-            formIsLoan.checked = editPlayer.isLoan;
-            formNotes.value = editPlayer.notes || '';
+            if (modalTitle) modalTitle.textContent = 'Muokkaa pelaajaa';
+            if (formPlayerId) formPlayerId.value = editPlayer.id;
+            if (formName) formName.value = editPlayer.name;
+            if (formNumber) formNumber.value = editPlayer.number;
+            if (formPosition) formPosition.value = editPlayer.position;
+            if (formIsLoan) formIsLoan.checked = editPlayer.isLoan;
+            if (formNotes) formNotes.value = editPlayer.notes || '';
         } else {
-            modalTitle.textContent = 'Lisää uusi pelaaja / Laina';
-            playerForm.reset();
-            formPlayerId.value = '';
-            formPosition.value = 'H';
-            formIsLoan.checked = false;
+            if (modalTitle) modalTitle.textContent = 'Lisää uusi pelaaja / Laina';
+            playerForm?.reset();
+            if (formPlayerId) formPlayerId.value = '';
+            if (formPosition) formPosition.value = 'H';
+            if (formIsLoan) formIsLoan.checked = false;
         }
-        playerModal.classList.add('active');
+        document.getElementById('player-modal')?.classList.add('active');
     }
 
     function closeModal() {
-        playerModal?.classList.remove('active');
-        teamModal?.classList.remove('active');
-        photoModal?.classList.remove('active');
-        assignModal?.classList.remove('active');
-        slotPickerModal?.classList.remove('active');
-        lineupConfigModal?.classList.remove('active');
-        manageLineupsModal?.classList.remove('active');
-        importPlayersModal?.classList.remove('active');
-        authModal?.classList.remove('active');
+        document.querySelectorAll('.modal-overlay').forEach(m => m.classList.remove('active'));
     }
-
-    playerForm?.addEventListener('submit', (e) => {
-        e.preventDefault();
-        const id = formPlayerId.value || 'p_' + Date.now();
-        const name = formName.value.trim();
-        const number = parseInt(formNumber.value, 10);
-        const position = formPosition.value;
-        const isLoan = formIsLoan.checked;
-        const notes = formNotes.value.trim();
-
-        if (!name || isNaN(number)) return;
-
-        const existingIndex = roster.findIndex(p => p.id === id);
-        const playerData = { id, name, number, position, isLoan, notes };
-
-        if (existingIndex >= 0) {
-            roster[existingIndex] = playerData;
-            showToast('Pelaajan tiedot päivitetty!');
-        } else {
-            roster.push(playerData);
-            showToast('Uusi pelaaja lisätty rinkiin!');
-        }
-
-        saveState();
-        updateRosterCounters();
-        renderRoster();
-        if (activeLineupKey === 'summary') {
-            renderSummaryView();
-        } else {
-            renderActiveLineupSlots();
-            renderCourtBoards();
-        }
-        closeModal();
-    });
 
     function deletePlayer(id) {
         if (!confirm('Haluatko varmasti poistaa pelaajan ringistä?')) return;
@@ -2684,57 +2609,43 @@
         showToast('Pelaaja poistettu.');
     }
 
-    teamForm?.addEventListener('submit', (e) => {
-        e.preventDefault();
-        const name = teamNameInput.value.trim();
-        if (!name) return;
-        const newTeamId = 'team_' + Date.now();
-        teams.push({ id: newTeamId, name: name });
+    function exportLineupsToClipboard() {
+        let text = `🏑 ${teams.find(t => t.id === currentTeamId)?.name || 'SALIBANDY'} - KENTÄLLISET\n\n`;
 
-        localStorage.setItem(`salibandy_roster_${newTeamId}`, JSON.stringify([]));
-        
-        const emptyLineups = {};
-        DEFAULT_LINEUP_CONFIGS.forEach(c => {
-            emptyLineups[c.id] = createEmptyLineupSlots();
-        });
-        localStorage.setItem(`salibandy_lineups_${newTeamId}`, JSON.stringify(emptyLineups));
+        lineupConfigs.forEach(cConfig => {
+            const key = cConfig.id;
+            const name = cConfig.name;
+            const lineup = lineups[key] || {};
+            const hasPlayers = Object.values(lineup).some(val => val !== '');
 
-        renderTeamDropdown();
-        closeModal();
-        switchTeam(newTeamId);
-        showToast(`Uusi tyhjä joukkue '${name}' luotu!`);
-    });
-
-    photoFileInput?.addEventListener('change', (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-
-        ocrStatus.style.display = 'flex';
-        ocrStatusText.textContent = 'Luetaan tekstiä valokuvasta...';
-        photoPreviewStep.style.display = 'none';
-
-        const reader = new FileReader();
-        reader.onload = function(event) {
-            const imgData = event.target.result;
-            
-            if (window.Tesseract) {
-                Tesseract.recognize(imgData, 'fin+eng', { logger: m => console.log(m) })
-                    .then(({ data: { text } }) => {
-                        parseOcrTextToPlayers(text);
-                    })
-                    .catch(err => {
-                        console.error('OCR Error:', err);
-                        parseOcrTextToPlayers("Sample #10 Juho\n#23 Matias (MV)\n#88 Eero");
-                    });
-            } else {
-                parseOcrTextToPlayers("Sample #10 Juho\n#23 Matias (MV)\n#88 Eero");
+            if (hasPlayers) {
+                text += `📌 ${name.toUpperCase()}:\n`;
+                const posOrder = ['MV', 'VP', 'OP', 'VH', 'KH', 'OH'];
+                posOrder.forEach(pos => {
+                    const pid = lineup[pos];
+                    const player = roster.find(p => p.id === pid);
+                    const icon = pos === 'MV' ? '🟢' : '🔵';
+                    if (player) {
+                        text += `  ${icon} ${pos}: #${player.number} ${player.name}${player.isLoan ? ' (LAINA)' : ''}\n`;
+                    }
+                });
+                text += `\n`;
             }
-        };
-        reader.readAsDataURL(file);
-    });
+        });
+
+        if (typeof navigator !== 'undefined' && navigator.clipboard) {
+            navigator.clipboard.writeText(text).then(() => {
+                showToast('Kentälliset kopioitu leikepöydälle! 📋');
+            }).catch(() => {
+                showToast('Kopiointi epäonnistui.');
+            });
+        }
+    }
 
     function parseOcrTextToPlayers(text) {
-        ocrStatus.style.display = 'none';
+        const ocrStatus = document.getElementById('ocr-status');
+        const photoPreviewStep = document.getElementById('photo-preview-step');
+        if (ocrStatus) ocrStatus.style.display = 'none';
         tempOcrParsedPlayers = [];
 
         const lines = text.split(/\r?\n/);
@@ -2774,10 +2685,12 @@
         }
 
         renderOcrResults();
-        photoPreviewStep.style.display = 'block';
+        if (photoPreviewStep) photoPreviewStep.style.display = 'block';
     }
 
     function renderOcrResults() {
+        const ocrResultsList = document.getElementById('ocr-results-list');
+        if (!ocrResultsList) return;
         ocrResultsList.innerHTML = '';
         tempOcrParsedPlayers.forEach((item, index) => {
             const row = document.createElement('div');
@@ -2794,92 +2707,46 @@
         });
     }
 
-    document.getElementById('btn-confirm-ocr-import')?.addEventListener('click', () => {
-        const rows = ocrResultsList.querySelectorAll('.ocr-item-row');
-        let count = 0;
-
-        rows.forEach(row => {
-            const numVal = parseInt(row.querySelector('.ocr-num-input').value, 10);
-            const nameVal = row.querySelector('.ocr-name-input').value.trim();
-            const posVal = row.querySelector('.ocr-pos-input').value;
-
-            if (nameVal && !isNaN(numVal)) {
-                roster.push({
-                    id: 'p_photo_' + Date.now() + '_' + (count++),
-                    name: nameVal,
-                    number: numVal,
-                    position: posVal,
-                    isLoan: false,
-                    notes: 'Tuotu valokuvasta 📷'
-                });
-            }
-        });
-
-        saveState();
-        updateRosterCounters();
-        renderRoster();
-        closeModal();
-        showToast(`${count} uutta pelaajaa tuotu kuvasta rinkiin! 🎉`);
-    });
-
-    function exportLineupsToClipboard() {
-        let text = `🏑 ${teams.find(t => t.id === currentTeamId)?.name || 'SALIBANDY'} - KENTÄLLISET\n\n`;
-
-        lineupConfigs.forEach(cConfig => {
-            const key = cConfig.id;
-            const name = cConfig.name;
-            const lineup = lineups[key] || {};
-            const hasPlayers = Object.values(lineup).some(val => val !== '');
-
-            if (hasPlayers) {
-                text += `📌 ${name.toUpperCase()}:\n`;
-                const posOrder = ['MV', 'VP', 'OP', 'VH', 'KH', 'OH'];
-                posOrder.forEach(pos => {
-                    const pid = lineup[pos];
-                    const player = roster.find(p => p.id === pid);
-                    const icon = pos === 'MV' ? '🟢' : '🔵';
-                    if (player) {
-                        text += `  ${icon} ${pos}: #${player.number} ${player.name}${player.isLoan ? ' (LAINA)' : ''}\n`;
-                    }
-                });
-                text += `\n`;
-            }
-        });
-
-        navigator.clipboard.writeText(text).then(() => {
-            showToast('Kentälliset kopioitu leikepöydälle! 📋');
-        }).catch(err => {
-            console.error('Kopiointivirhe:', err);
-            showToast('Kopiointi epäonnistui.');
-        });
-    }
-
+    // ==========================================
+    // GLOBAL EVENT BINDINGS
+    // ==========================================
     function bindEvents() {
-        teamSelect?.addEventListener('change', (e) => switchTeam(e.target.value));
-        btnDeleteTeam?.addEventListener('click', deleteActiveTeam);
-        cloudSyncBadge?.addEventListener('click', forceCloudSync);
+        document.getElementById('team-select')?.addEventListener('change', (e) => switchTeam(e.target.value));
+        document.getElementById('btn-delete-team')?.addEventListener('click', deleteActiveTeam);
+        document.getElementById('cloudSyncBadge')?.addEventListener('click', forceCloudSync);
 
-        btnAddTacticPage?.addEventListener('click', addTacticalPage);
-        btnDeleteTacticPage?.addEventListener('click', deleteTacticalPage);
-        btnAddCourtBoard?.addEventListener('click', addCourtToActivePage);
+        // Tactical Pages & Multi-court buttons
+        document.getElementById('btn-add-tactic-page')?.addEventListener('click', addTacticalPage);
+        document.getElementById('btn-delete-tactic-page')?.addEventListener('click', deleteTacticalPage);
+        document.getElementById('btn-add-court-board')?.addEventListener('click', addCourtToActivePage);
 
-        pagesScrollContainer?.addEventListener('click', (e) => {
-            const renameIcon = e.target.closest('[data-action="rename-page"]');
-            if (renameIcon) {
-                const pageId = renameIcon.dataset.pageId;
-                renameTacticalPage(pageId);
+        // Global delegated click handler for full robustness
+        document.addEventListener('click', (e) => {
+            const addCourtBtn = e.target.closest('#btn-add-court-board, [data-action="add-court-board"]');
+            if (addCourtBtn) {
+                e.preventDefault();
+                addCourtToActivePage();
+                return;
             }
-        });
 
-        courtsVerticalList?.addEventListener('click', (e) => {
+            const renamePageIcon = e.target.closest('[data-action="rename-page"]');
+            if (renamePageIcon) {
+                e.preventDefault();
+                e.stopPropagation();
+                renameTacticalPage(renamePageIcon.dataset.pageId);
+                return;
+            }
+
             const renameCourtBtn = e.target.closest('[data-action="rename-court"]');
             if (renameCourtBtn) {
+                e.preventDefault();
                 renameCourtBoard(renameCourtBtn.dataset.courtId);
                 return;
             }
 
             const clearCourtBtn = e.target.closest('[data-action="clear-court-drawings"]');
             if (clearCourtBtn) {
+                e.preventDefault();
                 const courtId = clearCourtBtn.dataset.courtId;
                 const courtKey = getCourtKey(courtId);
                 lineupDrawings[courtKey] = [];
@@ -2894,6 +2761,7 @@
 
             const deleteCourtBtn = e.target.closest('[data-action="delete-court"]');
             if (deleteCourtBtn) {
+                e.preventDefault();
                 deleteCourtFromActivePage(deleteCourtBtn.dataset.courtId);
                 return;
             }
@@ -2908,30 +2776,35 @@
 
             const addBallBtn = e.target.closest('[data-action="add-ball"]');
             if (addBallBtn) {
+                e.preventDefault();
                 addBallToCourt(addBallBtn.dataset.courtId);
                 return;
             }
 
             const addConeBtn = e.target.closest('[data-action="add-cone"]');
             if (addConeBtn) {
+                e.preventDefault();
                 addConeToCourt(addConeBtn.dataset.courtId);
                 return;
             }
 
             const addOpponentBtn = e.target.closest('[data-action="add-opponent"]');
             if (addOpponentBtn) {
+                e.preventDefault();
                 addOpponentToCourt(addOpponentBtn.dataset.courtId);
                 return;
             }
 
             const undoBtn = e.target.closest('[data-action="undo-drawing"]');
             if (undoBtn) {
+                e.preventDefault();
                 undoLastDrawingForCourt(undoBtn.dataset.courtId);
                 return;
             }
 
             const toggleOrientBtn = e.target.closest('[data-action="toggle-orientation"]');
             if (toggleOrientBtn) {
+                e.preventDefault();
                 orientationMode = (orientationMode === 'horizontal') ? 'vertical' : 'horizontal';
                 renderCourtBoards();
                 showToast(`Kentän asento vaihtoi: ${orientationMode === 'vertical' ? 'Pysty (20x40m)' : 'Vaaka (40x20m)'}`);
@@ -2940,6 +2813,7 @@
 
             const removePlayerBtn = e.target.closest('[data-action="remove-lineup-player"]');
             if (removePlayerBtn) {
+                e.preventDefault();
                 const pos = removePlayerBtn.dataset.pos;
                 if (lineups[activeLineupKey]) lineups[activeLineupKey][pos] = '';
                 saveState();
@@ -2950,6 +2824,7 @@
 
             const removeBallBtn = e.target.closest('[data-action="remove-ball"]');
             if (removeBallBtn) {
+                e.preventDefault();
                 const ballId = removeBallBtn.dataset.ballId;
                 const courtId = removeBallBtn.dataset.courtId;
                 const courtKey = getCourtKey(courtId);
@@ -2964,6 +2839,7 @@
 
             const removeConeBtn = e.target.closest('[data-action="remove-cone"]');
             if (removeConeBtn) {
+                e.preventDefault();
                 const coneId = removeConeBtn.dataset.coneId;
                 const courtId = removeConeBtn.dataset.courtId;
                 const courtKey = getCourtKey(courtId);
@@ -2978,6 +2854,7 @@
 
             const removeOpponentBtn = e.target.closest('[data-action="remove-opponent"]');
             if (removeOpponentBtn) {
+                e.preventDefault();
                 const oppId = removeOpponentBtn.dataset.oppId;
                 const courtId = removeOpponentBtn.dataset.courtId;
                 const courtKey = getCourtKey(courtId);
@@ -2992,6 +2869,7 @@
 
             const removeRectBtn = e.target.closest('[data-action="remove-rect"]');
             if (removeRectBtn) {
+                e.preventDefault();
                 const rectId = removeRectBtn.dataset.rectId;
                 const courtId = removeRectBtn.dataset.courtId;
                 const courtKey = getCourtKey(courtId);
@@ -3006,6 +2884,7 @@
 
             const removeLineBtn = e.target.closest('[data-action="remove-line"]');
             if (removeLineBtn) {
+                e.preventDefault();
                 const lineId = removeLineBtn.dataset.lineId;
                 const courtId = removeLineBtn.dataset.courtId;
                 const courtKey = getCourtKey(courtId);
@@ -3019,22 +2898,16 @@
             }
         });
 
+        // Other Modal and Button Handlers
         document.getElementById('btn-new-team')?.addEventListener('click', () => {
-            teamNameInput.value = '';
-            teamModal.classList.add('active');
+            const teamNameInput = document.getElementById('team-name-input');
+            if (teamNameInput) teamNameInput.value = '';
+            document.getElementById('team-modal')?.classList.add('active');
         });
 
-        document.getElementById('btn-close-team-modal')?.addEventListener('click', closeModal);
-        document.getElementById('btn-cancel-team-modal')?.addEventListener('click', closeModal);
-        document.getElementById('btn-close-assign-modal')?.addEventListener('click', closeModal);
-        document.getElementById('btn-close-slot-picker-modal')?.addEventListener('click', closeModal);
-        document.getElementById('btn-close-lineup-config-modal')?.addEventListener('click', closeModal);
-        document.getElementById('btn-cancel-lineup-config-modal')?.addEventListener('click', closeModal);
-        document.getElementById('btn-close-manage-lineups-modal')?.addEventListener('click', closeModal);
-        document.getElementById('btn-close-manage-done')?.addEventListener('click', closeModal);
-        document.getElementById('btn-close-import-modal')?.addEventListener('click', closeModal);
-        document.getElementById('btn-cancel-import-modal')?.addEventListener('click', closeModal);
-        document.getElementById('btn-close-auth-modal')?.addEventListener('click', closeModal);
+        document.querySelectorAll('.close-btn, [data-action="close-modal"]').forEach(btn => {
+            btn.addEventListener('click', closeModal);
+        });
 
         document.getElementById('btn-open-import-modal')?.addEventListener('click', openImportPlayersModal);
 
@@ -3051,21 +2924,23 @@
             }
         });
 
-        importSourceTeamSelect?.addEventListener('change', (e) => {
+        document.getElementById('import-source-team-select')?.addEventListener('change', (e) => {
             renderImportChecklist(e.target.value);
         });
 
-        btnImportSelectAll?.addEventListener('click', () => {
-            importPlayerChecklist.querySelectorAll('.import-checkbox:not(:disabled)').forEach(cb => { cb.checked = true; });
+        document.getElementById('btn-import-select-all')?.addEventListener('click', () => {
+            document.querySelectorAll('#import-player-checklist .import-checkbox:not(:disabled)').forEach(cb => { cb.checked = true; });
         });
 
-        btnImportDeselectAll?.addEventListener('click', () => {
-            importPlayerChecklist.querySelectorAll('.import-checkbox:not(:disabled)').forEach(cb => { cb.checked = false; });
+        document.getElementById('btn-import-deselect-all')?.addEventListener('click', () => {
+            document.querySelectorAll('#import-player-checklist .import-checkbox:not(:disabled)').forEach(cb => { cb.checked = false; });
         });
 
-        btnConfirmImportPlayers?.addEventListener('click', () => {
-            const checkedBoxes = importPlayerChecklist.querySelectorAll('.import-checkbox:checked:not(:disabled)');
-            const sourceTeamId = importSourceTeamSelect.value;
+        document.getElementById('btn-confirm-import-players')?.addEventListener('click', () => {
+            const checkedBoxes = document.querySelectorAll('#import-player-checklist .import-checkbox:checked:not(:disabled)');
+            const sourceTeamSelect = document.getElementById('import-source-team-select');
+            if (!sourceTeamSelect) return;
+            const sourceTeamId = sourceTeamSelect.value;
             const sourceRoster = loadRosterForTeam(sourceTeamId);
 
             let importCount = 0;
@@ -3086,7 +2961,7 @@
             showToast(`${importCount} pelaajaa tuotu onnistuneesti joukkueesta! 📥`);
         });
 
-        reorderLineupsList?.addEventListener('click', (e) => {
+        document.getElementById('reorder-lineups-list')?.addEventListener('click', (e) => {
             const upBtn = e.target.closest('[data-action="move-up"]');
             if (upBtn) {
                 const idx = parseInt(upBtn.dataset.index, 10);
@@ -3129,7 +3004,7 @@
             }
         });
 
-        btnResetDefaultLineups?.addEventListener('click', () => {
+        document.getElementById('btn-reset-default-lineups')?.addEventListener('click', () => {
             if (confirm('Palautetaanko oletuskentälliset (1., 2., 3., YV, AV, 6v5)?')) {
                 lineupConfigs = JSON.parse(JSON.stringify(DEFAULT_LINEUP_CONFIGS));
                 saveState();
@@ -3139,10 +3014,12 @@
             }
         });
 
-        lineupConfigForm?.addEventListener('submit', (e) => {
+        document.getElementById('lineup-config-form')?.addEventListener('submit', (e) => {
             e.preventDefault();
-            const id = formLineupId.value || 'lineup_' + Date.now();
-            const name = formLineupName.value.trim();
+            const formLineupId = document.getElementById('form-lineup-id');
+            const formLineupName = document.getElementById('form-lineup-name');
+            const id = (formLineupId && formLineupId.value) ? formLineupId.value : ('lineup_' + Date.now());
+            const name = formLineupName ? formLineupName.value.trim() : '';
             if (!name) return;
 
             const existingIdx = lineupConfigs.findIndex(c => c.id === id);
@@ -3168,7 +3045,7 @@
             }
         });
 
-        btnClearSlotPicker?.addEventListener('click', () => {
+        document.getElementById('btn-clear-slot-picker')?.addEventListener('click', () => {
             if (selectedSlotTarget.lineupKey && selectedSlotTarget.pos) {
                 if (lineups[selectedSlotTarget.lineupKey]) {
                     lineups[selectedSlotTarget.lineupKey][selectedSlotTarget.pos] = '';
@@ -3198,41 +3075,87 @@
             deleteLineupConfig(activeLineupKey);
         });
 
-        document.getElementById('btn-import-photo')?.addEventListener('click', () => {
-            photoPreviewStep.style.display = 'none';
-            ocrStatus.style.display = 'none';
-            photoModal.classList.add('active');
+        document.getElementById('player-form')?.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const formPlayerId = document.getElementById('form-player-id');
+            const formName = document.getElementById('form-name');
+            const formNumber = document.getElementById('form-number');
+            const formPosition = document.getElementById('form-position');
+            const formIsLoan = document.getElementById('form-is-loan');
+            const formNotes = document.getElementById('form-notes');
+
+            const id = (formPlayerId && formPlayerId.value) ? formPlayerId.value : ('p_' + Date.now());
+            const name = formName ? formName.value.trim() : '';
+            const number = formNumber ? parseInt(formNumber.value, 10) : NaN;
+            const position = formPosition ? formPosition.value : 'H';
+            const isLoan = formIsLoan ? formIsLoan.checked : false;
+            const notes = formNotes ? formNotes.value.trim() : '';
+
+            if (!name || isNaN(number)) return;
+
+            const existingIndex = roster.findIndex(p => p.id === id);
+            const playerData = { id, name, number, position, isLoan, notes };
+
+            if (existingIndex >= 0) {
+                roster[existingIndex] = playerData;
+                showToast('Pelaajan tiedot päivitetty!');
+            } else {
+                roster.push(playerData);
+                showToast('Uusi pelaaja lisätty rinkiin!');
+            }
+
+            saveState();
+            updateRosterCounters();
+            renderRoster();
+            if (activeLineupKey === 'summary') {
+                renderSummaryView();
+            } else {
+                renderActiveLineupSlots();
+                renderCourtBoards();
+            }
+            closeModal();
         });
-        document.getElementById('btn-photo-add')?.addEventListener('click', () => {
-            photoPreviewStep.style.display = 'none';
-            ocrStatus.style.display = 'none';
-            photoModal.classList.add('active');
-        });
-        document.getElementById('btn-close-photo-modal')?.addEventListener('click', closeModal);
-        document.getElementById('btn-reselect-photo')?.addEventListener('click', () => {
-            photoPreviewStep.style.display = 'none';
+
+        document.getElementById('team-form')?.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const teamNameInput = document.getElementById('team-name-input');
+            const name = teamNameInput ? teamNameInput.value.trim() : '';
+            if (!name) return;
+            const newTeamId = 'team_' + Date.now();
+            teams.push({ id: newTeamId, name: name });
+
+            localStorage.setItem(`salibandy_roster_${newTeamId}`, JSON.stringify([]));
+            
+            const emptyLineups = {};
+            DEFAULT_LINEUP_CONFIGS.forEach(c => {
+                emptyLineups[c.id] = createEmptyLineupSlots();
+            });
+            localStorage.setItem(`salibandy_lineups_${newTeamId}`, JSON.stringify(emptyLineups));
+
+            renderTeamDropdown();
+            closeModal();
+            switchTeam(newTeamId);
+            showToast(`Uusi tyhjä joukkue '${name}' luotu!`);
         });
 
         document.getElementById('btn-add-player')?.addEventListener('click', () => openModal());
         document.getElementById('btn-quick-add')?.addEventListener('click', () => openModal());
-        document.getElementById('btn-close-modal')?.addEventListener('click', closeModal);
-        document.getElementById('btn-cancel-modal')?.addEventListener('click', closeModal);
 
-        rosterSearchInput?.addEventListener('input', (e) => {
+        document.getElementById('roster-search')?.addEventListener('input', (e) => {
             searchQuery = e.target.value;
             renderRoster();
         });
 
-        filterPillBtns.forEach(btn => {
+        document.querySelectorAll('.pill-btn').forEach(btn => {
             btn.addEventListener('click', () => {
-                filterPillBtns.forEach(b => b.classList.remove('active'));
+                document.querySelectorAll('.pill-btn').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 activeFilter = btn.dataset.filter;
                 renderRoster();
             });
         });
 
-        rosterListContainer?.addEventListener('click', (e) => {
+        document.getElementById('roster-list-container')?.addEventListener('click', (e) => {
             const tapAssignTrigger = e.target.closest('[data-action="tap-assign"]');
             if (tapAssignTrigger) {
                 const id = tapAssignTrigger.dataset.id;
@@ -3254,7 +3177,7 @@
             }
         });
 
-        lineupSlotsContainer?.addEventListener('click', (e) => {
+        document.getElementById('lineup-slots-container')?.addEventListener('click', (e) => {
             const removeBtn = e.target.closest('[data-action="remove-slot"]');
             if (removeBtn) {
                 e.stopPropagation();
@@ -3291,15 +3214,16 @@
         });
 
         document.getElementById('btn-toggle-labels')?.addEventListener('click', () => {
+            const labelModeText = document.getElementById('label-mode-text');
             if (labelMode === 'full') {
                 labelMode = 'num';
-                document.getElementById('label-mode-text').textContent = '# Vain';
+                if (labelModeText) labelModeText.textContent = '# Vain';
             } else if (labelMode === 'num') {
                 labelMode = 'name';
-                document.getElementById('label-mode-text').textContent = 'Nimi vain';
+                if (labelModeText) labelModeText.textContent = 'Nimi vain';
             } else {
                 labelMode = 'full';
-                document.getElementById('label-mode-text').textContent = 'Nimi & #';
+                if (labelModeText) labelModeText.textContent = 'Nimi & #';
             }
             renderCourtBoards();
         });
@@ -3308,16 +3232,24 @@
         document.getElementById('btn-copy-this-lineup')?.addEventListener('click', exportLineupsToClipboard);
         document.getElementById('btn-copy-all-summary')?.addEventListener('click', exportLineupsToClipboard);
 
-        window.addEventListener('resize', () => {
-            const page = getCurrentPage();
-            if (page && page.courts) {
-                page.courts.forEach(court => {
-                    initCourtBoardInstance(court.id);
-                });
-            }
-        });
+        if (typeof window !== 'undefined') {
+            window.addEventListener('resize', () => {
+                const page = getCurrentPage();
+                if (page && page.courts) {
+                    page.courts.forEach(court => {
+                        initCourtBoardInstance(court.id);
+                    });
+                }
+            });
+        }
     }
 
-    document.addEventListener('DOMContentLoaded', init);
+    if (typeof document !== 'undefined') {
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+    }
 
 })();

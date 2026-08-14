@@ -10,8 +10,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 
-    <!-- CSS Stylesheet (Cache Busted v22.0) -->
-    <link rel="stylesheet" href="styles.css?v=22.0">
+    <!-- CSS Stylesheet (Cache Busted v23.0) -->
+    <link rel="stylesheet" href="styles.css?v=23.0">
 
     <!-- OCR Tesseract.js (Optinen tekstintunnistus valokuvista) -->
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4.1.1/dist/tesseract.min.js"></script>
@@ -134,6 +134,7 @@
                     <!-- Dynamic Tactic Page Badges e.g. Sivu 1, Sivu 2 -->
                 </div>
                 <button class="btn-xs btn-outline" id="btn-add-tactic-page" title="Lisää uusi taktiikkasivu / kuvio (esim. YV1, YV2)">+ Uusi sivu</button>
+                <button class="btn-xs btn-outline" data-action="add-court-board" id="btn-add-court-top" title="Lisää uusi piirtoalusta / kenttä nykyisen alapuolelle">➕ Lisää kenttä</button>
                 <button class="btn-xs btn-outline danger-text" id="btn-delete-tactic-page" title="Poista nykyinen taktiikkasivu">🗑️ Poista sivu</button>
             </div>
 
@@ -144,7 +145,7 @@
 
             <!-- ADD COURT BOARD BUTTON -->
             <div class="add-court-bottom-bar" id="add-court-bottom-bar">
-                <button class="btn btn-primary btn-block" id="btn-add-court-board">
+                <button class="btn btn-primary btn-block" id="btn-add-court-board" data-action="add-court-board">
                     ➕ Lisää uusi piirtoalusta / kenttä alapuolelle
                 </button>
             </div>
@@ -476,9 +477,9 @@
     <!-- TOAST NOTIFICATION CONTAINER -->
     <div id="toast" class="toast-notification"></div>
 
-    <!-- Firebase Config & App Engine (Cache Busted v22.0) -->
-    <script src="firebase-config.js?v=22.0"></script>
-    <script src="app.js?v=22.0"></script>
+    <!-- Firebase Config & App Engine (Cache Busted v23.0) -->
+    <script src="firebase-config.js?v=23.0"></script>
+    <script src="app.js?v=23.0"></script>
 
 </body>
 </html>
