@@ -1,6 +1,6 @@
 /**
  * Salibandyn Kentälliset & Taktiikkataulu - Advanced Logic & Interactive Engine
- * Sisältää täysileveän rinnakkaisen yhteenvetonäkymän ja Firebase-pilvisynkronoinnin.
+ * Sisältää täysileveän rinnakkaisen yhteenvetonäkymän ja reaaliaikaisen Firebase-pilvisynkronoinnin.
  */
 
 (function() {
@@ -86,8 +86,10 @@
         }
     };
 
-    // Firebase Auth User State
+    // Firebase Auth & Realtime Sync State
     let currentUser = null;
+    let unsubscribeFirestore = null;
+    let isCloudLoading = false; // Flag to prevent infinite feedback loops during cloud sync
 
     // Global State
     let teams = loadFromStorage('salibandy_teams_v1', DEFAULT_TEAMS);
@@ -202,7 +204,7 @@
     let selectedSlotTarget = { lineupKey: '', pos: '' };
 
     // ==========================================
-    // INITIALIZATION & FIREBASE AUTH SETUP
+    // INITIALIZATION & REAL-TIME FIREBASE SYNC SETUP
     // ==========================================
     function init() {
         renderTeamDropdown();
@@ -225,8 +227,12 @@
                 currentUser = user;
                 updateAuthUI();
                 if (user) {
-                    syncWithCloudFirestore(user);
+                    listenToCloudFirestore(user);
                 } else {
+                    if (unsubscribeFirestore) {
+                        unsubscribeFirestore();
+                        unsubscribeFirestore = null;
+                    }
                     updateCloudSyncBadge(false);
                 }
             });
@@ -272,6 +278,10 @@
 
     function handleLogout() {
         if (window.SalibandyFirebase && window.SalibandyFirebase.isReady()) {
+            if (unsubscribeFirestore) {
+                unsubscribeFirestore();
+                unsubscribeFirestore = null;
+            }
             window.SalibandyFirebase.getAuth().signOut().then(() => {
                 showToast('Kirjauduttu ulos pilvipalvelusta.');
                 currentUser = null;
@@ -280,35 +290,141 @@
         }
     }
 
-    function syncWithCloudFirestore(user) {
+    // ==========================================
+    // COMPLETE REAL-TIME BI-DIRECTIONAL CLOUD SYNC
+    // ==========================================
+    function buildFullCloudPayload() {
+        const rostersMap = {};
+        const configsMap = {};
+        const lineupsMap = {};
+        const drawingsMap = {};
+        const positionsMap = {};
+        const ballsMap = {};
+
+        teams.forEach(t => {
+            const tId = t.id;
+            rostersMap[tId] = (tId === currentTeamId) ? roster : loadRosterForTeam(tId);
+            configsMap[tId] = (tId === currentTeamId) ? lineupConfigs : loadLineupConfigs(tId);
+            lineupsMap[tId] = (tId === currentTeamId) ? lineups : loadLineupsForTeam(tId, configsMap[tId]);
+            drawingsMap[tId] = (tId === currentTeamId) ? lineupDrawings : loadFromStorage(`salibandy_drawings_${tId}`, {});
+            positionsMap[tId] = (tId === currentTeamId) ? lineupCourtPositions : loadFromStorage(`salibandy_positions_${tId}`, {});
+            ballsMap[tId] = (tId === currentTeamId) ? lineupBalls : loadFromStorage(`salibandy_balls_${tId}`, {});
+        });
+
+        return {
+            email: currentUser ? currentUser.email : '',
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            teams: teams,
+            currentTeamId: currentTeamId,
+            rosters: rostersMap,
+            lineupConfigs: configsMap,
+            lineups: lineupsMap,
+            drawings: drawingsMap,
+            positions: positionsMap,
+            balls: ballsMap
+        };
+    }
+
+    function listenToCloudFirestore(user) {
         if (!window.SalibandyFirebase || !window.SalibandyFirebase.isReady()) return;
         const db = window.SalibandyFirebase.getDb();
         const userRef = db.collection('users').doc(user.uid);
 
-        userRef.get().then((doc) => {
-            if (doc.exists) {
-                const cloudData = doc.data();
-                if (cloudData && cloudData.teams && cloudData.teams.length > 0) {
-                    teams = cloudData.teams;
-                    currentTeamId = cloudData.currentTeamId || teams[0].id;
-                    saveStateLocalOnly();
-                    switchTeam(currentTeamId);
-                    showToast('Omat joukkueet ladattu pilvestä! ☁️');
+        if (unsubscribeFirestore) unsubscribeFirestore();
+
+        unsubscribeFirestore = userRef.onSnapshot((doc) => {
+            if (isCloudLoading) return;
+
+            if (!doc.exists) {
+                // First time cloud user creation: Save current local state to Firestore
+                isCloudLoading = true;
+                const initialPayload = buildFullCloudPayload();
+                userRef.set(initialPayload).then(() => {
+                    updateCloudSyncBadge(true);
+                    isCloudLoading = false;
+                }).catch(err => {
+                    console.warn('First time Firestore doc write error:', err);
+                    isCloudLoading = false;
+                });
+                return;
+            }
+
+            const cloudData = doc.data();
+            if (!cloudData) return;
+
+            isCloudLoading = true;
+
+            // 1. Unpack Teams
+            if (cloudData.teams && Array.isArray(cloudData.teams) && cloudData.teams.length > 0) {
+                teams = cloudData.teams;
+                if (cloudData.currentTeamId && teams.some(t => t.id === cloudData.currentTeamId)) {
+                    currentTeamId = cloudData.currentTeamId;
+                } else {
+                    currentTeamId = teams[0].id;
                 }
-            } else {
-                // First time cloud user: Offer to save local teams to Cloud Firestore
-                userRef.set({
-                    email: user.email,
-                    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                    teams: teams,
-                    currentTeamId: currentTeamId
-                }).then(() => {
-                    saveState();
-                    showToast('Laitteesi joukkueet synkronoitu pilvitilillesi! 🎉');
+            }
+
+            // 2. Unpack All Dictionaries into Local Storage
+            if (cloudData.rosters) {
+                Object.keys(cloudData.rosters).forEach(tId => {
+                    localStorage.setItem(`salibandy_roster_${tId}`, JSON.stringify(cloudData.rosters[tId]));
                 });
             }
-        }).catch(err => {
-            console.warn('Firestore fetch error:', err);
+            if (cloudData.lineupConfigs) {
+                Object.keys(cloudData.lineupConfigs).forEach(tId => {
+                    localStorage.setItem(`salibandy_lineup_configs_${tId}`, JSON.stringify(cloudData.lineupConfigs[tId]));
+                });
+            }
+            if (cloudData.lineups) {
+                Object.keys(cloudData.lineups).forEach(tId => {
+                    localStorage.setItem(`salibandy_lineups_${tId}`, JSON.stringify(cloudData.lineups[tId]));
+                });
+            }
+            if (cloudData.drawings) {
+                Object.keys(cloudData.drawings).forEach(tId => {
+                    localStorage.setItem(`salibandy_drawings_${tId}`, JSON.stringify(cloudData.drawings[tId]));
+                });
+            }
+            if (cloudData.positions) {
+                Object.keys(cloudData.positions).forEach(tId => {
+                    localStorage.setItem(`salibandy_positions_${tId}`, JSON.stringify(cloudData.positions[tId]));
+                });
+            }
+            if (cloudData.balls) {
+                Object.keys(cloudData.balls).forEach(tId => {
+                    localStorage.setItem(`salibandy_balls_${tId}`, JSON.stringify(cloudData.balls[tId]));
+                });
+            }
+
+            // 3. Reload current active team variables in memory
+            roster = loadRosterForTeam(currentTeamId);
+            lineupConfigs = loadLineupConfigs(currentTeamId);
+            lineups = loadLineupsForTeam(currentTeamId, lineupConfigs);
+            lineupDrawings = loadFromStorage(`salibandy_drawings_${currentTeamId}`, {});
+            lineupCourtPositions = loadFromStorage(`salibandy_positions_${currentTeamId}`, {});
+            lineupBalls = loadFromStorage(`salibandy_balls_${currentTeamId}`, {});
+
+            saveStateLocalOnly();
+
+            renderTeamDropdown();
+            renderTabs();
+            updateRosterCounters();
+            renderRoster();
+            if (activeLineupKey === 'summary') {
+                renderSummaryView();
+            } else {
+                renderActiveLineupSlots();
+                renderCourtPlayers();
+                drawCanvasLines();
+            }
+
+            updateCloudSyncBadge(true);
+            setTimeout(() => { isCloudLoading = false; }, 300);
+
+        }, (err) => {
+            console.warn('Firestore real-time snapshot error:', err);
+            updateCloudSyncBadge(false);
+            isCloudLoading = false;
         });
     }
 
@@ -389,16 +505,16 @@
     function saveState() {
         saveStateLocalOnly();
 
-        if (currentUser && window.SalibandyFirebase && window.SalibandyFirebase.isReady()) {
+        if (currentUser && window.SalibandyFirebase && window.SalibandyFirebase.isReady() && !isCloudLoading) {
             const db = window.SalibandyFirebase.getDb();
-            db.collection('users').doc(currentUser.uid).set({
-                email: currentUser.email,
-                updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-                teams: teams,
-                currentTeamId: currentTeamId
-            }, { merge: true }).catch(err => {
-                console.warn('Cloud Firestore save error:', err);
-            });
+            const payload = buildFullCloudPayload();
+            db.collection('users').doc(currentUser.uid).set(payload, { merge: true })
+                .then(() => {
+                    updateCloudSyncBadge(true);
+                })
+                .catch(err => {
+                    console.warn('Cloud Firestore save error:', err);
+                });
         }
     }
 
@@ -1475,7 +1591,7 @@
 
             ballNode.innerHTML = `
                 <div class="ball-circle" title="Salibandypallo">
-                    <img src="ball.png?v=8.0" class="floorball-png-icon" alt="Pallo">
+                    <img src="ball.png?v=9.0" class="floorball-png-icon" alt="Pallo">
                     <button class="ball-remove-btn" data-action="remove-ball" data-ball-id="${ball.id}">✕</button>
                 </div>
             `;
