@@ -91,6 +91,17 @@
     let unsubscribeFirestore = null;
     let isCloudLoading = false;
 
+    // Helper: Escape HTML
+    function escapeHtml(str) {
+        if (str === null || str === undefined) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
     // Global State
     let teams = loadFromStorage('salibandy_teams_v1', DEFAULT_TEAMS);
     let currentTeamId = loadFromStorage('salibandy_active_team_id', 'team_edustus');
@@ -116,6 +127,7 @@
     let searchQuery = '';
     let labelMode = 'full';
     let orientationMode = window.innerWidth <= 600 ? 'vertical' : 'horizontal';
+    let activeSelectedElementId = null;
 
     // Per-court state maps
     let courtDrawingTools = {};
@@ -285,7 +297,7 @@
             userAuthStatusWrapper.innerHTML = `
                 <div class="user-profile-badge">
                     <span>👤</span>
-                    <span class="user-email-text" title="${currentUser.email}">${currentUser.email}</span>
+                    <span class="user-email-text" title="${escapeHtml(currentUser.email)}">${escapeHtml(currentUser.email)}</span>
                     <button class="btn-xs btn-outline danger-text" id="btn-user-logout" title="Kirjaudu ulos">🔴 Ulos</button>
                 </div>
             `;
@@ -298,7 +310,7 @@
                 </button>
             `;
             document.getElementById('btn-open-auth-modal')?.addEventListener('click', () => {
-                authModal.classList.add('active');
+                authModal?.classList.add('active');
             });
             updateCloudSyncBadge(false);
         }
@@ -360,9 +372,12 @@
             pagesMap[tId] = (tId === currentTeamId) ? lineupPages : loadFromStorage(`salibandy_pages_${tId}`, {});
         });
 
+        const serverTs = (window.firebase && window.firebase.firestore && window.firebase.firestore.FieldValue)
+            ? window.firebase.firestore.FieldValue.serverTimestamp() : new Date();
+
         return {
             email: currentUser ? currentUser.email : '',
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            updatedAt: serverTs,
             teams: teams,
             currentTeamId: currentTeamId,
             rosters: rostersMap,
@@ -380,7 +395,7 @@
     function forceCloudSync() {
         if (!currentUser || !window.SalibandyFirebase || !window.SalibandyFirebase.isReady()) {
             showToast('Kirjaudu sisään synkronoidaksesi pilveen.');
-            authModal.classList.add('active');
+            authModal?.classList.add('active');
             return;
         }
 
@@ -689,6 +704,7 @@
     }
 
     function showToast(message) {
+        if (!toastEl) return;
         toastEl.textContent = message;
         toastEl.classList.add('show');
         setTimeout(() => {
@@ -697,6 +713,7 @@
     }
 
     function renderTeamDropdown() {
+        if (!teamSelect) return;
         teamSelect.innerHTML = '';
         teams.forEach(t => {
             const opt = document.createElement('option');
@@ -822,15 +839,15 @@
 
         if (activeLineupKey === 'summary') {
             if (rosterPanelSection) rosterPanelSection.style.display = 'none';
-            pitchPanelSection.style.display = 'none';
-            lineupPanelSection.style.display = 'none';
-            summaryViewPanel.style.display = 'flex';
+            if (pitchPanelSection) pitchPanelSection.style.display = 'none';
+            if (lineupPanelSection) lineupPanelSection.style.display = 'none';
+            if (summaryViewPanel) summaryViewPanel.style.display = 'flex';
             renderSummaryView();
         } else {
             if (rosterPanelSection) rosterPanelSection.style.display = 'flex';
-            pitchPanelSection.style.display = 'flex';
-            lineupPanelSection.style.display = 'flex';
-            summaryViewPanel.style.display = 'none';
+            if (pitchPanelSection) pitchPanelSection.style.display = 'flex';
+            if (lineupPanelSection) lineupPanelSection.style.display = 'flex';
+            if (summaryViewPanel) summaryViewPanel.style.display = 'none';
             renderActiveLineupSlots();
             renderCourtBoards();
         }
@@ -840,7 +857,8 @@
     // MULTIPLE TACTICAL PAGES & TAB RENAMING
     // ==========================================
     function getPagesForActiveLineup() {
-        if (!lineupPages[activeLineupKey] || !Array.isArray(lineupPages[activeLineupKey])) {
+        if (!lineupPages || typeof lineupPages !== 'object') lineupPages = {};
+        if (!lineupPages[activeLineupKey] || !Array.isArray(lineupPages[activeLineupKey]) || lineupPages[activeLineupKey].length === 0) {
             lineupPages[activeLineupKey] = [
                 { id: 'p1', name: 'Sivu 1', courts: [{ id: 'c1', title: 'Kenttä 1' }] }
             ];
@@ -1060,7 +1078,7 @@
 
                     <div class="toolbar-group">
                         <button class="tool-btn highlight-ball" data-action="add-ball" data-court-id="${courtId}" title="Lisää pallo kentälle">
-                            <img src="ball.png?v=18.0" width="18" height="18" alt="Pallo" style="vertical-align: middle; display: inline-block;"> + Pallo
+                            <img src="ball.png?v=21.0" width="18" height="18" alt="Pallo" style="vertical-align: middle; display: inline-block;"> + Pallo
                         </button>
                         <button class="tool-btn highlight-cone" data-action="add-cone" data-court-id="${courtId}" title="Lisää harjoitustötterö kentälle">
                             🔶 + Tötterö
@@ -1109,9 +1127,9 @@
 
             courtsVerticalList.appendChild(card);
 
-            setTimeout(() => {
+            requestAnimationFrame(() => {
                 initCourtBoardInstance(courtId);
-            }, 30);
+            });
         });
     }
 
@@ -1206,7 +1224,7 @@
 
             ballNode.innerHTML = `
                 <div class="ball-circle" title="Salibandypallo">
-                    <img src="ball.png?v=18.0" class="floorball-png-icon" alt="Pallo">
+                    <img src="ball.png?v=21.0" class="floorball-png-icon" alt="Pallo">
                     <button class="ball-remove-btn" data-action="remove-ball" data-ball-id="${ball.id}" data-court-id="${courtId}">✕</button>
                 </div>
             `;
@@ -2098,6 +2116,487 @@
         }
     }
 
+    // ==========================================
+    // ROSTER & LINEUP SLOTS RENDERING
+    // ==========================================
+    function updateRosterCounters() {
+        if (!roster || !Array.isArray(roster)) return;
+        const mvCount = roster.filter(p => p.position === 'MV').length;
+        const fieldCount = roster.filter(p => p.position !== 'MV').length;
+        const loanCount = roster.filter(p => p.isLoan).length;
+
+        if (countMvEl) countMvEl.textContent = `${mvCount} MV`;
+        if (countFieldEl) countFieldEl.textContent = `${fieldCount} KENTTÄ`;
+        if (countLoanEl) countLoanEl.textContent = `${loanCount} LAINA`;
+    }
+
+    function getPosLabel(pos) {
+        const labels = {
+            MV: '🟢 MV',
+            VP: '🔵 VP',
+            OP: '🔵 OP',
+            VH: '🔵 VH',
+            KH: '🔵 KH',
+            OH: '🔵 OH',
+            H: '🔵 Kenttä',
+            P: '🔵 Pakki'
+        };
+        return labels[pos] || pos;
+    }
+
+    function renderRoster() {
+        if (!rosterListContainer) return;
+        rosterListContainer.innerHTML = '';
+
+        if (!roster || !Array.isArray(roster) || roster.length === 0) {
+            rosterListContainer.innerHTML = `
+                <div style="text-align: center; color: var(--text-muted); padding: 1.5rem 0.5rem;">
+                    <p style="font-size: 1.1rem; margin-bottom: 0.5rem;">🏑</p>
+                    <p>Ei pelaajia ringissä.</p>
+                    <button class="btn-xs btn-outline" id="btn-empty-restore-roster" style="margin-top: 0.5rem;">🔄 Palauta oletuspelaajat</button>
+                </div>
+            `;
+            document.getElementById('btn-empty-restore-roster')?.addEventListener('click', () => {
+                roster = JSON.parse(JSON.stringify(DEFAULT_ROSTER));
+                lineups = JSON.parse(JSON.stringify(DEFAULT_LINEUPS));
+                saveState();
+                updateRosterCounters();
+                renderRoster();
+                renderActiveLineupSlots();
+                renderCourtBoards();
+                showToast('Oletuspelaajat palautettu! 🎉');
+            });
+            return;
+        }
+
+        const filtered = roster.filter(player => {
+            const matchesSearch = player.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                                  player.number.toString().includes(searchQuery);
+
+            if (!matchesSearch) return false;
+            if (activeFilter === 'mv') return player.position === 'MV';
+            if (activeFilter === 'field') return player.position !== 'MV';
+            if (activeFilter === 'loan') return player.isLoan;
+            return true;
+        });
+
+        // Sort: MV first, then number
+        filtered.sort((a, b) => {
+            if (a.position === 'MV' && b.position !== 'MV') return -1;
+            if (a.position !== 'MV' && b.position === 'MV') return 1;
+            return a.number - b.number;
+        });
+
+        filtered.forEach(player => {
+            const card = document.createElement('div');
+            const isMv = player.position === 'MV';
+            card.className = `player-card ${isMv ? 'is-mv' : 'is-field'}`;
+            card.dataset.id = player.id;
+
+            let assignedInfo = '';
+            const assignments = [];
+            lineupConfigs.forEach(c => {
+                const lk = c.id;
+                const lObj = lineups[lk] || {};
+                Object.keys(lObj).forEach(pos => {
+                    if (lObj[pos] === player.id) {
+                        assignments.push(`${c.name} (${pos})`);
+                    }
+                });
+            });
+
+            if (assignments.length > 0) {
+                assignedInfo = `<div class="assigned-badge-line" title="${assignments.join(', ')}">📍 ${escapeHtml(assignments.join(', '))}</div>`;
+            }
+
+            card.innerHTML = `
+                <div class="player-card-main" data-action="tap-assign" data-id="${player.id}">
+                    <div class="player-number-badge">${player.number}</div>
+                    <div class="player-info-block">
+                        <div class="player-name-row">
+                            <span class="player-name">${escapeHtml(player.name)}</span>
+                            ${player.isLoan ? '<span class="loan-pill">LAINA</span>' : ''}
+                        </div>
+                        <div class="player-meta-row">
+                            <span class="pos-badge">${getPosLabel(player.position)}</span>
+                            ${player.notes ? `<span class="player-note-text">${escapeHtml(player.notes)}</span>` : ''}
+                        </div>
+                        ${assignedInfo}
+                    </div>
+                </div>
+                <div class="player-card-actions">
+                    <button class="mini-action-btn" data-action="edit" data-id="${player.id}" title="Muokkaa">✏️</button>
+                    <button class="mini-action-btn danger-text" data-action="delete" data-id="${player.id}" title="Poista">🗑️</button>
+                </div>
+            `;
+
+            rosterListContainer.appendChild(card);
+        });
+    }
+
+    function renderActiveLineupSlots() {
+        if (!activeLineupTitle || !lineupSlotsContainer) return;
+        activeLineupTitle.textContent = getLineupName(activeLineupKey);
+        const currentLineup = lineups[activeLineupKey] || {};
+        const posKeys = ['MV', 'VP', 'OP', 'VH', 'KH', 'OH'];
+
+        lineupSlotsContainer.innerHTML = '';
+
+        posKeys.forEach(pos => {
+            const playerId = currentLineup[pos];
+            const player = roster.find(p => p.id === playerId);
+            const isMv = pos === 'MV';
+
+            const slot = document.createElement('div');
+            slot.className = `lineup-slot ${isMv ? 'slot-mv' : 'slot-field'} ${player ? 'is-filled' : 'is-empty'}`;
+            slot.dataset.position = pos;
+
+            if (player) {
+                slot.innerHTML = `
+                    <div class="slot-pos-tag">${pos}</div>
+                    <div class="slot-player-info">
+                        <span class="slot-player-num">#${player.number}</span>
+                        <span class="slot-player-name">${escapeHtml(player.name)}</span>
+                        ${player.isLoan ? '<span class="loan-pill-tiny">⭐</span>' : ''}
+                    </div>
+                    <button class="slot-remove-btn" data-action="remove-slot" data-pos="${pos}" title="Poista paikalta">✕</button>
+                `;
+            } else {
+                slot.innerHTML = `
+                    <div class="slot-pos-tag">${pos}</div>
+                    <div class="slot-empty-prompt">+ Valitse pelaaja</div>
+                `;
+            }
+
+            lineupSlotsContainer.appendChild(slot);
+        });
+    }
+
+    // ==========================================
+    // SUMMARY VIEW (Kaikki kentälliset rinnakkain)
+    // ==========================================
+    function renderSummaryView() {
+        if (!summaryGridContainer) return;
+        summaryGridContainer.innerHTML = '';
+
+        const posKeys = ['MV', 'VP', 'OP', 'VH', 'KH', 'OH'];
+
+        lineupConfigs.forEach(cConfig => {
+            const lKey = cConfig.id;
+            const lName = cConfig.name;
+            const curLineup = lineups[lKey] || {};
+
+            const col = document.createElement('div');
+            col.className = 'summary-lineup-card';
+
+            let slotsHtml = '';
+            posKeys.forEach(pos => {
+                const pid = curLineup[pos];
+                const player = roster.find(p => p.id === pid);
+                const isMv = pos === 'MV';
+
+                if (player) {
+                    slotsHtml += `
+                        <div class="summary-slot-row ${isMv ? 'is-mv' : 'is-field'}" data-lineup="${lKey}" data-pos="${pos}">
+                            <span class="summary-pos-tag">${pos}</span>
+                            <span class="summary-p-num">#${player.number}</span>
+                            <span class="summary-p-name">${escapeHtml(player.name)}</span>
+                            ${player.isLoan ? '<span class="loan-pill-tiny">⭐</span>' : ''}
+                            <button class="summary-remove-slot" data-action="summary-remove-slot" data-lineup="${lKey}" data-pos="${pos}">✕</button>
+                        </div>
+                    `;
+                } else {
+                    slotsHtml += `
+                        <div class="summary-slot-row is-empty" data-lineup="${lKey}" data-pos="${pos}">
+                            <span class="summary-pos-tag">${pos}</span>
+                            <span class="summary-empty-text">+ Valitse ${pos}</span>
+                        </div>
+                    `;
+                }
+            });
+
+            col.innerHTML = `
+                <div class="summary-card-header">
+                    <div class="summary-card-title">${escapeHtml(lName)}</div>
+                    <button class="btn-xs btn-outline" data-action="switch-to-lineup" data-lineup="${lKey}">Avaa 🏒</button>
+                </div>
+                <div class="summary-card-body">
+                    ${slotsHtml}
+                </div>
+            `;
+
+            summaryGridContainer.appendChild(col);
+        });
+
+        // Bind Summary clicks
+        summaryGridContainer.querySelectorAll('[data-action="switch-to-lineup"]').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const lk = e.currentTarget.dataset.lineup;
+                switchTab(lk);
+            });
+        });
+
+        summaryGridContainer.querySelectorAll('.summary-slot-row').forEach(row => {
+            row.addEventListener('click', (e) => {
+                if (e.target.dataset.action === 'summary-remove-slot') {
+                    const lk = e.target.dataset.lineup;
+                    const pos = e.target.dataset.pos;
+                    if (lineups[lk]) lineups[lk][pos] = '';
+                    saveState();
+                    renderSummaryView();
+                    return;
+                }
+                const lk = row.dataset.lineup;
+                const pos = row.dataset.pos;
+                if (lk && pos) openSlotPickerModal(lk, pos);
+            });
+        });
+    }
+
+    // ==========================================
+    // MODALS & PICKERS
+    // ==========================================
+    function openImportPlayersModal() {
+        const otherTeams = teams.filter(t => t.id !== currentTeamId);
+
+        if (otherTeams.length === 0) {
+            showToast('Ei muita joukkueita joista tuoda pelaajia. Luo ensin toinen joukkue! 🏑');
+            return;
+        }
+
+        importSourceTeamSelect.innerHTML = '';
+        otherTeams.forEach(t => {
+            const opt = document.createElement('option');
+            opt.value = t.id;
+            opt.textContent = t.name;
+            importSourceTeamSelect.appendChild(opt);
+        });
+
+        renderImportChecklist(otherTeams[0].id);
+        importPlayersModal.classList.add('active');
+    }
+
+    function renderImportChecklist(sourceTeamId) {
+        importPlayerChecklist.innerHTML = '';
+        const sourceRoster = loadRosterForTeam(sourceTeamId);
+
+        if (sourceRoster.length === 0) {
+            importPlayerChecklist.innerHTML = '<div style="color: var(--text-muted); padding: 1rem; text-align: center;">Tässä joukkueessa ei ole vielä pelaajia.</div>';
+            return;
+        }
+
+        sourceRoster.forEach(player => {
+            const item = document.createElement('label');
+            item.className = 'import-player-item';
+            const isAlready = roster.some(p => p.number === player.number && p.name === player.name);
+
+            item.innerHTML = `
+                <input type="checkbox" value="${player.id}" class="import-checkbox" ${isAlready ? 'disabled' : 'checked'}>
+                <span class="import-p-num">#${player.number}</span>
+                <span class="import-p-name">${escapeHtml(player.name)}</span>
+                <span class="pos-badge">${getPosLabel(player.position)}</span>
+                ${isAlready ? '<span style="font-size:0.7rem; color:var(--text-muted);">(On jo ringissä)</span>' : ''}
+            `;
+            importPlayerChecklist.appendChild(item);
+        });
+    }
+
+    function openManageLineupsModal() {
+        renderReorderList();
+        manageLineupsModal.classList.add('active');
+    }
+
+    function renderReorderList() {
+        reorderLineupsList.innerHTML = '';
+
+        if (lineupConfigs.length === 0) {
+            reorderLineupsList.innerHTML = '<div style="text-align:center; color: var(--text-muted); padding: 1rem;">Ei kentällisiä.</div>';
+            return;
+        }
+
+        lineupConfigs.forEach((c, idx) => {
+            const row = document.createElement('div');
+            row.className = 'reorder-item-row';
+            row.innerHTML = `
+                <div class="reorder-info">
+                    <span class="reorder-num">${idx + 1}.</span>
+                    <span class="reorder-name">${escapeHtml(c.name)}</span>
+                </div>
+                <div class="reorder-actions">
+                    <button class="btn-xs btn-outline" data-action="move-up" data-index="${idx}" ${idx === 0 ? 'disabled' : ''}>▲</button>
+                    <button class="btn-xs btn-outline" data-action="move-down" data-index="${idx}" ${idx === lineupConfigs.length - 1 ? 'disabled' : ''}>▼</button>
+                    <button class="btn-xs btn-outline" data-action="edit-config" data-id="${c.id}">✏️</button>
+                    <button class="btn-xs btn-outline danger-text" data-action="delete-config" data-id="${c.id}">🗑️</button>
+                </div>
+            `;
+            reorderLineupsList.appendChild(row);
+        });
+    }
+
+    function openLineupConfigModal(lineupConfig = null) {
+        if (lineupConfig) {
+            lineupConfigModalTitle.textContent = 'Muokkaa kentällisen nimeä';
+            formLineupId.value = lineupConfig.id;
+            formLineupName.value = lineupConfig.name;
+        } else {
+            lineupConfigModalTitle.textContent = 'Uusi kentällinen';
+            lineupConfigForm.reset();
+            formLineupId.value = '';
+        }
+        lineupConfigModal.classList.add('active');
+    }
+
+    function deleteLineupConfig(id) {
+        if (lineupConfigs.length <= 1) {
+            showToast('Et voi poistaa ainoaa kentällistä.');
+            return;
+        }
+        const c = lineupConfigs.find(item => item.id === id);
+        if (!c) return;
+
+        if (confirm(`Haluatko varmasti poistaa kentällisen '${c.name}'?`)) {
+            lineupConfigs = lineupConfigs.filter(item => item.id !== id);
+            delete lineups[id];
+            delete lineupDrawings[id];
+            delete lineupCourtPositions[id];
+            delete lineupBalls[id];
+            delete lineupCones[id];
+            delete lineupOpponents[id];
+            delete lineupPages[id];
+
+            if (activeLineupKey === id) {
+                activeLineupKey = lineupConfigs[0].id;
+            }
+
+            saveState();
+            renderTabs();
+            renderTacticalPageBadges();
+            renderReorderList();
+            if (activeLineupKey === 'summary') {
+                renderSummaryView();
+            } else {
+                renderActiveLineupSlots();
+                renderCourtBoards();
+            }
+            showToast(`Kentällinen '${c.name}' poistettu.`);
+        }
+    }
+
+    function openSlotPickerModal(lineupKey, pos) {
+        selectedSlotTarget = { lineupKey, pos };
+        const isMv = pos === 'MV';
+        const lineupName = getLineupName(lineupKey);
+
+        slotPickerTitle.textContent = `Valitse pelaaja: ${lineupName} - ${pos}`;
+        slotPickerInfo.textContent = `Valitse pelaaja ringistä paikkaan ${pos}:`;
+
+        const currentOccupantId = (lineups[lineupKey] || {})[pos];
+
+        const sortedRoster = [...roster].sort((a, b) => {
+            if (isMv) {
+                if (a.position === 'MV' && b.position !== 'MV') return -1;
+                if (a.position !== 'MV' && b.position === 'MV') return 1;
+            }
+            return a.number - b.number;
+        });
+
+        slotPickerPlayerList.innerHTML = '';
+
+        sortedRoster.forEach(player => {
+            const item = document.createElement('div');
+            const isAssignedToThis = player.id === currentOccupantId;
+            item.className = `slot-picker-item ${player.position === 'MV' ? 'is-mv' : 'is-field'} ${isAssignedToThis ? 'is-current' : ''}`;
+
+            item.innerHTML = `
+                <div class="slot-picker-num">#${player.number}</div>
+                <div class="slot-picker-info">
+                    <span class="slot-picker-name">${escapeHtml(player.name)}</span>
+                    <span class="pos-badge">${getPosLabel(player.position)}</span>
+                    ${player.isLoan ? '<span class="loan-pill-tiny">LAINA</span>' : ''}
+                </div>
+                ${isAssignedToThis ? '<span style="font-size:0.75rem; color:var(--accent-field);">✓ Valittu</span>' : ''}
+            `;
+
+            item.addEventListener('click', () => {
+                assignPlayerToLineupSlot(lineupKey, pos, player.id);
+                closeModal();
+            });
+
+            slotPickerPlayerList.appendChild(item);
+        });
+
+        slotPickerModal.classList.add('active');
+    }
+
+    function openAssignModal(player) {
+        selectedPlayerForAssignment = player;
+        assignModalTitle.textContent = 'Sijoita kentälliseen';
+        assignModalPlayerInfo.innerHTML = `Valitse paikka pelaajalle <strong>#${player.number} ${escapeHtml(player.name)}</strong>:`;
+
+        const slotTypes = ['MV', 'VP', 'OP', 'VH', 'KH', 'OH'];
+        assignOptionsGrid.innerHTML = '';
+
+        lineupConfigs.forEach(cConfig => {
+            const lKey = cConfig.id;
+            const lName = cConfig.name;
+            const curL = lineups[lKey] || {};
+
+            const section = document.createElement('div');
+            section.className = 'assign-lineup-group';
+            section.innerHTML = `<div class="assign-lineup-title">${escapeHtml(lName)}</div>`;
+
+            const btnGrid = document.createElement('div');
+            btnGrid.className = 'assign-slots-row';
+
+            slotTypes.forEach(pos => {
+                const btn = document.createElement('button');
+                const isSelectedHere = curL[pos] === player.id;
+                btn.className = `assign-slot-btn ${isSelectedHere ? 'is-active' : ''}`;
+                btn.innerHTML = `<strong>${pos}</strong>`;
+
+                btn.addEventListener('click', () => {
+                    if (isSelectedHere) {
+                        lineups[lKey][pos] = '';
+                        showToast(`Poistettu: ${lName} - ${pos}`);
+                    } else {
+                        assignPlayerToLineupSlot(lKey, pos, player.id);
+                    }
+                    saveState();
+                    renderRoster();
+                    if (activeLineupKey === 'summary') {
+                        renderSummaryView();
+                    } else {
+                        renderActiveLineupSlots();
+                        renderCourtBoards();
+                    }
+                    closeModal();
+                });
+
+                btnGrid.appendChild(btn);
+            });
+
+            section.appendChild(btnGrid);
+            assignOptionsGrid.appendChild(section);
+        });
+
+        assignModal.classList.add('active');
+    }
+
+    function assignPlayerToLineupSlot(lineupKey, pos, playerId) {
+        if (!lineups[lineupKey]) lineups[lineupKey] = createEmptyLineupSlots();
+        lineups[lineupKey][pos] = playerId;
+
+        saveState();
+        renderRoster();
+        if (activeLineupKey === 'summary') {
+            renderSummaryView();
+        } else {
+            renderActiveLineupSlots();
+            renderCourtBoards();
+        }
+        showToast(`Pelaaja sijoitettu: ${getLineupName(lineupKey)} - ${pos} 👍`);
+    }
+
     function openModal(editPlayer = null) {
         if (editPlayer) {
             modalTitle.textContent = 'Muokkaa pelaajaa';
@@ -2118,18 +2617,18 @@
     }
 
     function closeModal() {
-        playerModal.classList.remove('active');
-        teamModal.classList.remove('active');
-        photoModal.classList.remove('active');
-        assignModal.classList.remove('active');
-        slotPickerModal.classList.remove('active');
-        lineupConfigModal.classList.remove('active');
-        manageLineupsModal.classList.remove('active');
-        importPlayersModal.classList.remove('active');
+        playerModal?.classList.remove('active');
+        teamModal?.classList.remove('active');
+        photoModal?.classList.remove('active');
+        assignModal?.classList.remove('active');
+        slotPickerModal?.classList.remove('active');
+        lineupConfigModal?.classList.remove('active');
+        manageLineupsModal?.classList.remove('active');
+        importPlayersModal?.classList.remove('active');
         authModal?.classList.remove('active');
     }
 
-    playerForm.addEventListener('submit', (e) => {
+    playerForm?.addEventListener('submit', (e) => {
         e.preventDefault();
         const id = formPlayerId.value || 'p_' + Date.now();
         const name = formName.value.trim();
@@ -2185,7 +2684,7 @@
         showToast('Pelaaja poistettu.');
     }
 
-    teamForm.addEventListener('submit', (e) => {
+    teamForm?.addEventListener('submit', (e) => {
         e.preventDefault();
         const name = teamNameInput.value.trim();
         if (!name) return;
@@ -2206,7 +2705,7 @@
         showToast(`Uusi tyhjä joukkue '${name}' luotu!`);
     });
 
-    photoFileInput.addEventListener('change', (e) => {
+    photoFileInput?.addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (!file) return;
 
@@ -2295,7 +2794,7 @@
         });
     }
 
-    document.getElementById('btn-confirm-ocr-import').addEventListener('click', () => {
+    document.getElementById('btn-confirm-ocr-import')?.addEventListener('click', () => {
         const rows = ocrResultsList.querySelectorAll('.ocr-item-row');
         let count = 0;
 
@@ -2356,7 +2855,7 @@
     }
 
     function bindEvents() {
-        teamSelect.addEventListener('change', (e) => switchTeam(e.target.value));
+        teamSelect?.addEventListener('change', (e) => switchTeam(e.target.value));
         btnDeleteTeam?.addEventListener('click', deleteActiveTeam);
         cloudSyncBadge?.addEventListener('click', forceCloudSync);
 
@@ -2520,13 +3019,13 @@
             }
         });
 
-        document.getElementById('btn-new-team').addEventListener('click', () => {
+        document.getElementById('btn-new-team')?.addEventListener('click', () => {
             teamNameInput.value = '';
             teamModal.classList.add('active');
         });
 
-        document.getElementById('btn-close-team-modal').addEventListener('click', closeModal);
-        document.getElementById('btn-cancel-team-modal').addEventListener('click', closeModal);
+        document.getElementById('btn-close-team-modal')?.addEventListener('click', closeModal);
+        document.getElementById('btn-cancel-team-modal')?.addEventListener('click', closeModal);
         document.getElementById('btn-close-assign-modal')?.addEventListener('click', closeModal);
         document.getElementById('btn-close-slot-picker-modal')?.addEventListener('click', closeModal);
         document.getElementById('btn-close-lineup-config-modal')?.addEventListener('click', closeModal);
@@ -2552,6 +3051,141 @@
             }
         });
 
+        importSourceTeamSelect?.addEventListener('change', (e) => {
+            renderImportChecklist(e.target.value);
+        });
+
+        btnImportSelectAll?.addEventListener('click', () => {
+            importPlayerChecklist.querySelectorAll('.import-checkbox:not(:disabled)').forEach(cb => { cb.checked = true; });
+        });
+
+        btnImportDeselectAll?.addEventListener('click', () => {
+            importPlayerChecklist.querySelectorAll('.import-checkbox:not(:disabled)').forEach(cb => { cb.checked = false; });
+        });
+
+        btnConfirmImportPlayers?.addEventListener('click', () => {
+            const checkedBoxes = importPlayerChecklist.querySelectorAll('.import-checkbox:checked:not(:disabled)');
+            const sourceTeamId = importSourceTeamSelect.value;
+            const sourceRoster = loadRosterForTeam(sourceTeamId);
+
+            let importCount = 0;
+            checkedBoxes.forEach(cb => {
+                const pId = cb.value;
+                const pObj = sourceRoster.find(p => p.id === pId);
+                if (pObj) {
+                    const cloned = JSON.parse(JSON.stringify(pObj));
+                    cloned.id = 'p_imp_' + Date.now() + '_' + (importCount++);
+                    roster.push(cloned);
+                }
+            });
+
+            saveState();
+            updateRosterCounters();
+            renderRoster();
+            closeModal();
+            showToast(`${importCount} pelaajaa tuotu onnistuneesti joukkueesta! 📥`);
+        });
+
+        reorderLineupsList?.addEventListener('click', (e) => {
+            const upBtn = e.target.closest('[data-action="move-up"]');
+            if (upBtn) {
+                const idx = parseInt(upBtn.dataset.index, 10);
+                if (idx > 0) {
+                    const temp = lineupConfigs[idx];
+                    lineupConfigs[idx] = lineupConfigs[idx - 1];
+                    lineupConfigs[idx - 1] = temp;
+                    saveState();
+                    renderTabs();
+                    renderReorderList();
+                }
+                return;
+            }
+
+            const downBtn = e.target.closest('[data-action="move-down"]');
+            if (downBtn) {
+                const idx = parseInt(downBtn.dataset.index, 10);
+                if (idx < lineupConfigs.length - 1) {
+                    const temp = lineupConfigs[idx];
+                    lineupConfigs[idx] = lineupConfigs[idx + 1];
+                    lineupConfigs[idx + 1] = temp;
+                    saveState();
+                    renderTabs();
+                    renderReorderList();
+                }
+                return;
+            }
+
+            const editBtn = e.target.closest('[data-action="edit-config"]');
+            if (editBtn) {
+                const c = lineupConfigs.find(item => item.id === editBtn.dataset.id);
+                if (c) openLineupConfigModal(c);
+                return;
+            }
+
+            const delBtn = e.target.closest('[data-action="delete-config"]');
+            if (delBtn) {
+                deleteLineupConfig(delBtn.dataset.id);
+                return;
+            }
+        });
+
+        btnResetDefaultLineups?.addEventListener('click', () => {
+            if (confirm('Palautetaanko oletuskentälliset (1., 2., 3., YV, AV, 6v5)?')) {
+                lineupConfigs = JSON.parse(JSON.stringify(DEFAULT_LINEUP_CONFIGS));
+                saveState();
+                renderTabs();
+                renderReorderList();
+                showToast('Oletuskentälliset palautettu.');
+            }
+        });
+
+        lineupConfigForm?.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const id = formLineupId.value || 'lineup_' + Date.now();
+            const name = formLineupName.value.trim();
+            if (!name) return;
+
+            const existingIdx = lineupConfigs.findIndex(c => c.id === id);
+            if (existingIdx >= 0) {
+                lineupConfigs[existingIdx].name = name;
+                showToast('Kentällisen nimi päivitetty!');
+            } else {
+                lineupConfigs.push({ id, name, type: 'custom' });
+                lineups[id] = createEmptyLineupSlots();
+                activeLineupKey = id;
+                showToast('Uusi kentällinen luotu!');
+            }
+
+            saveState();
+            renderTabs();
+            renderTacticalPageBadges();
+            closeModal();
+            if (activeLineupKey === 'summary') {
+                renderSummaryView();
+            } else {
+                renderActiveLineupSlots();
+                renderCourtBoards();
+            }
+        });
+
+        btnClearSlotPicker?.addEventListener('click', () => {
+            if (selectedSlotTarget.lineupKey && selectedSlotTarget.pos) {
+                if (lineups[selectedSlotTarget.lineupKey]) {
+                    lineups[selectedSlotTarget.lineupKey][selectedSlotTarget.pos] = '';
+                    saveState();
+                    renderRoster();
+                    if (activeLineupKey === 'summary') {
+                        renderSummaryView();
+                    } else {
+                        renderActiveLineupSlots();
+                        renderCourtBoards();
+                    }
+                    closeModal();
+                    showToast('Paikka tyhjennetty.');
+                }
+            }
+        });
+
         document.getElementById('btn-add-lineup-summary')?.addEventListener('click', () => openLineupConfigModal());
         document.getElementById('btn-manage-lineups-summary')?.addEventListener('click', () => openManageLineupsModal());
         
@@ -2564,27 +3198,27 @@
             deleteLineupConfig(activeLineupKey);
         });
 
-        document.getElementById('btn-import-photo').addEventListener('click', () => {
+        document.getElementById('btn-import-photo')?.addEventListener('click', () => {
             photoPreviewStep.style.display = 'none';
             ocrStatus.style.display = 'none';
             photoModal.classList.add('active');
         });
-        document.getElementById('btn-photo-add').addEventListener('click', () => {
+        document.getElementById('btn-photo-add')?.addEventListener('click', () => {
             photoPreviewStep.style.display = 'none';
             ocrStatus.style.display = 'none';
             photoModal.classList.add('active');
         });
-        document.getElementById('btn-close-photo-modal').addEventListener('click', closeModal);
-        document.getElementById('btn-reselect-photo').addEventListener('click', () => {
+        document.getElementById('btn-close-photo-modal')?.addEventListener('click', closeModal);
+        document.getElementById('btn-reselect-photo')?.addEventListener('click', () => {
             photoPreviewStep.style.display = 'none';
         });
 
-        document.getElementById('btn-add-player').addEventListener('click', () => openModal());
-        document.getElementById('btn-quick-add').addEventListener('click', () => openModal());
-        document.getElementById('btn-close-modal').addEventListener('click', closeModal);
-        document.getElementById('btn-cancel-modal').addEventListener('click', closeModal);
+        document.getElementById('btn-add-player')?.addEventListener('click', () => openModal());
+        document.getElementById('btn-quick-add')?.addEventListener('click', () => openModal());
+        document.getElementById('btn-close-modal')?.addEventListener('click', closeModal);
+        document.getElementById('btn-cancel-modal')?.addEventListener('click', closeModal);
 
-        rosterSearchInput.addEventListener('input', (e) => {
+        rosterSearchInput?.addEventListener('input', (e) => {
             searchQuery = e.target.value;
             renderRoster();
         });
@@ -2598,7 +3232,7 @@
             });
         });
 
-        rosterListContainer.addEventListener('click', (e) => {
+        rosterListContainer?.addEventListener('click', (e) => {
             const tapAssignTrigger = e.target.closest('[data-action="tap-assign"]');
             if (tapAssignTrigger) {
                 const id = tapAssignTrigger.dataset.id;
@@ -2620,7 +3254,7 @@
             }
         });
 
-        lineupSlotsContainer.addEventListener('click', (e) => {
+        lineupSlotsContainer?.addEventListener('click', (e) => {
             const removeBtn = e.target.closest('[data-action="remove-slot"]');
             if (removeBtn) {
                 e.stopPropagation();
@@ -2645,7 +3279,7 @@
             }
         });
 
-        document.getElementById('btn-clear-pitch').addEventListener('click', () => {
+        document.getElementById('btn-clear-pitch')?.addEventListener('click', () => {
             const lName = getLineupName(activeLineupKey);
             if (confirm(`Tyhjennetäänkö ${lName} kaikilta alustoilta?`)) {
                 lineups[activeLineupKey] = createEmptyLineupSlots();
@@ -2656,7 +3290,7 @@
             }
         });
 
-        document.getElementById('btn-toggle-labels').addEventListener('click', () => {
+        document.getElementById('btn-toggle-labels')?.addEventListener('click', () => {
             if (labelMode === 'full') {
                 labelMode = 'num';
                 document.getElementById('label-mode-text').textContent = '# Vain';
@@ -2670,9 +3304,18 @@
             renderCourtBoards();
         });
 
-        document.getElementById('btn-export-text').addEventListener('click', exportLineupsToClipboard);
-        document.getElementById('btn-copy-this-lineup').addEventListener('click', exportLineupsToClipboard);
+        document.getElementById('btn-export-text')?.addEventListener('click', exportLineupsToClipboard);
+        document.getElementById('btn-copy-this-lineup')?.addEventListener('click', exportLineupsToClipboard);
         document.getElementById('btn-copy-all-summary')?.addEventListener('click', exportLineupsToClipboard);
+
+        window.addEventListener('resize', () => {
+            const page = getCurrentPage();
+            if (page && page.courts) {
+                page.courts.forEach(court => {
+                    initCourtBoardInstance(court.id);
+                });
+            }
+        });
     }
 
     document.addEventListener('DOMContentLoaded', init);
