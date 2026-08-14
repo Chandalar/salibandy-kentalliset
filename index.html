@@ -10,8 +10,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 
-    <!-- CSS Stylesheet (Cache Busted v18.0) -->
-    <link rel="stylesheet" href="styles.css?v=18.0">
+    <!-- CSS Stylesheet (Cache Busted v19.0) -->
+    <link rel="stylesheet" href="styles.css?v=19.0">
 
     <!-- OCR Tesseract.js (Optinen tekstintunnistus valokuvista) -->
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4.1.1/dist/tesseract.min.js"></script>
@@ -123,7 +123,7 @@
             </div>
         </section>
 
-        <!-- CENTER PANEL: TACTICAL COURT & DRAWING -->
+        <!-- CENTER PANEL: TACTICAL COURT & DRAWING (Vertically Stacked Courts) -->
         <section class="panel pitch-panel" id="pitch-panel-section">
             
             <!-- TACTICAL PAGES / BOARDS BAR -->
@@ -136,86 +136,18 @@
                 <button class="btn-xs btn-outline danger-text" id="btn-delete-tactic-page" title="Poista nykyinen taktiikkasivu">🗑️ Poista sivu</button>
             </div>
 
-            <!-- PITCH TOOLBAR (Drawing tools & elements) -->
-            <div class="pitch-toolbar">
-                <div class="toolbar-group">
-                    <button class="tool-btn active" id="tool-select" title="Liikuta pelaajia, palloja, tötteröitä ja piirroksia kentällä">
-                        👆 Liikuta
-                    </button>
-                    <button class="tool-btn tool-pass" id="tool-pass" title="Piirrä suora syöttöviiva">
-                        ↗️ Syöttö
-                    </button>
-                    <button class="tool-btn tool-run" id="tool-run" title="Piirrä vapaa juoksuviiva">
-                        🏃 Juoksu
-                    </button>
-                    <button class="tool-btn tool-shot" id="tool-shot" title="Piirrä suora laukaus maalia kohti">
-                        💥 Veto
-                    </button>
-                    <button class="tool-btn tool-rect" id="tool-rect" title="Piirrä läpinäkyvä taktinen alue">
-                        🔲 Alue
-                    </button>
-                </div>
-
-                <div class="toolbar-group">
-                    <button class="tool-btn highlight-ball" id="btn-add-ball" title="Lisää salibandypallo kentälle">
-                        <img src="ball.png?v=17.0" width="18" height="18" alt="Pallo" style="vertical-align: middle; display: inline-block;"> + Pallo
-                    </button>
-                    <button class="tool-btn highlight-cone" id="btn-add-cone" title="Lisää harjoitustötterö kentälle">
-                        🔶 + Tötterö
-                    </button>
-                    <button class="tool-btn highlight-opponent" id="btn-add-opponent" title="Lisää vastustaja kentälle">
-                        🔴 + Vastustaja
-                    </button>
-                    <button class="tool-btn" id="tool-undo" title="Kumoaa viimeisen piirroksen">
-                        ↩️ Kumoa
-                    </button>
-                    <button class="tool-btn" id="tool-clear-drawings" title="Tyhjennä piirrokset">
-                        🧹 Tyhjennä
-                    </button>
-                    <button class="tool-btn highlight-orient" id="btn-toggle-orientation" title="Vaihda kentän asentoa (Pysty / Vaaka)">
-                        🔄 <span id="orient-mode-text">Asento</span>
-                    </button>
-                </div>
+            <!-- VERTICALLY STACKED COURTS CONTAINER -->
+            <div class="courts-vertical-list" id="courts-vertical-list">
+                <!-- Dynamic Court Cards Stacked Vertically -->
             </div>
 
-            <!-- INTERACTIVE FLOORBALL PITCH CANVAS AREA -->
-            <div class="pitch-outer-wrapper">
-                <div class="pitch-container mode-horizontal" id="floorball-court">
-                    
-                    <!-- COURT LINES (SVG Rendered) -->
-                    <div class="court-surface"></div>
-                    <div class="court-center-line"></div>
-                    <div class="center-spot-pink"></div>
-                    <div class="center-line-tick tick-left"></div>
-                    <div class="center-line-tick tick-right"></div>
-
-                    <!-- GOAL AREAS (Goal 1 & Goal 2) -->
-                    <div class="goal-area-container goal-1">
-                        <div class="goal-outer-box"></div>
-                        <div class="goal-inner-crease"></div>
-                        <div class="goal-net-frame"></div>
-                    </div>
-
-                    <div class="goal-area-container goal-2">
-                        <div class="goal-outer-box"></div>
-                        <div class="goal-inner-crease"></div>
-                        <div class="goal-net-frame"></div>
-                    </div>
-
-                    <!-- FACEOFF DOTS -->
-                    <div class="faceoff-dot dot-tl"></div>
-                    <div class="faceoff-dot dot-tr"></div>
-                    <div class="faceoff-dot dot-bl"></div>
-                    <div class="faceoff-dot dot-br"></div>
-
-                    <!-- DRAWING CANVAS LAYER -->
-                    <canvas id="tactic-canvas"></canvas>
-
-                    <!-- ON-COURT PLAYER & BALL NODES LAYER -->
-                    <div id="court-players-layer"></div>
-
-                </div>
+            <!-- ADD COURT BOARD BUTTON -->
+            <div class="add-court-bottom-bar" id="add-court-bottom-bar">
+                <button class="btn btn-primary btn-block" id="btn-add-court-board">
+                    ➕ Lisää uusi piirtoalusta / kenttä alapuolelle
+                </button>
             </div>
+
         </section>
 
         <!-- RIGHT PANEL: ACTIVE LINEUP SLOTS -->
@@ -543,9 +475,9 @@
     <!-- TOAST NOTIFICATION CONTAINER -->
     <div id="toast" class="toast-notification"></div>
 
-    <!-- Firebase Config & App Engine (Cache Busted v18.0) -->
-    <script src="firebase-config.js?v=18.0"></script>
-    <script src="app.js?v=18.0"></script>
+    <!-- Firebase Config & App Engine (Cache Busted v19.0) -->
+    <script src="firebase-config.js?v=19.0"></script>
+    <script src="app.js?v=19.0"></script>
 
 </body>
 </html>

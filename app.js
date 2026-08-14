@@ -105,7 +105,7 @@
     lineupDrawings = sanitizeDrawings(lineupDrawings);
 
     let lineupCourtPositions = loadFromStorage(`salibandy_positions_${currentTeamId}`, {});
-    let lineupBalls = loadFromStorage(`salibandy_balls_${currentTeamId}`, { '1': [{ id: 'ball_default', x: 55, y: 50 }] });
+    let lineupBalls = loadFromStorage(`salibandy_balls_${currentTeamId}`, { '1_p1_c1': [{ id: 'ball_default', x: 55, y: 50 }] });
     let lineupCones = loadFromStorage(`salibandy_cones_${currentTeamId}`, {});
     let lineupOpponents = loadFromStorage(`salibandy_opponents_${currentTeamId}`, {});
     let lineupPages = loadFromStorage(`salibandy_pages_${currentTeamId}`, {});
@@ -114,11 +114,13 @@
     let activePageId = 'p1';
     let activeFilter = 'all';
     let searchQuery = '';
-    let drawingTool = 'select';
-    let isDrawing = false;
-    let currentPathPct = [];
     let labelMode = 'full';
     let orientationMode = window.innerWidth <= 600 ? 'vertical' : 'horizontal';
+
+    // Per-court state maps
+    let courtDrawingTools = {};
+    let courtIsDrawingMap = {};
+    let courtPathPctMap = {};
 
     // DOM Elements
     const teamSelect = document.getElementById('team-select');
@@ -129,15 +131,14 @@
     const tabsScrollContainer = document.getElementById('tabs-scroll-container');
     const activeLineupTitle = document.getElementById('active-lineup-title');
     const lineupSlotsContainer = document.getElementById('lineup-slots-container');
-    const courtPlayersLayer = document.getElementById('court-players-layer');
-    const floorballCourt = document.getElementById('floorball-court');
-    const canvas = document.getElementById('tactic-canvas');
-    const ctx = canvas.getContext('2d');
-    const toastEl = document.getElementById('toast');
 
     const pagesScrollContainer = document.getElementById('pages-scroll-container');
     const btnAddTacticPage = document.getElementById('btn-add-tactic-page');
     const btnDeleteTacticPage = document.getElementById('btn-delete-tactic-page');
+    const courtsVerticalList = document.getElementById('courts-vertical-list');
+    const btnAddCourtBoard = document.getElementById('btn-add-court-board');
+
+    const toastEl = document.getElementById('toast');
 
     // Main Sections
     const rosterPanelSection = document.getElementById('roster-panel-section');
@@ -213,8 +214,8 @@
     let selectedPlayerForAssignment = null;
     let selectedSlotTarget = { lineupKey: '', pos: '' };
 
-    function getActivePageKey() {
-        return `${activeLineupKey}_${activePageId}`;
+    function getCourtKey(courtId) {
+        return `${activeLineupKey}_${activePageId}_${courtId}`;
     }
 
     // ==========================================
@@ -224,15 +225,12 @@
         renderTeamDropdown();
         renderTabs();
         renderTacticalPageBadges();
-        applyOrientation();
-        setupCanvas();
         bindEvents();
         initFirebaseAuth();
         updateRosterCounters();
         renderRoster();
         renderActiveLineupSlots();
-        renderCourtPlayers();
-        drawCanvasLines();
+        renderCourtBoards();
     }
 
     function sanitizeDrawings(drawingsObj) {
@@ -544,8 +542,7 @@
                 renderSummaryView();
             } else {
                 renderActiveLineupSlots();
-                renderCourtPlayers();
-                drawCanvasLines();
+                renderCourtBoards();
             }
 
             updateCloudSyncBadge(true);
@@ -716,8 +713,7 @@
             renderSummaryView();
         } else {
             renderActiveLineupSlots();
-            renderCourtPlayers();
-            drawCanvasLines();
+            renderCourtBoards();
         }
         showToast(`Joukkue vaihdettu: ${teams.find(t => t.id === currentTeamId)?.name || ''}`);
     }
@@ -812,21 +808,33 @@
             lineupPanelSection.style.display = 'flex';
             summaryViewPanel.style.display = 'none';
             renderActiveLineupSlots();
-            renderCourtPlayers();
-            setTimeout(resizeCanvas, 60);
+            renderCourtBoards();
         }
     }
 
     // ==========================================
-    // MULTIPLE TACTICAL PAGES / SLIDES MANAGEMENT
+    // MULTIPLE TACTICAL PAGES & TAB RENAMING
     // ==========================================
     function getPagesForActiveLineup() {
         if (!lineupPages[activeLineupKey] || !Array.isArray(lineupPages[activeLineupKey])) {
             lineupPages[activeLineupKey] = [
-                { id: 'p1', name: 'Sivu 1' }
+                { id: 'p1', name: 'Sivu 1', courts: [{ id: 'c1', title: 'Kenttä 1' }] }
             ];
         }
         return lineupPages[activeLineupKey];
+    }
+
+    function getCurrentPage() {
+        const pages = getPagesForActiveLineup();
+        let page = pages.find(p => p.id === activePageId);
+        if (!page) {
+            page = pages[0] || { id: 'p1', name: 'Sivu 1', courts: [{ id: 'c1', title: 'Kenttä 1' }] };
+            activePageId = page.id;
+        }
+        if (!page.courts || !Array.isArray(page.courts) || page.courts.length === 0) {
+            page.courts = [{ id: 'c1', title: 'Kenttä 1' }];
+        }
+        return page;
     }
 
     function renderTacticalPageBadges() {
@@ -842,15 +850,20 @@
         }
 
         pages.forEach((page, index) => {
+            const isCurrent = page.id === activePageId;
             const badge = document.createElement('button');
-            badge.className = `page-badge-btn ${page.id === activePageId ? 'active' : ''}`;
-            badge.textContent = `📄 ${page.name || ('Sivu ' + (index + 1))}`;
+            badge.className = `page-badge-btn ${isCurrent ? 'active' : ''}`;
             
-            badge.addEventListener('click', () => {
+            badge.innerHTML = `
+                <span>📄 ${escapeHtml(page.name || ('Sivu ' + (index + 1)))}</span>
+                <span class="page-rename-icon" title="Uudelleennimeä taktiikkasivu" data-action="rename-page" data-page-id="${page.id}">✏️</span>
+            `;
+            
+            badge.addEventListener('click', (e) => {
+                if (e.target.classList.contains('page-rename-icon')) return;
                 activePageId = page.id;
                 renderTacticalPageBadges();
-                renderCourtPlayers();
-                drawCanvasLines();
+                renderCourtBoards();
             });
 
             pagesScrollContainer.appendChild(badge);
@@ -861,6 +874,20 @@
         }
     }
 
+    function renameTacticalPage(pageId) {
+        const pages = getPagesForActiveLineup();
+        const page = pages.find(p => p.id === pageId);
+        if (!page) return;
+
+        const newName = prompt('Syötä taktiikkasivun uusi nimi (esim. YV 5v4 Timantti):', page.name || '');
+        if (newName !== null && newName.trim() !== '') {
+            page.name = newName.trim();
+            saveState();
+            renderTacticalPageBadges();
+            showToast(`Taktiikkasivu nimettiin uudelleen: '${page.name}' ✏️`);
+        }
+    }
+
     function addTacticalPage() {
         const pages = getPagesForActiveLineup();
         const nextNum = pages.length + 1;
@@ -868,15 +895,15 @@
 
         pages.push({
             id: newPageId,
-            name: `Sivu ${nextNum}`
+            name: `Sivu ${nextNum}`,
+            courts: [{ id: 'c1', title: 'Kenttä 1' }]
         });
 
         activePageId = newPageId;
         saveState();
         renderTacticalPageBadges();
-        renderCourtPlayers();
-        drawCanvasLines();
-        showToast(`Uusi taktiikkasivu '${'Sivu ' + nextNum}' luotu! 📄`);
+        renderCourtBoards();
+        showToast(`Uusi taktiikkasivu 'Sivu ${nextNum}' luotu! 📄`);
     }
 
     function deleteTacticalPage() {
@@ -890,915 +917,215 @@
         const pName = curPage ? curPage.name : 'sivu';
 
         if (confirm(`Haluatko varmasti poistaa taktiikkasivun '${pName}'?`)) {
-            const pageKeyToDelete = getActivePageKey();
-            delete lineupDrawings[pageKeyToDelete];
-            delete lineupBalls[pageKeyToDelete];
-            delete lineupCones[pageKeyToDelete];
-            delete lineupOpponents[pageKeyToDelete];
-            delete lineupCourtPositions[pageKeyToDelete];
-
             lineupPages[activeLineupKey] = pages.filter(p => p.id !== activePageId);
             activePageId = lineupPages[activeLineupKey][0].id;
 
             saveState();
             renderTacticalPageBadges();
-            renderCourtPlayers();
-            drawCanvasLines();
+            renderCourtBoards();
             showToast(`Taktiikkasivu '${pName}' poistettu.`);
         }
     }
 
-    function applyOrientation() {
-        const textEl = document.getElementById('orient-mode-text');
-        if (orientationMode === 'vertical') {
-            floorballCourt.classList.remove('mode-horizontal');
-            floorballCourt.classList.add('mode-vertical');
-            textEl.textContent = 'Pysty (20x40m)';
-        } else {
-            floorballCourt.classList.remove('mode-vertical');
-            floorballCourt.classList.add('mode-horizontal');
-            textEl.textContent = 'Vaaka (40x20m)';
-        }
-        renderCourtPlayers();
-        setTimeout(resizeCanvas, 60);
-    }
-
-    function resizeCanvas() {
-        const rect = floorballCourt.getBoundingClientRect();
-        canvas.width = rect.width;
-        canvas.height = rect.height;
-        drawCanvasLines();
-    }
-
-    function updateRosterCounters() {
-        const mvCount = roster.filter(p => p.position === 'MV').length;
-        const fieldCount = roster.filter(p => p.position !== 'MV').length;
-        const loanCount = roster.filter(p => p.isLoan).length;
-
-        countMvEl.textContent = mvCount;
-        countFieldEl.textContent = fieldCount;
-        countLoanEl.textContent = loanCount;
-    }
-
-    function renderRoster() {
-        rosterListContainer.innerHTML = '';
-
-        if (roster.length === 0) {
-            rosterListContainer.innerHTML = `
-                <div style="text-align:center; padding: 1.8rem 0.8rem; color: var(--text-muted);">
-                    <p style="font-size: 0.9rem; font-weight: 700; color: var(--text-primary); margin-bottom: 0.4rem;">Joukkueessa ei ole vielä pelaajia 👥</p>
-                    <p style="font-size: 0.76rem; margin-bottom: 1.2rem; color: var(--text-secondary);">
-                        Voit lisätä uusia pelaajia, lukea kokoonpanon valokuvasta tai tuoda pelaajia muista joukkueista!
-                    </p>
-                    <div style="display: flex; flex-direction: column; gap: 0.5rem; max-width: 230px; margin: 0 auto;">
-                        <button class="btn btn-primary btn-sm" id="btn-empty-add-player">+ Lisää uusi pelaaja</button>
-                        <button class="btn btn-secondary btn-sm" id="btn-empty-import-players">📥 Tuo muista joukkueista</button>
-                        <button class="btn btn-photo btn-sm" id="btn-empty-photo">📷 Lue lista kuvasta</button>
-                    </div>
-                </div>
-            `;
-
-            document.getElementById('btn-empty-add-player')?.addEventListener('click', () => openModal());
-            document.getElementById('btn-empty-import-players')?.addEventListener('click', () => openImportPlayersModal());
-            document.getElementById('btn-empty-photo')?.addEventListener('click', () => {
-                photoPreviewStep.style.display = 'none';
-                ocrStatus.style.display = 'none';
-                photoModal.classList.add('active');
-            });
-            return;
-        }
-
-        const filtered = roster.filter(player => {
-            if (activeFilter === 'mv' && player.position !== 'MV') return false;
-            if (activeFilter === 'field' && player.position === 'MV') return false;
-            if (activeFilter === 'loan' && !player.isLoan) return false;
-
-            if (searchQuery.trim() !== '') {
-                const q = searchQuery.toLowerCase();
-                const matchName = player.name.toLowerCase().includes(q);
-                const matchNum = player.number.toString().includes(q);
-                return matchName || matchNum;
-            }
-            return true;
-        });
-
-        if (filtered.length === 0) {
-            rosterListContainer.innerHTML = `
-                <div style="text-align:center; color: var(--text-muted); padding: 2rem 1rem; font-size: 0.85rem;">
-                    Ei pelaajia valitulla hakuehdolla.
-                </div>
-            `;
-            return;
-        }
-
-        filtered.forEach(player => {
-            const isMv = player.position === 'MV';
-            const card = document.createElement('div');
-            card.className = `player-card ${isMv ? 'is-mv' : 'is-field'}`;
-            card.draggable = true;
-            card.dataset.playerId = player.id;
-
-            card.innerHTML = `
-                <div class="player-card-info" data-action="tap-assign" data-id="${player.id}">
-                    <div class="player-num-circle">#${player.number}</div>
-                    <div class="player-details">
-                        <div class="player-name-row">
-                            <span class="player-name">${escapeHtml(player.name)}</span>
-                            ${player.isLoan ? '<span class="loan-badge">⭐ LAINA</span>' : ''}
-                        </div>
-                        <span class="player-submeta">${isMv ? 'Maalivahti (MV)' : getPosLabel(player.position)} ${player.notes ? '• ' + escapeHtml(player.notes) : ''}</span>
-                    </div>
-                </div>
-                <div class="player-card-actions">
-                    <button class="btn-assign-quick" data-action="tap-assign" data-id="${player.id}">+ Sijoita</button>
-                    <button class="mini-action-btn edit-btn" title="Muokkaa" data-action="edit" data-id="${player.id}">✏️</button>
-                    <button class="mini-action-btn delete-btn" title="Poista" data-action="delete" data-id="${player.id}">🗑️</button>
-                </div>
-            `;
-
-            card.addEventListener('dragstart', (e) => {
-                e.dataTransfer.setData('text/plain', player.id);
-                e.dataTransfer.effectAllowed = 'move';
-                card.style.opacity = '0.4';
-            });
-
-            card.addEventListener('dragend', () => {
-                card.style.opacity = '1';
-            });
-
-            rosterListContainer.appendChild(card);
-        });
-    }
-
-    function getPosLabel(pos) {
-        switch(pos) {
-            case 'MV': return 'Maalivahti';
-            case 'P': return 'Puolustaja';
-            case 'KH': return 'Keskushyökkääjä';
-            case 'H': return 'Hyökkääjä';
-            default: return pos;
-        }
-    }
-
-    function escapeHtml(str) {
-        return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-    }
-
     // ==========================================
-    // AUTH MODAL LOGIC (LOGIN / REGISTER / GOOGLE)
+    // VERTICALLY STACKED COURTS ENGINE (`renderCourtBoards`)
     // ==========================================
-    authTabLogin?.addEventListener('click', () => {
-        authTabLogin.classList.add('active');
-        authTabRegister.classList.remove('active');
-        loginForm.style.display = 'block';
-        registerForm.style.display = 'none';
-    });
+    function addCourtToActivePage() {
+        const page = getCurrentPage();
+        const nextNum = page.courts.length + 1;
+        const newCourtId = 'c_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4);
 
-    authTabRegister?.addEventListener('click', () => {
-        authTabRegister.classList.add('active');
-        authTabLogin.classList.remove('active');
-        registerForm.style.display = 'block';
-        loginForm.style.display = 'none';
-    });
-
-    loginForm?.addEventListener('submit', (e) => {
-        e.preventDefault();
-        const email = document.getElementById('login-email').value.trim();
-        const pass = document.getElementById('login-password').value;
-
-        if (!window.SalibandyFirebase || !window.SalibandyFirebase.isReady()) {
-            showToast('Firebase-palvelu ei ole käytettävissä offline-tilassa.');
-            return;
-        }
-
-        window.SalibandyFirebase.getAuth().signInWithEmailAndPassword(email, pass)
-            .then((userCredential) => {
-                closeModal();
-                showToast(`Tervetuloa takaisin, ${userCredential.user.email}! 🔒`);
-                setTimeout(forceCloudSync, 500);
-            })
-            .catch((err) => {
-                alert(`Kirjautumisvirhe: ${err.message}`);
-            });
-    });
-
-    registerForm?.addEventListener('submit', (e) => {
-        e.preventDefault();
-        const email = document.getElementById('reg-email').value.trim();
-        const pass = document.getElementById('reg-password').value;
-
-        if (!window.SalibandyFirebase || !window.SalibandyFirebase.isReady()) {
-            showToast('Firebase-palvelu ei ole käytettävissä offline-tilassa.');
-            return;
-        }
-
-        window.SalibandyFirebase.getAuth().createUserWithEmailAndPassword(email, pass)
-            .then((userCredential) => {
-                closeModal();
-                showToast(`Tili luotu onnistuneesti: ${userCredential.user.email}! ✨`);
-                setTimeout(forceCloudSync, 500);
-            })
-            .catch((err) => {
-                alert(`Tilin luontivirhe: ${err.message}`);
-            });
-    });
-
-    document.getElementById('btn-google-login')?.addEventListener('click', () => {
-        if (!window.SalibandyFirebase || !window.SalibandyFirebase.isReady()) {
-            showToast('Firebase-palvelu ei ole käytettävissä offline-tilassa.');
-            return;
-        }
-
-        const provider = new firebase.auth.GoogleAuthProvider();
-        window.SalibandyFirebase.getAuth().signInWithPopup(provider)
-            .then((result) => {
-                closeModal();
-                showToast(`Kirjauduttu Google-tilillä: ${result.user.email} 🎉`);
-                setTimeout(forceCloudSync, 500);
-            })
-            .catch((err) => {
-                alert(`Google-kirjautumisvirhe: ${err.message}`);
-            });
-    });
-
-    // ==========================================
-    // IMPORT PLAYERS FROM OTHER TEAMS LOGIC
-    // ==========================================
-    function openImportPlayersModal() {
-        const otherTeams = teams.filter(t => t.id !== currentTeamId);
-
-        if (otherTeams.length === 0) {
-            showToast('Ei muita joukkueita joista tuoda pelaajia. Luotavissa uusi joukkue! 🏑');
-            return;
-        }
-
-        importSourceTeamSelect.innerHTML = '';
-        otherTeams.forEach(t => {
-            const opt = document.createElement('option');
-            opt.value = t.id;
-            opt.textContent = t.name;
-            importSourceTeamSelect.appendChild(opt);
-        });
-
-        renderImportChecklist(otherTeams[0].id);
-        importPlayersModal.classList.add('active');
-    }
-
-    function renderImportChecklist(sourceTeamId) {
-        const sourceRoster = loadRosterForTeam(sourceTeamId);
-        importPlayerChecklist.innerHTML = '';
-
-        if (sourceRoster.length === 0) {
-            importPlayerChecklist.innerHTML = `
-                <div style="text-align:center; color: var(--text-muted); padding: 1.5rem;">
-                    Valitulla lähdejoukkueella ei ole vielä pelaajia ringissä.
-                </div>
-            `;
-            return;
-        }
-
-        sourceRoster.forEach(player => {
-            const isMv = player.position === 'MV';
-            const row = document.createElement('label');
-            row.className = 'import-player-row';
-
-            row.innerHTML = `
-                <input type="checkbox" value="${player.id}" class="import-checkbox" checked>
-                <div class="player-num-circle" style="background: ${isMv ? 'var(--accent-mv)' : 'var(--accent-field)'}; color: ${isMv ? '#022c22' : '#fff'}; width:24px; height:24px; font-size:0.75rem;">
-                    #${player.number}
-                </div>
-                <div class="player-details" style="flex:1;">
-                    <div class="player-name-row">
-                        <span class="player-name">${escapeHtml(player.name)}</span>
-                        ${player.isLoan ? '<span class="loan-badge">⭐ LAINA</span>' : ''}
-                    </div>
-                    <span class="player-submeta">${getPosLabel(player.position)}</span>
-                </div>
-            `;
-
-            importPlayerChecklist.appendChild(row);
-        });
-    }
-
-    importSourceTeamSelect?.addEventListener('change', (e) => {
-        renderImportChecklist(e.target.value);
-    });
-
-    btnImportSelectAll?.addEventListener('click', () => {
-        importPlayerChecklist.querySelectorAll('.import-checkbox').forEach(cb => cb.checked = true);
-    });
-
-    btnImportDeselectAll?.addEventListener('click', () => {
-        importPlayerChecklist.querySelectorAll('.import-checkbox').forEach(cb => cb.checked = false);
-    });
-
-    btnConfirmImportPlayers?.addEventListener('click', () => {
-        const sourceTeamId = importSourceTeamSelect.value;
-        const sourceRoster = loadRosterForTeam(sourceTeamId);
-
-        const checkedCheckboxes = importPlayerChecklist.querySelectorAll('.import-checkbox:checked');
-        if (checkedCheckboxes.length === 0) {
-            showToast('Valitse vähintään yksi tuotava pelaaja.');
-            return;
-        }
-
-        let importedCount = 0;
-        checkedCheckboxes.forEach(cb => {
-            const targetId = cb.value;
-            const original = sourceRoster.find(p => p.id === targetId);
-            if (original) {
-                const newPlayer = {
-                    ...original,
-                    id: 'p_imp_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4)
-                };
-                roster.push(newPlayer);
-                importedCount++;
-            }
+        page.courts.push({
+            id: newCourtId,
+            title: `Kenttä ${nextNum}`
         });
 
         saveState();
-        updateRosterCounters();
-        renderRoster();
-        if (activeLineupKey === 'summary') {
-            renderSummaryView();
-        } else {
-            renderActiveLineupSlots();
-            renderCourtPlayers();
-        }
-
-        closeModal();
-        showToast(`${importedCount} pelaajaa tuotu onnistuneesti uuteen joukkueeseen! 🎉`);
-    });
-
-    // ==========================================
-    // REORDER & MANAGE LINEUPS
-    // ==========================================
-    function openManageLineupsModal() {
-        renderReorderList();
-        manageLineupsModal.classList.add('active');
+        renderCourtBoards();
+        showToast(`Uusi piirtoalusta / kenttä lisätty alapuolelle! 🏒`);
     }
 
-    function renderReorderList() {
-        reorderLineupsList.innerHTML = '';
-
-        if (lineupConfigs.length === 0) {
-            reorderLineupsList.innerHTML = `
-                <div style="text-align:center; color: var(--text-muted); padding: 1rem;">
-                    Ei kentällisiä. Voit luoda uuden kentällisen tai palauttaa oletuskentät.
-                </div>
-            `;
+    function deleteCourtFromActivePage(courtId) {
+        const page = getCurrentPage();
+        if (page.courts.length <= 1) {
+            showToast('Et voi poistaa ainoaa piirtoalustaa sivulta.');
             return;
         }
 
-        lineupConfigs.forEach((config, idx) => {
-            const row = document.createElement('div');
-            row.className = 'reorder-item-row';
+        const courtObj = page.courts.find(c => c.id === courtId);
+        const cTitle = courtObj ? courtObj.title : 'kenttä';
 
-            row.innerHTML = `
-                <div class="reorder-arrows-group">
-                    <button class="reorder-btn" data-action="move-up" data-index="${idx}" ${idx === 0 ? 'disabled style="opacity:0.3;"' : ''}>⬆️</button>
-                    <button class="reorder-btn" data-action="move-down" data-index="${idx}" ${idx === lineupConfigs.length - 1 ? 'disabled style="opacity:0.3;"' : ''}>⬇️</button>
-                </div>
-                <span class="reorder-item-title">${escapeHtml(config.name)}</span>
-                <div class="reorder-item-actions">
-                    <button class="btn-xs btn-outline" data-action="edit-config" data-id="${config.id}">✏️</button>
-                    <button class="btn-xs btn-outline danger-text" data-action="delete-config" data-id="${config.id}">🗑️</button>
-                </div>
-            `;
+        if (confirm(`Poistetaanko piirtoalusta '${cTitle}'?`)) {
+            const courtKey = getCourtKey(courtId);
+            delete lineupDrawings[courtKey];
+            delete lineupBalls[courtKey];
+            delete lineupCones[courtKey];
+            delete lineupOpponents[courtKey];
+            delete lineupCourtPositions[courtKey];
 
-            reorderLineupsList.appendChild(row);
-        });
-    }
-
-    reorderLineupsList.addEventListener('click', (e) => {
-        const moveUpBtn = e.target.closest('[data-action="move-up"]');
-        if (moveUpBtn) {
-            const idx = parseInt(moveUpBtn.dataset.index, 10);
-            if (idx > 0) {
-                const temp = lineupConfigs[idx];
-                lineupConfigs[idx] = lineupConfigs[idx - 1];
-                lineupConfigs[idx - 1] = temp;
-                saveState();
-                renderTabs();
-                renderReorderList();
-                if (activeLineupKey === 'summary') renderSummaryView();
-            }
-            return;
-        }
-
-        const moveDownBtn = e.target.closest('[data-action="move-down"]');
-        if (moveDownBtn) {
-            const idx = parseInt(moveDownBtn.dataset.index, 10);
-            if (idx < lineupConfigs.length - 1) {
-                const temp = lineupConfigs[idx];
-                lineupConfigs[idx] = lineupConfigs[idx + 1];
-                lineupConfigs[idx + 1] = temp;
-                saveState();
-                renderTabs();
-                renderReorderList();
-                if (activeLineupKey === 'summary') renderSummaryView();
-            }
-            return;
-        }
-
-        const editBtn = e.target.closest('[data-action="edit-config"]');
-        if (editBtn) {
-            const id = editBtn.dataset.id;
-            const config = lineupConfigs.find(c => c.id === id);
-            if (config) openLineupConfigModal(config);
-            return;
-        }
-
-        const deleteBtn = e.target.closest('[data-action="delete-config"]');
-        if (deleteBtn) {
-            const id = deleteBtn.dataset.id;
-            deleteLineupConfig(id);
-            renderReorderList();
-            return;
-        }
-    });
-
-    btnResetDefaultLineups?.addEventListener('click', () => {
-        if (confirm('Palautetaanko standardit oletuskentät (1. Kenttä, 2. Kenttä, 3. Kenttä, YV, AV, 6v5, Taktiikka)?')) {
-            lineupConfigs = JSON.parse(JSON.stringify(DEFAULT_LINEUP_CONFIGS));
-            activeLineupKey = '1';
-            activePageId = 'p1';
-            saveState();
-            renderTabs();
-            renderTacticalPageBadges();
-            renderReorderList();
-            if (activeLineupKey === 'summary') renderSummaryView();
-            else switchTab('1');
-            showToast('Oletuskentät palautettu.');
-        }
-    });
-
-    // ==========================================
-    // LINEUP CONFIGURATION
-    // ==========================================
-    function openLineupConfigModal(lineupConfig = null) {
-        if (lineupConfig) {
-            lineupConfigModalTitle.textContent = 'Muokkaa kentällisen nimeä';
-            formLineupId.value = lineupConfig.id;
-            formLineupName.value = lineupConfig.name;
-        } else {
-            lineupConfigModalTitle.textContent = 'Uusi kentällinen';
-            lineupConfigForm.reset();
-            formLineupId.value = '';
-        }
-        lineupConfigModal.classList.add('active');
-    }
-
-    lineupConfigForm.addEventListener('submit', (e) => {
-        e.preventDefault();
-        const id = formLineupId.value || 'lineup_' + Date.now();
-        const name = formLineupName.value.trim();
-
-        if (!name) return;
-
-        const existing = lineupConfigs.find(c => c.id === id);
-        if (existing) {
-            existing.name = name;
-            showToast('Kentällisen nimi päivitetty!');
-        } else {
-            lineupConfigs.push({ id, name, type: 'user' });
-            lineups[id] = createEmptyLineupSlots();
-            activeLineupKey = id;
-            activePageId = 'p1';
-            showToast(`Uusi kentällinen '${name}' luotu!`);
-        }
-
-        saveState();
-        renderTabs();
-        renderTacticalPageBadges();
-        renderReorderList();
-        if (activeLineupKey === 'summary') {
-            renderSummaryView();
-        } else {
-            switchTab(id);
-        }
-        closeModal();
-    });
-
-    function deleteLineupConfig(id) {
-        const config = lineupConfigs.find(c => c.id === id);
-        if (!config) return;
-
-        if (confirm(`Haluatko varmasti poistaa kentällisen '${config.name}'?`)) {
-            lineupConfigs = lineupConfigs.filter(c => c.id !== id);
-            delete lineups[id];
-            delete lineupDrawings[id];
-            delete lineupBalls[id];
-            delete lineupCones[id];
-            delete lineupOpponents[id];
-            delete lineupPages[id];
-
-            if (activeLineupKey === id) {
-                activeLineupKey = lineupConfigs[0] ? lineupConfigs[0].id : 'summary';
-                activePageId = 'p1';
-            }
+            page.courts = page.courts.filter(c => c.id !== courtId);
 
             saveState();
-            renderTabs();
-            renderTacticalPageBadges();
-            if (activeLineupKey === 'summary') {
-                renderSummaryView();
-            } else {
-                switchTab(activeLineupKey);
-            }
-            showToast('Kentällinen poistettu.');
+            renderCourtBoards();
+            showToast(`Piirtoalusta '${cTitle}' poistettu.`);
         }
     }
 
-    // ==========================================
-    // SLOT-PICKER PLAYER MODAL
-    // ==========================================
-    function openSlotPickerModal(lineupKey, pos) {
-        selectedSlotTarget = { lineupKey, pos };
-        const isMv = pos === 'MV';
-        const lineupName = getLineupName(lineupKey);
+    function renameCourtBoard(courtId) {
+        const page = getCurrentPage();
+        const courtObj = page.courts.find(c => c.id === courtId);
+        if (!courtObj) return;
 
-        slotPickerTitle.textContent = `Valitse pelaaja: ${lineupName} - ${pos}`;
-        slotPickerInfo.textContent = `Valitse pelaaja ringistä paikkaan ${pos}:`;
-
-        const currentOccupantId = (lineups[lineupKey] || {})[pos];
-
-        const sortedRoster = [...roster].sort((a, b) => {
-            if (isMv) {
-                if (a.position === 'MV' && b.position !== 'MV') return -1;
-                if (a.position !== 'MV' && b.position === 'MV') return 1;
-            } else {
-                if (a.position !== 'MV' && b.position === 'MV') return -1;
-                if (a.position === 'MV' && b.position !== 'MV') return 1;
-            }
-            return a.number - b.number;
-        });
-
-        slotPickerPlayerList.innerHTML = '';
-
-        if (sortedRoster.length === 0) {
-            slotPickerPlayerList.innerHTML = `
-                <div style="text-align:center; color: var(--text-muted); padding: 1rem;">
-                    Joukkueessa ei ole vielä pelaajia. Lisää ensin pelaajia rinkiin!
-                </div>
-            `;
-            slotPickerModal.classList.add('active');
-            return;
-        }
-
-        sortedRoster.forEach(player => {
-            const isPlayerMv = player.position === 'MV';
-            const isSelected = player.id === currentOccupantId;
-
-            const row = document.createElement('div');
-            row.className = `slot-picker-row ${isSelected ? 'is-selected' : ''}`;
-            row.dataset.playerId = player.id;
-
-            row.innerHTML = `
-                <div class="player-card-info">
-                    <div class="player-num-circle" style="background: ${isPlayerMv ? 'var(--accent-mv)' : 'var(--accent-field)'}; color: ${isPlayerMv ? '#022c22' : '#fff'}">#${player.number}</div>
-                    <div class="player-details">
-                        <div class="player-name-row">
-                            <span class="player-name">${escapeHtml(player.name)}</span>
-                            ${player.isLoan ? '<span class="loan-badge">⭐ LAINA</span>' : ''}
-                        </div>
-                        <span class="player-submeta">${getPosLabel(player.position)}</span>
-                    </div>
-                </div>
-                <button class="btn-xs ${isSelected ? 'btn-primary' : 'btn-outline'}">${isSelected ? 'Valittu ✓' : '+ Valitse'}</button>
-            `;
-
-            row.addEventListener('click', () => {
-                assignPlayerToLineupSlot(lineupKey, pos, player.id);
-                slotPickerModal.classList.remove('active');
-                showToast(`Pelaaja #${player.number} asetettu paikkaan ${lineupName} - ${pos}`);
-            });
-
-            slotPickerPlayerList.appendChild(row);
-        });
-
-        slotPickerModal.classList.add('active');
-    }
-
-    btnClearSlotPicker.addEventListener('click', () => {
-        if (selectedSlotTarget.lineupKey && selectedSlotTarget.pos) {
-            lineups[selectedSlotTarget.lineupKey][selectedSlotTarget.pos] = '';
+        const newTitle = prompt('Syötä kentän / vaiheen otsikko (esim. Vaihe 1: Avaus):', courtObj.title || '');
+        if (newTitle !== null && newTitle.trim() !== '') {
+            courtObj.title = newTitle.trim();
             saveState();
-            if (activeLineupKey === 'summary') {
-                renderSummaryView();
-            } else {
-                renderActiveLineupSlots();
-                renderCourtPlayers();
-            }
-            slotPickerModal.classList.remove('active');
-            showToast('Paikka tyhjennetty.');
-        }
-    });
-
-    // ==========================================
-    // TAP-TO-ASSIGN MOBILE SELECTION MENU
-    // ==========================================
-    function openAssignModal(player) {
-        selectedPlayerForAssignment = player;
-        assignModalTitle.textContent = `Sijoita kentälliseen`;
-        assignModalPlayerInfo.innerHTML = `Valitse paikka pelaajalle <strong>#${player.number} ${escapeHtml(player.name)}</strong>:`;
-
-        const slotTypes = ['MV', 'VP', 'OP', 'VH', 'KH', 'OH'];
-
-        assignOptionsGrid.innerHTML = '';
-
-        lineupConfigs.forEach(cConfig => {
-            const lKey = cConfig.id;
-            const groupCard = document.createElement('div');
-            groupCard.className = 'assign-group-card';
-
-            let btnsHtml = '';
-            slotTypes.forEach(pos => {
-                const isMv = pos === 'MV';
-                const currentPid = (lineups[lKey] || {})[pos];
-                const occupant = roster.find(p => p.id === currentPid);
-                const isCurrent = currentPid === player.id;
-
-                btnsHtml += `
-                    <button class="assign-pos-btn ${isMv ? 'is-mv' : ''}" data-lineup="${lKey}" data-pos="${pos}">
-                        ${pos} ${isCurrent ? '✓' : (occupant ? '(' + occupant.number + ')' : '+')}
-                    </button>
-                `;
-            });
-
-            groupCard.innerHTML = `
-                <h4>${escapeHtml(cConfig.name)}</h4>
-                <div class="assign-btn-row">
-                    ${btnsHtml}
-                </div>
-            `;
-
-            assignOptionsGrid.appendChild(groupCard);
-        });
-
-        assignModal.classList.add('active');
-    }
-
-    assignOptionsGrid.addEventListener('click', (e) => {
-        const btn = e.target.closest('.assign-pos-btn');
-        if (!btn || !selectedPlayerForAssignment) return;
-
-        const lKey = btn.dataset.lineup;
-        const pos = btn.dataset.pos;
-
-        assignPlayerToLineupSlot(lKey, pos, selectedPlayerForAssignment.id);
-        assignModal.classList.remove('active');
-        showToast(`Pelaaja #${selectedPlayerForAssignment.number} sijoitettu: ${getLineupName(lKey)} - ${pos}`);
-    });
-
-    // ==========================================
-    // LINEUP SLOTS RENDER & DRAG DROP
-    // ==========================================
-    function renderActiveLineupSlots() {
-        activeLineupTitle.textContent = getLineupName(activeLineupKey);
-        const currentLineup = lineups[activeLineupKey] || {};
-
-        const slotTypes = [
-            { pos: 'MV', title: 'Maalivahti', isMv: true },
-            { pos: 'VP', title: 'Vasen Puolustaja', isMv: false },
-            { pos: 'OP', title: 'Oikea Puolustaja', isMv: false },
-            { pos: 'VH', title: 'Vasen Hyökkääjä', isMv: false },
-            { pos: 'KH', title: 'Sentteri / KH', isMv: false },
-            { pos: 'OH', title: 'Oikea Hyökkääjä', isMv: false }
-        ];
-
-        lineupSlotsContainer.innerHTML = '';
-
-        slotTypes.forEach(slot => {
-            const playerId = currentLineup[slot.pos] || '';
-            const player = roster.find(p => p.id === playerId);
-
-            const slotEl = document.createElement('div');
-            slotEl.className = `lineup-slot ${slot.isMv ? 'slot-mv' : 'slot-field'}`;
-            slotEl.dataset.position = slot.pos;
-
-            let dropzoneContent = '';
-            if (player) {
-                const isMv = player.position === 'MV';
-                dropzoneContent = `
-                    <div class="player-card ${isMv ? 'is-mv' : 'is-field'}" style="width: 100%; border-left: none;" draggable="true" data-player-id="${player.id}">
-                        <div class="player-card-info">
-                            <div class="player-num-circle">#${player.number}</div>
-                            <div class="player-details">
-                                <div class="player-name-row">
-                                    <span class="player-name">${escapeHtml(player.name)}</span>
-                                    ${player.isLoan ? '<span class="loan-badge">⭐ LAINA</span>' : ''}
-                                </div>
-                            </div>
-                        </div>
-                        <button class="mini-action-btn delete-btn" title="Poista paikalta" data-action="remove-slot" data-pos="${slot.pos}">✕</button>
-                    </div>
-                `;
-            } else {
-                dropzoneContent = `<span class="slot-placeholder">+ Täppää tai vedä ${slot.pos} tähän</span>`;
-            }
-
-            slotEl.innerHTML = `
-                <div class="slot-badge">${slot.isMv ? '🟢' : '🔵'} ${slot.pos}</div>
-                <div class="slot-title">${slot.title}</div>
-                <div class="slot-dropzone" id="slot-zone-${slot.pos}">${dropzoneContent}</div>
-            `;
-
-            slotEl.addEventListener('dragover', (e) => {
-                e.preventDefault();
-                slotEl.classList.add('drag-over');
-            });
-
-            slotEl.addEventListener('dragleave', () => {
-                slotEl.classList.remove('drag-over');
-            });
-
-            slotEl.addEventListener('drop', (e) => {
-                e.preventDefault();
-                slotEl.classList.remove('drag-over');
-                const droppedPlayerId = e.dataTransfer.getData('text/plain');
-                if (droppedPlayerId) {
-                    assignPlayerToLineupSlot(activeLineupKey, slot.pos, droppedPlayerId);
-                }
-            });
-
-            lineupSlotsContainer.appendChild(slotEl);
-        });
-    }
-
-    function assignPlayerToLineupSlot(lineupKey, pos, playerId) {
-        if (!lineups[lineupKey]) lineups[lineupKey] = createEmptyLineupSlots();
-        
-        Object.keys(lineups[lineupKey]).forEach(k => {
-            if (lineups[lineupKey][k] === playerId) {
-                lineups[lineupKey][k] = '';
-            }
-        });
-
-        lineups[lineupKey][pos] = playerId;
-        saveState();
-        if (activeLineupKey === 'summary') {
-            renderSummaryView();
-        } else {
-            renderActiveLineupSlots();
-            renderCourtPlayers();
+            renderCourtBoards();
+            showToast(`Kentän otsikko päivitetty: '${courtObj.title}' ✏️`);
         }
     }
 
-    // ==========================================
-    // SUMMARY VIEW
-    // ==========================================
-    function renderSummaryView() {
-        summaryGridContainer.innerHTML = '';
-        const slotTypes = ['MV', 'VP', 'OP', 'VH', 'KH', 'OH'];
+    function renderCourtBoards() {
+        if (!courtsVerticalList) return;
+        courtsVerticalList.innerHTML = '';
 
-        lineupConfigs.forEach(cConfig => {
-            const lKey = cConfig.id;
-            const card = document.createElement('div');
-            card.className = 'summary-lineup-card';
-            const lineup = lineups[lKey] || {};
-
-            let rowsHtml = '';
-            slotTypes.forEach(pos => {
-                const pid = lineup[pos];
-                const player = roster.find(p => p.id === pid);
-                const isMv = pos === 'MV';
-
-                if (player) {
-                    rowsHtml += `
-                        <div class="summary-slot-row ${isMv ? 'is-mv' : 'is-field'}" data-action="pick-summary-slot" data-lineup="${lKey}" data-pos="${pos}">
-                            <span class="summary-pos-tag">${pos}</span>
-                            <span class="summary-player-val">#${player.number} ${escapeHtml(player.name)} ${player.isLoan ? '⭐' : ''}</span>
-                            <button class="mini-action-btn delete-btn" data-action="remove-summary-slot" data-lineup="${lKey}" data-pos="${pos}">✕</button>
-                        </div>
-                    `;
-                } else {
-                    rowsHtml += `
-                        <div class="summary-slot-row ${isMv ? 'is-mv' : 'is-field'}" data-action="pick-summary-slot" data-lineup="${lKey}" data-pos="${pos}">
-                            <span class="summary-pos-tag">${pos}</span>
-                            <span class="summary-player-val empty-val">+ Täppää valitaksesi (${pos})</span>
-                        </div>
-                    `;
-                }
-            });
-
-            card.innerHTML = `
-                <div class="summary-card-header">
-                    <h3>${escapeHtml(cConfig.name)}</h3>
-                    <div class="summary-card-header-actions">
-                        <button class="btn-xs btn-outline" data-action="edit-summary-lineup-name" data-lineup="${lKey}" title="Muokkaa nimeä">✏️</button>
-                        <button class="btn-xs btn-outline danger-text" data-action="delete-summary-lineup" data-lineup="${lKey}" title="Poista kentällinen">🗑️</button>
-                        <button class="btn-xs btn-outline" data-action="clear-summary-lineup" data-lineup="${lKey}" title="Tyhjennä pelaajat">Tyhjennä</button>
-                    </div>
-                </div>
-                <div class="summary-slots-list">
-                    ${rowsHtml}
-                </div>
-            `;
-
-            card.querySelectorAll('.summary-slot-row').forEach(row => {
-                row.addEventListener('dragover', (e) => {
-                    e.preventDefault();
-                    row.style.background = 'rgba(59, 130, 246, 0.2)';
-                });
-                row.addEventListener('dragleave', () => {
-                    row.style.background = '';
-                });
-                row.addEventListener('drop', (e) => {
-                    e.preventDefault();
-                    row.style.background = '';
-                    const droppedPlayerId = e.dataTransfer.getData('text/plain');
-                    const targetLineup = row.dataset.lineup;
-                    const targetPos = row.dataset.pos;
-                    if (droppedPlayerId && targetLineup && targetPos) {
-                        assignPlayerToLineupSlot(targetLineup, targetPos, droppedPlayerId);
-                    }
-                });
-            });
-
-            summaryGridContainer.appendChild(card);
-        });
-    }
-
-    summaryGridContainer?.addEventListener('click', (e) => {
-        const removeBtn = e.target.closest('[data-action="remove-summary-slot"]');
-        if (removeBtn) {
-            e.stopPropagation();
-            const lKey = removeBtn.dataset.lineup;
-            const pos = removeBtn.dataset.pos;
-            if (lineups[lKey]) lineups[lKey][pos] = '';
-            saveState();
-            renderSummaryView();
-            return;
-        }
-
-        const pickSlotRow = e.target.closest('[data-action="pick-summary-slot"]');
-        if (pickSlotRow) {
-            const lKey = pickSlotRow.dataset.lineup;
-            const pos = pickSlotRow.dataset.pos;
-            openSlotPickerModal(lKey, pos);
-            return;
-        }
-
-        const editNameBtn = e.target.closest('[data-action="edit-summary-lineup-name"]');
-        if (editNameBtn) {
-            const lKey = editNameBtn.dataset.lineup;
-            const config = lineupConfigs.find(c => c.id === lKey);
-            if (config) openLineupConfigModal(config);
-            return;
-        }
-
-        const deleteLineupBtn = e.target.closest('[data-action="delete-summary-lineup"]');
-        if (deleteLineupBtn) {
-            const lKey = deleteLineupBtn.dataset.lineup;
-            deleteLineupConfig(lKey);
-            return;
-        }
-
-        const clearBtn = e.target.closest('[data-action="clear-summary-lineup"]');
-        if (clearBtn) {
-            const lKey = clearBtn.dataset.lineup;
-            const lName = getLineupName(lKey);
-            if (confirm(`Tyhjennetäänkö ${lName}?`)) {
-                lineups[lKey] = createEmptyLineupSlots();
-                saveState();
-                renderSummaryView();
-                showToast(`${lName} tyhjennetty.`);
-            }
-        }
-    });
-
-    // ==========================================
-    // TACTICAL COURT & DYNAMIC LINEUP PLAYERS, BALLS, CONES, OPPONENTS, RECTANGLES & LINES
-    // ==========================================
-    let activeSelectedElementId = null;
-
-    function selectCourtElement(elementId, elementNode = null) {
-        activeSelectedElementId = elementId;
-        document.querySelectorAll('.court-player-node, .court-ball-node, .court-cone-node, .court-opponent-node, .court-rect-node, .court-line-node, .line-endpoint-handle')
-            .forEach(el => el.classList.remove('is-selected'));
-
-        if (elementNode) {
-            elementNode.classList.add('is-selected');
-        }
-    }
-
-    function renderCourtPlayers() {
-        courtPlayersLayer.innerHTML = '';
         if (activeLineupKey === 'summary') return;
 
-        renderLineupPlayerNodes();
-        renderCourtBalls();
-        renderCourtCones();
-        renderCourtOpponents();
-        renderCourtRectangles();
-        renderCourtLineNodes();
+        const page = getCurrentPage();
+        const courts = page.courts;
+
+        courts.forEach((court, idx) => {
+            const courtId = court.id;
+            const courtKey = getCourtKey(courtId);
+            const activeTool = courtDrawingTools[courtId] || 'select';
+
+            const card = document.createElement('div');
+            card.className = 'court-board-card';
+            card.dataset.courtId = courtId;
+
+            card.innerHTML = `
+                <div class="court-board-header">
+                    <div class="court-board-title">
+                        <span>🏒 ${courts.length > 1 ? '#' + (idx + 1) + ' ' : ''}${escapeHtml(court.title || ('Kenttä ' + (idx + 1)))}</span>
+                        <button class="btn-xs btn-outline" data-action="rename-court" data-court-id="${courtId}">✏️ Nimeä</button>
+                    </div>
+                    <div class="court-header-actions">
+                        <button class="btn-xs btn-outline" data-action="clear-court-drawings" data-court-id="${courtId}">🧹 Tyhjennä</button>
+                        ${courts.length > 1 ? `<button class="btn-xs btn-outline danger-text" data-action="delete-court" data-court-id="${courtId}">🗑️ Poista kenttä</button>` : ''}
+                    </div>
+                </div>
+
+                <div class="pitch-toolbar">
+                    <div class="toolbar-group">
+                        <button class="tool-btn ${activeTool === 'select' ? 'active' : ''}" data-tool="select" data-court-id="${courtId}" title="Liikuta sormella/hiirellä">
+                            👆 Liikuta
+                        </button>
+                        <button class="tool-btn tool-pass ${activeTool === 'pass' ? 'active' : ''}" data-tool="pass" data-court-id="${courtId}" title="Piirrä suora syöttöviiva">
+                            ↗️ Syöttö
+                        </button>
+                        <button class="tool-btn tool-run ${activeTool === 'run' ? 'active' : ''}" data-tool="run" data-court-id="${courtId}" title="Piirrä vapaa juoksuviiva">
+                            🏃 Juoksu
+                        </button>
+                        <button class="tool-btn tool-shot ${activeTool === 'shot' ? 'active' : ''}" data-tool="shot" data-court-id="${courtId}" title="Piirrä laukaus maalia kohti">
+                            💥 Veto
+                        </button>
+                        <button class="tool-btn tool-rect ${activeTool === 'rect' ? 'active' : ''}" data-tool="rect" data-court-id="${courtId}" title="Piirrä taktinen alue">
+                            🔲 Alue
+                        </button>
+                    </div>
+
+                    <div class="toolbar-group">
+                        <button class="tool-btn highlight-ball" data-action="add-ball" data-court-id="${courtId}" title="Lisää pallo kentälle">
+                            <img src="ball.png?v=18.0" width="18" height="18" alt="Pallo" style="vertical-align: middle; display: inline-block;"> + Pallo
+                        </button>
+                        <button class="tool-btn highlight-cone" data-action="add-cone" data-court-id="${courtId}" title="Lisää harjoitustötterö kentälle">
+                            🔶 + Tötterö
+                        </button>
+                        <button class="tool-btn highlight-opponent" data-action="add-opponent" data-court-id="${courtId}" title="Lisää vastustaja kentälle">
+                            🔴 + Vastustaja
+                        </button>
+                        <button class="tool-btn" data-action="undo-drawing" data-court-id="${courtId}" title="Kumoa piirros">
+                            ↩️ Kumoa
+                        </button>
+                        <button class="tool-btn highlight-orient" data-action="toggle-orientation" data-court-id="${courtId}" title="Vaihda kentän asentoa">
+                            🔄 Asento
+                        </button>
+                    </div>
+                </div>
+
+                <div class="pitch-outer-wrapper">
+                    <div class="pitch-container ${orientationMode === 'vertical' ? 'mode-vertical' : 'mode-horizontal'}" id="floorball-court-${courtId}">
+                        <div class="court-surface"></div>
+                        <div class="court-center-line"></div>
+                        <div class="center-spot-pink"></div>
+                        <div class="center-line-tick tick-left"></div>
+                        <div class="center-line-tick tick-right"></div>
+
+                        <div class="goal-area-container goal-1">
+                            <div class="goal-outer-box"></div>
+                            <div class="goal-inner-crease"></div>
+                            <div class="goal-net-frame"></div>
+                        </div>
+                        <div class="goal-area-container goal-2">
+                            <div class="goal-outer-box"></div>
+                            <div class="goal-inner-crease"></div>
+                            <div class="goal-net-frame"></div>
+                        </div>
+
+                        <div class="faceoff-dot dot-tl"></div>
+                        <div class="faceoff-dot dot-tr"></div>
+                        <div class="faceoff-dot dot-bl"></div>
+                        <div class="faceoff-dot dot-br"></div>
+
+                        <canvas id="tactic-canvas-${courtId}"></canvas>
+                        <div id="court-players-layer-${courtId}"></div>
+                    </div>
+                </div>
+            `;
+
+            courtsVerticalList.appendChild(card);
+
+            setTimeout(() => {
+                initCourtBoardInstance(courtId);
+            }, 30);
+        });
     }
 
-    function renderLineupPlayerNodes() {
+    function initCourtBoardInstance(courtId) {
+        const courtKey = getCourtKey(courtId);
+        const courtContainer = document.getElementById(`floorball-court-${courtId}`);
+        const canvasEl = document.getElementById(`tactic-canvas-${courtId}`);
+        const layersEl = document.getElementById(`court-players-layer-${courtId}`);
+
+        if (!courtContainer || !canvasEl || !layersEl) return;
+
+        const ctxEl = canvasEl.getContext('2d');
+        const courtRect = courtContainer.getBoundingClientRect();
+        canvasEl.width = courtRect.width;
+        canvasEl.height = courtRect.height;
+
+        renderCourtNodesForInstance(courtId, layersEl);
+        drawCanvasLinesForInstance(courtId, canvasEl, ctxEl);
+
+        setupCourtCanvasDrawing(courtId, courtContainer, canvasEl, ctxEl);
+    }
+
+    function renderCourtNodesForInstance(courtId, layersEl) {
+        layersEl.innerHTML = '';
+        const courtKey = getCourtKey(courtId);
+
+        renderLineupPlayerNodesForInstance(courtId, layersEl);
+        renderCourtBallsForInstance(courtId, layersEl);
+        renderCourtConesForInstance(courtId, layersEl);
+        renderCourtOpponentsForInstance(courtId, layersEl);
+        renderCourtRectanglesForInstance(courtId, layersEl);
+        renderCourtLineNodesForInstance(courtId, layersEl);
+    }
+
+    function renderLineupPlayerNodesForInstance(courtId, layersEl) {
         const currentLineup = lineups[activeLineupKey] || {};
         const posKeys = ['MV', 'VP', 'OP', 'VH', 'KH', 'OH'];
-        const pageKey = getActivePageKey();
+        const courtKey = getCourtKey(courtId);
 
         posKeys.forEach(pos => {
             const playerId = currentLineup[pos];
@@ -1808,7 +1135,7 @@
             if (!player) return;
 
             let defaultCoords = DEFAULT_POS_COORDS[orientationMode][pos] || { x: 50, y: 50 };
-            let posKeyStore = `${pageKey}_${pos}_${orientationMode}`;
+            let posKeyStore = `${courtKey}_${pos}_${orientationMode}`;
             let fallbackKeyStore = `${activeLineupKey}_${pos}_${orientationMode}`;
             let coords = lineupCourtPositions[posKeyStore] || lineupCourtPositions[fallbackKeyStore] || defaultCoords;
 
@@ -1817,7 +1144,6 @@
             node.className = `court-player-node ${isMv ? 'is-mv' : 'is-field'} ${activeSelectedElementId === posKeyStore ? 'is-selected' : ''}`;
             node.style.left = coords.x + '%';
             node.style.top = coords.y + '%';
-            node.dataset.posKey = posKeyStore;
 
             let labelText = `#${player.number} ${player.name}`;
             if (labelMode === 'num') labelText = `#${player.number}`;
@@ -1833,148 +1159,80 @@
                 </div>
             `;
 
-            setupNodeTouchDragging(node, coords, posKeyStore);
-            courtPlayersLayer.appendChild(node);
+            setupNodeTouchDragging(node, coords, posKeyStore, courtId);
+            layersEl.appendChild(node);
         });
     }
 
-    function addBallToActiveLineup() {
-        const pageKey = getActivePageKey();
-        if (!lineupBalls || typeof lineupBalls !== 'object') lineupBalls = {};
-        if (!lineupBalls[pageKey] || !Array.isArray(lineupBalls[pageKey])) {
-            lineupBalls[pageKey] = [];
-        }
-
-        const newBall = {
-            id: 'ball_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
-            x: 55,
-            y: 50
-        };
-
-        lineupBalls[pageKey].push(newBall);
-        setDrawingTool('select', document.getElementById('tool-select'));
-        saveState();
-        renderCourtPlayers();
-        showToast('Salibandypallo lisätty kentälle! ⚪');
-    }
-
-    function addConeToActiveLineup() {
-        const pageKey = getActivePageKey();
-        if (!lineupCones || typeof lineupCones !== 'object') lineupCones = {};
-        if (!lineupCones[pageKey] || !Array.isArray(lineupCones[pageKey])) {
-            lineupCones[pageKey] = [];
-        }
-
-        const newCone = {
-            id: 'cone_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
-            x: 45,
-            y: 50
-        };
-
-        lineupCones[pageKey].push(newCone);
-        setDrawingTool('select', document.getElementById('tool-select'));
-        saveState();
-        renderCourtPlayers();
-        showToast('Harjoitustötterö lisätty kentälle! 🔶');
-    }
-
-    function addOpponentToActiveLineup() {
-        const pageKey = getActivePageKey();
-        if (!lineupOpponents || typeof lineupOpponents !== 'object') lineupOpponents = {};
-        if (!lineupOpponents[pageKey] || !Array.isArray(lineupOpponents[pageKey])) {
-            lineupOpponents[pageKey] = [];
-        }
-
-        const count = lineupOpponents[pageKey].length + 1;
-        const newOpponent = {
-            id: 'opp_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
-            label: `V${count}`,
-            x: 50,
-            y: 35
-        };
-
-        lineupOpponents[pageKey].push(newOpponent);
-        setDrawingTool('select', document.getElementById('tool-select'));
-        saveState();
-        renderCourtPlayers();
-        showToast('Vastustaja lisätty kentälle! 🔴');
-    }
-
-    function renderCourtBalls() {
-        const pageKey = getActivePageKey();
-        if (!lineupBalls || typeof lineupBalls !== 'object') return;
-        const balls = lineupBalls[pageKey] || lineupBalls[activeLineupKey] || [];
+    function renderCourtBallsForInstance(courtId, layersEl) {
+        const courtKey = getCourtKey(courtId);
+        const balls = lineupBalls[courtKey] || lineupBalls[activeLineupKey] || [];
         balls.forEach(ball => {
             const isSelected = activeSelectedElementId === ball.id;
             const ballNode = document.createElement('div');
             ballNode.className = `court-ball-node ${isSelected ? 'is-selected' : ''}`;
             ballNode.style.left = ball.x + '%';
             ballNode.style.top = ball.y + '%';
-            ballNode.dataset.ballId = ball.id;
 
             ballNode.innerHTML = `
                 <div class="ball-circle" title="Salibandypallo">
-                    <img src="ball.png?v=17.0" class="floorball-png-icon" alt="Pallo">
-                    <button class="ball-remove-btn" data-action="remove-ball" data-ball-id="${ball.id}">✕</button>
+                    <img src="ball.png?v=18.0" class="floorball-png-icon" alt="Pallo">
+                    <button class="ball-remove-btn" data-action="remove-ball" data-ball-id="${ball.id}" data-court-id="${courtId}">✕</button>
                 </div>
             `;
 
-            setupBallTouchDragging(ballNode, ball);
-            courtPlayersLayer.appendChild(ballNode);
+            setupBallTouchDragging(ballNode, ball, courtId);
+            layersEl.appendChild(ballNode);
         });
     }
 
-    function renderCourtCones() {
-        const pageKey = getActivePageKey();
-        if (!lineupCones || typeof lineupCones !== 'object') return;
-        const cones = lineupCones[pageKey] || lineupCones[activeLineupKey] || [];
+    function renderCourtConesForInstance(courtId, layersEl) {
+        const courtKey = getCourtKey(courtId);
+        const cones = lineupCones[courtKey] || lineupCones[activeLineupKey] || [];
         cones.forEach(cone => {
             const isSelected = activeSelectedElementId === cone.id;
             const coneNode = document.createElement('div');
             coneNode.className = `court-cone-node ${isSelected ? 'is-selected' : ''}`;
             coneNode.style.left = cone.x + '%';
             coneNode.style.top = cone.y + '%';
-            coneNode.dataset.coneId = cone.id;
 
             coneNode.innerHTML = `
                 <div class="cone-circle" title="Harjoitustötterö / Kartio">
                     <span style="font-size: 0.95rem; line-height: 1;">🔶</span>
-                    <button class="cone-remove-btn" data-action="remove-cone" data-cone-id="${cone.id}">✕</button>
+                    <button class="cone-remove-btn" data-action="remove-cone" data-cone-id="${cone.id}" data-court-id="${courtId}">✕</button>
                 </div>
             `;
 
-            setupConeTouchDragging(coneNode, cone);
-            courtPlayersLayer.appendChild(coneNode);
+            setupConeTouchDragging(coneNode, cone, courtId);
+            layersEl.appendChild(coneNode);
         });
     }
 
-    function renderCourtOpponents() {
-        const pageKey = getActivePageKey();
-        if (!lineupOpponents || typeof lineupOpponents !== 'object') return;
-        const opponents = lineupOpponents[pageKey] || lineupOpponents[activeLineupKey] || [];
+    function renderCourtOpponentsForInstance(courtId, layersEl) {
+        const courtKey = getCourtKey(courtId);
+        const opponents = lineupOpponents[courtKey] || lineupOpponents[activeLineupKey] || [];
         opponents.forEach(opp => {
             const isSelected = activeSelectedElementId === opp.id;
             const oppNode = document.createElement('div');
             oppNode.className = `court-opponent-node ${isSelected ? 'is-selected' : ''}`;
             oppNode.style.left = opp.x + '%';
             oppNode.style.top = opp.y + '%';
-            oppNode.dataset.oppId = opp.id;
 
             oppNode.innerHTML = `
                 <div class="opponent-circle" title="Vastustajan pelaaja">
                     ${escapeHtml(opp.label || 'V')}
-                    <button class="opponent-remove-btn" data-action="remove-opponent" data-opp-id="${opp.id}">✕</button>
+                    <button class="opponent-remove-btn" data-action="remove-opponent" data-opp-id="${opp.id}" data-court-id="${courtId}">✕</button>
                 </div>
             `;
 
-            setupOpponentTouchDragging(oppNode, opp);
-            courtPlayersLayer.appendChild(oppNode);
+            setupOpponentTouchDragging(oppNode, opp, courtId);
+            layersEl.appendChild(oppNode);
         });
     }
 
-    function renderCourtRectangles() {
-        const pageKey = getActivePageKey();
-        const drawings = lineupDrawings[pageKey] || lineupDrawings[activeLineupKey] || [];
+    function renderCourtRectanglesForInstance(courtId, layersEl) {
+        const courtKey = getCourtKey(courtId);
+        const drawings = lineupDrawings[courtKey] || lineupDrawings[activeLineupKey] || [];
         const rects = drawings.filter(d => d.type === 'rect');
 
         rects.forEach(rectObj => {
@@ -1985,22 +1243,21 @@
             rectNode.style.top = rectObj.y + '%';
             rectNode.style.width = rectObj.w + '%';
             rectNode.style.height = rectObj.h + '%';
-            rectNode.dataset.rectId = rectObj.id;
 
             rectNode.innerHTML = `
                 <div class="rect-border-box" title="Siirrettävä taktinen alue">
-                    <button class="rect-remove-btn" data-action="remove-rect" data-rect-id="${rectObj.id}">✕</button>
+                    <button class="rect-remove-btn" data-action="remove-rect" data-rect-id="${rectObj.id}" data-court-id="${courtId}">✕</button>
                 </div>
             `;
 
-            setupRectTouchDragging(rectNode, rectObj);
-            courtPlayersLayer.appendChild(rectNode);
+            setupRectTouchDragging(rectNode, rectObj, courtId);
+            layersEl.appendChild(rectNode);
         });
     }
 
-    function renderCourtLineNodes() {
-        const pageKey = getActivePageKey();
-        const drawings = lineupDrawings[pageKey] || lineupDrawings[activeLineupKey] || [];
+    function renderCourtLineNodesForInstance(courtId, layersEl) {
+        const courtKey = getCourtKey(courtId);
+        const drawings = lineupDrawings[courtKey] || lineupDrawings[activeLineupKey] || [];
         const lineDrawings = drawings.filter(d => d.type === 'pass' || d.type === 'shot' || d.type === 'run');
 
         lineDrawings.forEach(lineObj => {
@@ -2021,24 +1278,21 @@
 
             const isSelected = activeSelectedElementId === lineObj.id;
 
-            // 1. Midpoint Drag Handle (Moves ENTIRE line)
             const lineNode = document.createElement('div');
             lineNode.className = `court-line-node ${isSelected ? 'is-selected' : ''}`;
             lineNode.style.left = midPct.x + '%';
             lineNode.style.top = midPct.y + '%';
-            lineNode.dataset.lineId = lineObj.id;
 
             lineNode.innerHTML = `
                 <div class="line-mid-handle ${handleClass}" title="Siirrä koko viivaa sormella/hiirellä">
                     <span style="font-size: 0.72rem; line-height: 1;">${icon}</span>
-                    <button class="line-remove-btn" data-action="remove-line" data-line-id="${lineObj.id}">✕</button>
+                    <button class="line-remove-btn" data-action="remove-line" data-line-id="${lineObj.id}" data-court-id="${courtId}">✕</button>
                 </div>
             `;
 
-            setupLineMidpointDragging(lineNode, lineObj);
-            courtPlayersLayer.appendChild(lineNode);
+            setupLineMidpointDragging(lineNode, lineObj, courtId);
+            layersEl.appendChild(lineNode);
 
-            // 2. Endpoint Adjust Handle (Rotates / extends pass and shot lines)
             if (lineObj.type === 'pass' || lineObj.type === 'shot') {
                 const endpointNode = document.createElement('div');
                 endpointNode.className = `line-endpoint-handle ${lineObj.type === 'shot' ? 'shot-endpoint' : 'pass-endpoint'} ${isSelected ? 'is-selected' : ''}`;
@@ -2046,20 +1300,360 @@
                 endpointNode.style.top = endPct.y + '%';
                 endpointNode.title = 'Käännä tai säädä suuntaa sormella/hiirellä';
 
-                setupLineEndpointDragging(endpointNode, lineObj);
-                courtPlayersLayer.appendChild(endpointNode);
+                setupLineEndpointDragging(endpointNode, lineObj, courtId);
+                layersEl.appendChild(endpointNode);
             }
         });
     }
 
-    function setupLineMidpointDragging(lineNode, lineObj) {
+    function addBallToCourt(courtId) {
+        const courtKey = getCourtKey(courtId);
+        if (!lineupBalls || typeof lineupBalls !== 'object') lineupBalls = {};
+        if (!lineupBalls[courtKey] || !Array.isArray(lineupBalls[courtKey])) {
+            lineupBalls[courtKey] = [];
+        }
+
+        lineupBalls[courtKey].push({
+            id: 'ball_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+            x: 55,
+            y: 50
+        });
+
+        setCourtDrawingTool(courtId, 'select');
+        saveState();
+        renderCourtBoards();
+        showToast('Salibandypallo lisätty kentälle! ⚪');
+    }
+
+    function addConeToCourt(courtId) {
+        const courtKey = getCourtKey(courtId);
+        if (!lineupCones || typeof lineupCones !== 'object') lineupCones = {};
+        if (!lineupCones[courtKey] || !Array.isArray(lineupCones[courtKey])) {
+            lineupCones[courtKey] = [];
+        }
+
+        lineupCones[courtKey].push({
+            id: 'cone_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+            x: 45,
+            y: 50
+        });
+
+        setCourtDrawingTool(courtId, 'select');
+        saveState();
+        renderCourtBoards();
+        showToast('Harjoitustötterö lisätty kentälle! 🔶');
+    }
+
+    function addOpponentToCourt(courtId) {
+        const courtKey = getCourtKey(courtId);
+        if (!lineupOpponents || typeof lineupOpponents !== 'object') lineupOpponents = {};
+        if (!lineupOpponents[courtKey] || !Array.isArray(lineupOpponents[courtKey])) {
+            lineupOpponents[courtKey] = [];
+        }
+
+        const count = lineupOpponents[courtKey].length + 1;
+        lineupOpponents[courtKey].push({
+            id: 'opp_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+            label: `V${count}`,
+            x: 50,
+            y: 35
+        });
+
+        setCourtDrawingTool(courtId, 'select');
+        saveState();
+        renderCourtBoards();
+        showToast('Vastustaja lisätty kentälle! 🔴');
+    }
+
+    function setCourtDrawingTool(courtId, tool) {
+        courtDrawingTools[courtId] = tool;
+        const courtCard = document.querySelector(`.court-board-card[data-court-id="${courtId}"]`);
+        if (!courtCard) return;
+
+        courtCard.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+        const activeBtn = courtCard.querySelector(`.tool-btn[data-tool="${tool}"]`);
+        if (activeBtn) activeBtn.classList.add('active');
+
+        const canvasEl = document.getElementById(`tactic-canvas-${courtId}`);
+        const courtContainer = document.getElementById(`floorball-court-${courtId}`);
+        if (canvasEl && courtContainer) {
+            if (tool === 'select') {
+                canvasEl.style.pointerEvents = 'none';
+                canvasEl.style.touchAction = 'auto';
+                courtContainer.classList.remove('drawing-active');
+            } else {
+                canvasEl.style.pointerEvents = 'auto';
+                canvasEl.style.touchAction = 'none';
+                courtContainer.classList.add('drawing-active');
+            }
+        }
+    }
+
+    function selectCourtElement(elementId, elementNode = null) {
+        activeSelectedElementId = elementId;
+        document.querySelectorAll('.court-player-node, .court-ball-node, .court-cone-node, .court-opponent-node, .court-rect-node, .court-line-node, .line-endpoint-handle')
+            .forEach(el => el.classList.remove('is-selected'));
+
+        if (elementNode) {
+            elementNode.classList.add('is-selected');
+        }
+    }
+
+    function setupCourtCanvasDrawing(courtId, courtContainer, canvasEl, ctxEl) {
+        canvasEl.addEventListener('pointerdown', (e) => {
+            const tool = courtDrawingTools[courtId] || 'select';
+            if (tool === 'select') return;
+
+            courtIsDrawingMap[courtId] = true;
+            e.preventDefault();
+            canvasEl.setPointerCapture(e.pointerId);
+
+            const courtRect = courtContainer.getBoundingClientRect();
+            const ptPct = {
+                x: Math.max(0, Math.min(100, ((e.clientX - courtRect.left) / courtRect.width) * 100)),
+                y: Math.max(0, Math.min(100, ((e.clientY - courtRect.top) / courtRect.height) * 100))
+            };
+
+            if (tool === 'pass' || tool === 'shot' || tool === 'rect') {
+                courtPathPctMap[courtId] = [ptPct, ptPct];
+            } else {
+                courtPathPctMap[courtId] = [ptPct];
+            }
+        });
+
+        canvasEl.addEventListener('pointermove', (e) => {
+            if (!courtIsDrawingMap[courtId]) return;
+            e.preventDefault();
+
+            const tool = courtDrawingTools[courtId] || 'select';
+            const courtRect = courtContainer.getBoundingClientRect();
+            const ptPct = {
+                x: Math.max(0, Math.min(100, ((e.clientX - courtRect.left) / courtRect.width) * 100)),
+                y: Math.max(0, Math.min(100, ((e.clientY - courtRect.top) / courtRect.height) * 100))
+            };
+
+            let pathPct = courtPathPctMap[courtId] || [];
+            if (tool === 'pass' || tool === 'shot' || tool === 'rect') {
+                pathPct = [pathPct[0], ptPct];
+            } else {
+                pathPct.push(ptPct);
+            }
+            courtPathPctMap[courtId] = pathPct;
+
+            drawCanvasLinesForInstance(courtId, canvasEl, ctxEl);
+            drawPreviewPathForInstance(ctxEl, canvasEl, pathPct, tool);
+        });
+
+        canvasEl.addEventListener('pointerup', () => {
+            if (!courtIsDrawingMap[courtId]) return;
+            courtIsDrawingMap[courtId] = false;
+
+            const tool = courtDrawingTools[courtId] || 'select';
+            const courtKey = getCourtKey(courtId);
+            const pathPct = courtPathPctMap[courtId] || [];
+
+            if (pathPct.length >= 2 || (tool === 'run' && pathPct.length > 1)) {
+                if (!lineupDrawings[courtKey]) lineupDrawings[courtKey] = [];
+
+                if (tool === 'rect') {
+                    const p1 = pathPct[0];
+                    const p2 = pathPct[pathPct.length - 1];
+
+                    const xPct = Math.min(p1.x, p2.x);
+                    const yPct = Math.min(p1.y, p2.y);
+                    const wPct = Math.abs(p2.x - p1.x);
+                    const hPct = Math.abs(p2.y - p1.y);
+
+                    lineupDrawings[courtKey].push({
+                        id: 'rect_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+                        type: 'rect',
+                        x: Math.round(xPct * 10) / 10,
+                        y: Math.round(yPct * 10) / 10,
+                        w: Math.max(4, Math.round(wPct * 10) / 10),
+                        h: Math.max(4, Math.round(hPct * 10) / 10)
+                    });
+
+                    setCourtDrawingTool(courtId, 'select');
+                    saveState();
+                    renderCourtBoards();
+                    showToast('Taktinen alue luotu! Voit siirtää sitä sormella/hiirellä 🔲');
+                } else {
+                    let color = '#38bdf8';
+                    if (tool === 'pass') color = '#eab308';
+                    if (tool === 'shot') color = '#ec4899';
+
+                    lineupDrawings[courtKey].push({
+                        id: 'draw_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+                        type: tool,
+                        pointsPct: [...pathPct],
+                        color: color
+                    });
+
+                    setCourtDrawingTool(courtId, 'select');
+                    saveState();
+                    renderCourtBoards();
+                    showToast(`${tool === 'pass' ? 'Syöttöviiva' : (tool === 'shot' ? 'Vetoviiva' : 'Juoksuviiva')} piirretty! Voit siirtää sitä 👆`);
+                }
+            }
+            courtPathPctMap[courtId] = [];
+            drawCanvasLinesForInstance(courtId, canvasEl, ctxEl);
+        });
+
+        canvasEl.addEventListener('pointercancel', () => {
+            courtIsDrawingMap[courtId] = false;
+            courtPathPctMap[courtId] = [];
+            drawCanvasLinesForInstance(courtId, canvasEl, ctxEl);
+        });
+    }
+
+    function drawCanvasLinesForInstance(courtId, canvasEl, ctxEl) {
+        ctxEl.clearRect(0, 0, canvasEl.width, canvasEl.height);
+        const courtKey = getCourtKey(courtId);
+        const currentDrawings = lineupDrawings[courtKey] || lineupDrawings[activeLineupKey] || [];
+        currentDrawings.forEach(draw => {
+            if (draw.type !== 'rect') {
+                renderPathOnCtx(ctxEl, canvasEl, draw, draw.type, draw.color);
+            }
+        });
+    }
+
+    function drawPreviewPathForInstance(ctxEl, canvasEl, pointsPct, tool) {
+        let color = '#38bdf8';
+        if (tool === 'pass') color = '#eab308';
+        if (tool === 'shot') color = '#ec4899';
+        if (tool === 'rect') color = '#60a5fa';
+        renderPathOnCtx(ctxEl, canvasEl, { pointsPct: pointsPct }, tool, color);
+    }
+
+    function renderPathOnCtx(ctxEl, canvasEl, drawObj, type, color) {
+        const ptsPct = drawObj.pointsPct;
+        if (!ptsPct || ptsPct.length < 2) return;
+
+        const canvasW = canvasEl.width;
+        const canvasH = canvasEl.height;
+
+        const points = ptsPct.map(p => ({
+            x: (p.x / 100) * canvasW,
+            y: (p.y / 100) * canvasH
+        }));
+
+        if (type === 'rect') {
+            const start = points[0];
+            const end = points[points.length - 1];
+            const x = Math.min(start.x, end.x);
+            const y = Math.min(start.y, end.y);
+            const w = Math.abs(end.x - start.x);
+            const h = Math.abs(end.y - start.y);
+
+            ctxEl.save();
+            ctxEl.fillStyle = 'rgba(59, 130, 246, 0.22)';
+            ctxEl.strokeStyle = '#60a5fa';
+            ctxEl.lineWidth = 2;
+            ctxEl.setLineDash([6, 4]);
+            ctxEl.fillRect(x, y, w, h);
+            ctxEl.strokeRect(x, y, w, h);
+            ctxEl.restore();
+            return;
+        }
+
+        if (type === 'pass') {
+            const start = points[0];
+            const end = points[points.length - 1];
+            ctxEl.save();
+            ctxEl.strokeStyle = color || '#eab308';
+            ctxEl.lineWidth = 3.5;
+            ctxEl.lineCap = 'round';
+            ctxEl.setLineDash([8, 6]);
+
+            ctxEl.beginPath();
+            ctxEl.moveTo(start.x, start.y);
+            ctxEl.lineTo(end.x, end.y);
+            ctxEl.stroke();
+
+            const angle = Math.atan2(end.y - start.y, end.x - start.x);
+            ctxEl.setLineDash([]);
+            ctxEl.fillStyle = color || '#eab308';
+            ctxEl.beginPath();
+            ctxEl.moveTo(end.x, end.y);
+            ctxEl.lineTo(end.x - 16 * Math.cos(angle - Math.PI / 5), end.y - 16 * Math.sin(angle - Math.PI / 5));
+            ctxEl.lineTo(end.x - 16 * Math.cos(angle + Math.PI / 5), end.y - 16 * Math.sin(angle + Math.PI / 5));
+            ctxEl.closePath();
+            ctxEl.fill();
+            ctxEl.restore();
+            return;
+        }
+
+        if (type === 'shot') {
+            const start = points[0];
+            const end = points[points.length - 1];
+            ctxEl.save();
+            ctxEl.strokeStyle = color || '#ec4899';
+            ctxEl.lineWidth = 4.5;
+            ctxEl.lineCap = 'round';
+            ctxEl.setLineDash([10, 4]);
+
+            ctxEl.beginPath();
+            ctxEl.moveTo(start.x, start.y);
+            ctxEl.lineTo(end.x, end.y);
+            ctxEl.stroke();
+
+            const angle = Math.atan2(end.y - start.y, end.x - start.x);
+            ctxEl.setLineDash([]);
+            ctxEl.fillStyle = color || '#ec4899';
+            ctxEl.beginPath();
+            ctxEl.moveTo(end.x, end.y);
+            ctxEl.lineTo(end.x - 16 * Math.cos(angle - Math.PI / 5), end.y - 16 * Math.sin(angle - Math.PI / 5));
+            ctxEl.lineTo(end.x - 16 * Math.cos(angle + Math.PI / 5), end.y - 16 * Math.sin(angle + Math.PI / 5));
+            ctxEl.closePath();
+            ctxEl.fill();
+
+            ctxEl.strokeStyle = '#ffffff';
+            ctxEl.lineWidth = 2;
+            ctxEl.beginPath();
+            ctxEl.arc(end.x, end.y, 7, 0, 2 * Math.PI);
+            ctxEl.stroke();
+            ctxEl.restore();
+            return;
+        }
+
+        ctxEl.save();
+        ctxEl.strokeStyle = color || '#38bdf8';
+        ctxEl.lineWidth = 3.5;
+        ctxEl.lineCap = 'round';
+        ctxEl.lineJoin = 'round';
+        ctxEl.setLineDash([]);
+
+        ctxEl.beginPath();
+        ctxEl.moveTo(points[0].x, points[0].y);
+        for (let i = 1; i < points.length; i++) {
+            ctxEl.lineTo(points[i].x, points[i].y);
+        }
+        ctxEl.stroke();
+
+        const end = points[points.length - 1];
+        const prev = points[Math.max(0, points.length - 4)];
+        const angle = Math.atan2(end.y - prev.y, end.x - prev.x);
+
+        ctxEl.fillStyle = color || '#38bdf8';
+        ctxEl.beginPath();
+        ctxEl.moveTo(end.x, end.y);
+        ctxEl.lineTo(end.x - 16 * Math.cos(angle - Math.PI / 5), end.y - 16 * Math.sin(angle - Math.PI / 5));
+        ctxEl.lineTo(end.x - 16 * Math.cos(angle + Math.PI / 5), end.y - 16 * Math.sin(angle + Math.PI / 5));
+        ctxEl.closePath();
+        ctxEl.fill();
+
+        ctxEl.restore();
+    }
+
+    function setupLineMidpointDragging(lineNode, lineObj, courtId) {
         let isDragging = false;
         let startPointer = { x: 0, y: 0 };
         let initialPts = [];
         let rafId = null;
 
         const onPointerDown = (e) => {
-            if (drawingTool !== 'select') return;
+            const tool = courtDrawingTools[courtId] || 'select';
+            if (tool !== 'select') return;
             selectCourtElement(lineObj.id, lineNode);
             if (e.target.classList.contains('line-remove-btn')) return;
 
@@ -2077,7 +1671,10 @@
             if (!isDragging) return;
             e.preventDefault();
 
-            const courtRect = floorballCourt.getBoundingClientRect();
+            const courtContainer = document.getElementById(`floorball-court-${courtId}`);
+            if (!courtContainer) return;
+
+            const courtRect = courtContainer.getBoundingClientRect();
             const deltaPctX = ((e.clientX - startPointer.x) / courtRect.width) * 100;
             const deltaPctY = ((e.clientY - startPointer.y) / courtRect.height) * 100;
 
@@ -2097,7 +1694,8 @@
             rafId = requestAnimationFrame(() => {
                 lineNode.style.left = midX + '%';
                 lineNode.style.top = midY + '%';
-                drawCanvasLines();
+                const canvasEl = document.getElementById(`tactic-canvas-${courtId}`);
+                if (canvasEl) drawCanvasLinesForInstance(courtId, canvasEl, canvasEl.getContext('2d'));
             });
         };
 
@@ -2109,18 +1707,19 @@
             lineNode.removeEventListener('pointerup', onPointerUp);
             lineNode.removeEventListener('pointercancel', onPointerUp);
             saveState();
-            renderCourtPlayers();
+            renderCourtBoards();
         };
 
         lineNode.addEventListener('pointerdown', onPointerDown);
     }
 
-    function setupLineEndpointDragging(endpointNode, lineObj) {
+    function setupLineEndpointDragging(endpointNode, lineObj, courtId) {
         let isDragging = false;
         let rafId = null;
 
         const onPointerDown = (e) => {
-            if (drawingTool !== 'select') return;
+            const tool = courtDrawingTools[courtId] || 'select';
+            if (tool !== 'select') return;
             selectCourtElement(lineObj.id, endpointNode);
 
             isDragging = true;
@@ -2135,7 +1734,10 @@
             if (!isDragging) return;
             e.preventDefault();
 
-            const courtRect = floorballCourt.getBoundingClientRect();
+            const courtContainer = document.getElementById(`floorball-court-${courtId}`);
+            if (!courtContainer) return;
+
+            const courtRect = courtContainer.getBoundingClientRect();
             let newX = ((e.clientX - courtRect.left) / courtRect.width) * 100;
             let newY = ((e.clientY - courtRect.top) / courtRect.height) * 100;
 
@@ -2151,7 +1753,8 @@
             rafId = requestAnimationFrame(() => {
                 endpointNode.style.left = lineObj.pointsPct[1].x + '%';
                 endpointNode.style.top = lineObj.pointsPct[1].y + '%';
-                drawCanvasLines();
+                const canvasEl = document.getElementById(`tactic-canvas-${courtId}`);
+                if (canvasEl) drawCanvasLinesForInstance(courtId, canvasEl, canvasEl.getContext('2d'));
             });
         };
 
@@ -2163,18 +1766,19 @@
             endpointNode.removeEventListener('pointerup', onPointerUp);
             endpointNode.removeEventListener('pointercancel', onPointerUp);
             saveState();
-            renderCourtPlayers();
+            renderCourtBoards();
         };
 
         endpointNode.addEventListener('pointerdown', onPointerDown);
     }
 
-    function setupConeTouchDragging(coneNode, coneObj) {
+    function setupConeTouchDragging(coneNode, coneObj, courtId) {
         let isDragging = false;
         let rafId = null;
 
         const onPointerDown = (e) => {
-            if (drawingTool !== 'select') return;
+            const tool = courtDrawingTools[courtId] || 'select';
+            if (tool !== 'select') return;
             selectCourtElement(coneObj.id, coneNode);
             if (e.target.classList.contains('cone-remove-btn')) return;
             
@@ -2190,7 +1794,10 @@
             if (!isDragging) return;
             e.preventDefault();
 
-            const rect = floorballCourt.getBoundingClientRect();
+            const courtContainer = document.getElementById(`floorball-court-${courtId}`);
+            if (!courtContainer) return;
+
+            const rect = courtContainer.getBoundingClientRect();
             let newX = ((e.clientX - rect.left) / rect.width) * 100;
             let newY = ((e.clientY - rect.top) / rect.height) * 100;
 
@@ -2220,12 +1827,13 @@
         coneNode.addEventListener('pointerdown', onPointerDown);
     }
 
-    function setupOpponentTouchDragging(oppNode, oppObj) {
+    function setupOpponentTouchDragging(oppNode, oppObj, courtId) {
         let isDragging = false;
         let rafId = null;
 
         const onPointerDown = (e) => {
-            if (drawingTool !== 'select') return;
+            const tool = courtDrawingTools[courtId] || 'select';
+            if (tool !== 'select') return;
             selectCourtElement(oppObj.id, oppNode);
             if (e.target.classList.contains('opponent-remove-btn')) return;
             
@@ -2241,7 +1849,10 @@
             if (!isDragging) return;
             e.preventDefault();
 
-            const rect = floorballCourt.getBoundingClientRect();
+            const courtContainer = document.getElementById(`floorball-court-${courtId}`);
+            if (!courtContainer) return;
+
+            const rect = courtContainer.getBoundingClientRect();
             let newX = ((e.clientX - rect.left) / rect.width) * 100;
             let newY = ((e.clientY - rect.top) / rect.height) * 100;
 
@@ -2271,14 +1882,15 @@
         oppNode.addEventListener('pointerdown', onPointerDown);
     }
 
-    function setupRectTouchDragging(rectNode, rectObj) {
+    function setupRectTouchDragging(rectNode, rectObj, courtId) {
         let isDragging = false;
         let startPointer = { x: 0, y: 0 };
         let startRectPos = { x: rectObj.x, y: rectObj.y };
         let rafId = null;
 
         const onPointerDown = (e) => {
-            if (drawingTool !== 'select') return;
+            const tool = courtDrawingTools[courtId] || 'select';
+            if (tool !== 'select') return;
             selectCourtElement(rectObj.id, rectNode);
             if (e.target.classList.contains('rect-remove-btn')) return;
 
@@ -2296,7 +1908,10 @@
             if (!isDragging) return;
             e.preventDefault();
 
-            const courtRect = floorballCourt.getBoundingClientRect();
+            const courtContainer = document.getElementById(`floorball-court-${courtId}`);
+            if (!courtContainer) return;
+
+            const courtRect = courtContainer.getBoundingClientRect();
             const deltaPctX = ((e.clientX - startPointer.x) / courtRect.width) * 100;
             const deltaPctY = ((e.clientY - startPointer.y) / courtRect.height) * 100;
 
@@ -2329,12 +1944,13 @@
         rectNode.addEventListener('pointerdown', onPointerDown);
     }
 
-    function setupBallTouchDragging(ballNode, ballObj) {
+    function setupBallTouchDragging(ballNode, ballObj, courtId) {
         let isDragging = false;
         let rafId = null;
 
         const onPointerDown = (e) => {
-            if (drawingTool !== 'select') return;
+            const tool = courtDrawingTools[courtId] || 'select';
+            if (tool !== 'select') return;
             selectCourtElement(ballObj.id, ballNode);
             if (e.target.classList.contains('ball-remove-btn')) return;
             
@@ -2350,7 +1966,10 @@
             if (!isDragging) return;
             e.preventDefault();
 
-            const rect = floorballCourt.getBoundingClientRect();
+            const courtContainer = document.getElementById(`floorball-court-${courtId}`);
+            if (!courtContainer) return;
+
+            const rect = courtContainer.getBoundingClientRect();
             let newX = ((e.clientX - rect.left) / rect.width) * 100;
             let newY = ((e.clientY - rect.top) / rect.height) * 100;
 
@@ -2380,12 +1999,13 @@
         ballNode.addEventListener('pointerdown', onPointerDown);
     }
 
-    function setupNodeTouchDragging(node, coords, posKeyStore) {
+    function setupNodeTouchDragging(node, coords, posKeyStore, courtId) {
         let isDragging = false;
         let rafId = null;
 
         const onPointerDown = (e) => {
-            if (drawingTool !== 'select') return;
+            const tool = courtDrawingTools[courtId] || 'select';
+            if (tool !== 'select') return;
             selectCourtElement(posKeyStore, node);
             if (e.target.classList.contains('node-remove-btn')) return;
             
@@ -2401,7 +2021,10 @@
             if (!isDragging) return;
             e.preventDefault();
 
-            const rect = floorballCourt.getBoundingClientRect();
+            const courtContainer = document.getElementById(`floorball-court-${courtId}`);
+            if (!courtContainer) return;
+
+            const rect = courtContainer.getBoundingClientRect();
             let newX = ((e.clientX - rect.left) / rect.width) * 100;
             let newY = ((e.clientY - rect.top) / rect.height) * 100;
 
@@ -2432,286 +2055,16 @@
         node.addEventListener('pointerdown', onPointerDown);
     }
 
-    floorballCourt.addEventListener('dragover', (e) => {
-        e.preventDefault();
-    });
-
-    floorballCourt.addEventListener('drop', (e) => {
-        e.preventDefault();
-        const playerId = e.dataTransfer.getData('text/plain');
-        if (!playerId) return;
-
-        const player = roster.find(p => p.id === playerId);
-        if (!player) return;
-
-        let targetPos = player.position === 'MV' ? 'MV' : 'KH';
-        const lineup = lineups[activeLineupKey] || {};
-        
-        if (player.position !== 'MV') {
-            if (!lineup['KH']) targetPos = 'KH';
-            else if (!lineup['VH']) targetPos = 'VH';
-            else if (!lineup['OH']) targetPos = 'OH';
-            else if (!lineup['VP']) targetPos = 'VP';
-            else if (!lineup['OP']) targetPos = 'OP';
-        }
-
-        assignPlayerToLineupSlot(activeLineupKey, targetPos, playerId);
-    });
-
-    // ==========================================
-    // CANVAS TACTICAL DRAWING SYSTEM
-    // ==========================================
-    function setupCanvas() {
-        window.addEventListener('resize', resizeCanvas);
-        setTimeout(resizeCanvas, 100);
-
-        canvas.addEventListener('pointerdown', (e) => {
-            if (drawingTool === 'select' || activeLineupKey === 'summary') return;
-            isDrawing = true;
-            e.preventDefault();
-            canvas.setPointerCapture(e.pointerId);
-            const courtRect = floorballCourt.getBoundingClientRect();
-            const ptPct = {
-                x: Math.max(0, Math.min(100, ((e.clientX - courtRect.left) / courtRect.width) * 100)),
-                y: Math.max(0, Math.min(100, ((e.clientY - courtRect.top) / courtRect.height) * 100))
-            };
-
-            if (drawingTool === 'pass' || drawingTool === 'shot' || drawingTool === 'rect') {
-                currentPathPct = [ptPct, ptPct];
-            } else {
-                currentPathPct = [ptPct];
-            }
-        });
-
-        canvas.addEventListener('pointermove', (e) => {
-            if (!isDrawing) return;
-            e.preventDefault();
-            const courtRect = floorballCourt.getBoundingClientRect();
-            const ptPct = {
-                x: Math.max(0, Math.min(100, ((e.clientX - courtRect.left) / courtRect.width) * 100)),
-                y: Math.max(0, Math.min(100, ((e.clientY - courtRect.top) / courtRect.height) * 100))
-            };
-
-            if (drawingTool === 'pass' || drawingTool === 'shot' || drawingTool === 'rect') {
-                currentPathPct = [currentPathPct[0], ptPct];
-            } else {
-                currentPathPct.push(ptPct);
-            }
-            drawCanvasLines();
-            drawPreviewPath(currentPathPct);
-        });
-
-        canvas.addEventListener('pointerup', () => {
-            if (!isDrawing) return;
-            isDrawing = false;
-
-            const pageKey = getActivePageKey();
-            if (currentPathPct.length >= 2 || (drawingTool === 'run' && currentPathPct.length > 1)) {
-                if (!lineupDrawings[pageKey]) lineupDrawings[pageKey] = [];
-
-                if (drawingTool === 'rect') {
-                    const p1 = currentPathPct[0];
-                    const p2 = currentPathPct[currentPathPct.length - 1];
-
-                    const xPct = Math.min(p1.x, p2.x);
-                    const yPct = Math.min(p1.y, p2.y);
-                    const wPct = Math.abs(p2.x - p1.x);
-                    const hPct = Math.abs(p2.y - p1.y);
-
-                    lineupDrawings[pageKey].push({
-                        id: 'rect_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
-                        type: 'rect',
-                        x: Math.round(xPct * 10) / 10,
-                        y: Math.round(yPct * 10) / 10,
-                        w: Math.max(4, Math.round(wPct * 10) / 10),
-                        h: Math.max(4, Math.round(hPct * 10) / 10)
-                    });
-
-                    setDrawingTool('select', document.getElementById('tool-select'));
-                    saveState();
-                    renderCourtPlayers();
-                    showToast('Taktinen alue luotu! Voit siirtää sitä sormella/hiirellä 🔲');
-                } else {
-                    let color = '#38bdf8';
-                    if (drawingTool === 'pass') color = '#eab308';
-                    if (drawingTool === 'shot') color = '#ec4899';
-
-                    lineupDrawings[pageKey].push({
-                        id: 'draw_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
-                        type: drawingTool,
-                        pointsPct: [...currentPathPct],
-                        color: color
-                    });
-
-                    setDrawingTool('select', document.getElementById('tool-select'));
-                    saveState();
-                    renderCourtPlayers();
-                    showToast(`${drawingTool === 'pass' ? 'Syöttöviiva' : (drawingTool === 'shot' ? 'Vetoviiva' : 'Juoksuviiva')} piirretty! Voit siirtää ja säätää sitä 👆`);
-                }
-            }
-            currentPathPct = [];
-            drawCanvasLines();
-        });
-
-        canvas.addEventListener('pointercancel', () => {
-            isDrawing = false;
-            currentPathPct = [];
-            drawCanvasLines();
-        });
-    }
-
-    function drawCanvasLines() {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        if (activeLineupKey === 'summary') return;
-
-        const pageKey = getActivePageKey();
-        const currentDrawings = lineupDrawings[pageKey] || lineupDrawings[activeLineupKey] || [];
-        currentDrawings.forEach(draw => {
-            if (draw.type !== 'rect') {
-                renderPath(draw, draw.type, draw.color);
-            }
-        });
-    }
-
-    function drawPreviewPath(pointsPct) {
-        let color = '#38bdf8';
-        if (drawingTool === 'pass') color = '#eab308';
-        if (drawingTool === 'shot') color = '#ec4899';
-        if (drawingTool === 'rect') color = '#60a5fa';
-        renderPath({ pointsPct: pointsPct }, drawingTool, color);
-    }
-
-    function renderPath(drawObj, type, color) {
-        const ptsPct = drawObj.pointsPct;
-        if (!ptsPct || ptsPct.length < 2) return;
-
-        const canvasW = canvas.width;
-        const canvasH = canvas.height;
-
-        const points = ptsPct.map(p => ({
-            x: (p.x / 100) * canvasW,
-            y: (p.y / 100) * canvasH
-        }));
-
-        if (type === 'rect') {
-            const start = points[0];
-            const end = points[points.length - 1];
-            const x = Math.min(start.x, end.x);
-            const y = Math.min(start.y, end.y);
-            const w = Math.abs(end.x - start.x);
-            const h = Math.abs(end.y - start.y);
-
-            ctx.save();
-            ctx.fillStyle = 'rgba(59, 130, 246, 0.22)';
-            ctx.strokeStyle = '#60a5fa';
-            ctx.lineWidth = 2;
-            ctx.setLineDash([6, 4]);
-            ctx.fillRect(x, y, w, h);
-            ctx.strokeRect(x, y, w, h);
-            ctx.restore();
-            return;
-        }
-
-        if (type === 'pass') {
-            const start = points[0];
-            const end = points[points.length - 1];
-            ctx.save();
-            ctx.strokeStyle = color || '#eab308';
-            ctx.lineWidth = 3.5;
-            ctx.lineCap = 'round';
-            ctx.setLineDash([8, 6]);
-
-            ctx.beginPath();
-            ctx.moveTo(start.x, start.y);
-            ctx.lineTo(end.x, end.y);
-            ctx.stroke();
-
-            const angle = Math.atan2(end.y - start.y, end.x - start.x);
-            ctx.setLineDash([]);
-            ctx.fillStyle = color || '#eab308';
-            ctx.beginPath();
-            ctx.moveTo(end.x, end.y);
-            ctx.lineTo(end.x - 16 * Math.cos(angle - Math.PI / 5), end.y - 16 * Math.sin(angle - Math.PI / 5));
-            ctx.lineTo(end.x - 16 * Math.cos(angle + Math.PI / 5), end.y - 16 * Math.sin(angle + Math.PI / 5));
-            ctx.closePath();
-            ctx.fill();
-            ctx.restore();
-            return;
-        }
-
-        if (type === 'shot') {
-            const start = points[0];
-            const end = points[points.length - 1];
-            ctx.save();
-            ctx.strokeStyle = color || '#ec4899';
-            ctx.lineWidth = 4.5;
-            ctx.lineCap = 'round';
-            ctx.setLineDash([10, 4]);
-
-            ctx.beginPath();
-            ctx.moveTo(start.x, start.y);
-            ctx.lineTo(end.x, end.y);
-            ctx.stroke();
-
-            const angle = Math.atan2(end.y - start.y, end.x - start.x);
-            ctx.setLineDash([]);
-            ctx.fillStyle = color || '#ec4899';
-            ctx.beginPath();
-            ctx.moveTo(end.x, end.y);
-            ctx.lineTo(end.x - 16 * Math.cos(angle - Math.PI / 5), end.y - 16 * Math.sin(angle - Math.PI / 5));
-            ctx.lineTo(end.x - 16 * Math.cos(angle + Math.PI / 5), end.y - 16 * Math.sin(angle + Math.PI / 5));
-            ctx.closePath();
-            ctx.fill();
-
-            ctx.strokeStyle = '#ffffff';
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.arc(end.x, end.y, 7, 0, 2 * Math.PI);
-            ctx.stroke();
-            ctx.restore();
-            return;
-        }
-
-        ctx.save();
-        ctx.strokeStyle = color || '#38bdf8';
-        ctx.lineWidth = 3.5;
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-        ctx.setLineDash([]);
-
-        ctx.beginPath();
-        ctx.moveTo(points[0].x, points[0].y);
-        for (let i = 1; i < points.length; i++) {
-            ctx.lineTo(points[i].x, points[i].y);
-        }
-        ctx.stroke();
-
-        const end = points[points.length - 1];
-        const prev = points[Math.max(0, points.length - 4)];
-        const angle = Math.atan2(end.y - prev.y, end.x - prev.x);
-
-        ctx.fillStyle = color || '#38bdf8';
-        ctx.beginPath();
-        ctx.moveTo(end.x, end.y);
-        ctx.lineTo(end.x - 16 * Math.cos(angle - Math.PI / 5), end.y - 16 * Math.sin(angle - Math.PI / 5));
-        ctx.lineTo(end.x - 16 * Math.cos(angle + Math.PI / 5), end.y - 16 * Math.sin(angle + Math.PI / 5));
-        ctx.closePath();
-        ctx.fill();
-
-        ctx.restore();
-    }
-
-    function undoLastDrawing() {
-        const pageKey = getActivePageKey();
-        const currentDrawings = lineupDrawings[pageKey] || lineupDrawings[activeLineupKey] || [];
+    function undoLastDrawingForCourt(courtId) {
+        const courtKey = getCourtKey(courtId);
+        const currentDrawings = lineupDrawings[courtKey] || lineupDrawings[activeLineupKey] || [];
         if (currentDrawings.length > 0) {
             currentDrawings.pop();
             saveState();
-            renderCourtPlayers();
-            drawCanvasLines();
+            renderCourtBoards();
             showToast('Viimeisin piirros kumottu ↩️');
         } else {
-            showToast('Ei piirroksia kumottavaksi tässä taktiikkasivussa.');
+            showToast('Ei piirroksia kumottavaksi tässä kentässä.');
         }
     }
 
@@ -2775,7 +2128,7 @@
             renderSummaryView();
         } else {
             renderActiveLineupSlots();
-            renderCourtPlayers();
+            renderCourtBoards();
         }
         closeModal();
     });
@@ -2797,7 +2150,7 @@
             renderSummaryView();
         } else {
             renderActiveLineupSlots();
-            renderCourtPlayers();
+            renderCourtBoards();
         }
         showToast('Pelaaja poistettu.');
     }
@@ -2979,6 +2332,163 @@
 
         btnAddTacticPage?.addEventListener('click', addTacticalPage);
         btnDeleteTacticPage?.addEventListener('click', deleteTacticalPage);
+        btnAddCourtBoard?.addEventListener('click', addCourtToActivePage);
+
+        pagesScrollContainer?.addEventListener('click', (e) => {
+            const renameIcon = e.target.closest('[data-action="rename-page"]');
+            if (renameIcon) {
+                const pageId = renameIcon.dataset.pageId;
+                renameTacticalPage(pageId);
+            }
+        });
+
+        courtsVerticalList?.addEventListener('click', (e) => {
+            const renameCourtBtn = e.target.closest('[data-action="rename-court"]');
+            if (renameCourtBtn) {
+                renameCourtBoard(renameCourtBtn.dataset.courtId);
+                return;
+            }
+
+            const clearCourtBtn = e.target.closest('[data-action="clear-court-drawings"]');
+            if (clearCourtBtn) {
+                const courtId = clearCourtBtn.dataset.courtId;
+                const courtKey = getCourtKey(courtId);
+                lineupDrawings[courtKey] = [];
+                lineupBalls[courtKey] = [];
+                lineupCones[courtKey] = [];
+                lineupOpponents[courtKey] = [];
+                saveState();
+                renderCourtBoards();
+                showToast('Piirtoalusta tyhjennetty.');
+                return;
+            }
+
+            const deleteCourtBtn = e.target.closest('[data-action="delete-court"]');
+            if (deleteCourtBtn) {
+                deleteCourtFromActivePage(deleteCourtBtn.dataset.courtId);
+                return;
+            }
+
+            const toolBtn = e.target.closest('.tool-btn[data-tool]');
+            if (toolBtn) {
+                const courtId = toolBtn.dataset.courtId;
+                const tool = toolBtn.dataset.tool;
+                setCourtDrawingTool(courtId, tool);
+                return;
+            }
+
+            const addBallBtn = e.target.closest('[data-action="add-ball"]');
+            if (addBallBtn) {
+                addBallToCourt(addBallBtn.dataset.courtId);
+                return;
+            }
+
+            const addConeBtn = e.target.closest('[data-action="add-cone"]');
+            if (addConeBtn) {
+                addConeToCourt(addConeBtn.dataset.courtId);
+                return;
+            }
+
+            const addOpponentBtn = e.target.closest('[data-action="add-opponent"]');
+            if (addOpponentBtn) {
+                addOpponentToCourt(addOpponentBtn.dataset.courtId);
+                return;
+            }
+
+            const undoBtn = e.target.closest('[data-action="undo-drawing"]');
+            if (undoBtn) {
+                undoLastDrawingForCourt(undoBtn.dataset.courtId);
+                return;
+            }
+
+            const toggleOrientBtn = e.target.closest('[data-action="toggle-orientation"]');
+            if (toggleOrientBtn) {
+                orientationMode = (orientationMode === 'horizontal') ? 'vertical' : 'horizontal';
+                renderCourtBoards();
+                showToast(`Kentän asento vaihtoi: ${orientationMode === 'vertical' ? 'Pysty (20x40m)' : 'Vaaka (40x20m)'}`);
+                return;
+            }
+
+            const removePlayerBtn = e.target.closest('[data-action="remove-lineup-player"]');
+            if (removePlayerBtn) {
+                const pos = removePlayerBtn.dataset.pos;
+                if (lineups[activeLineupKey]) lineups[activeLineupKey][pos] = '';
+                saveState();
+                renderActiveLineupSlots();
+                renderCourtBoards();
+                return;
+            }
+
+            const removeBallBtn = e.target.closest('[data-action="remove-ball"]');
+            if (removeBallBtn) {
+                const ballId = removeBallBtn.dataset.ballId;
+                const courtId = removeBallBtn.dataset.courtId;
+                const courtKey = getCourtKey(courtId);
+                if (lineupBalls[courtKey]) {
+                    lineupBalls[courtKey] = lineupBalls[courtKey].filter(b => b.id !== ballId);
+                    saveState();
+                    renderCourtBoards();
+                    showToast('Pallo poistettu.');
+                }
+                return;
+            }
+
+            const removeConeBtn = e.target.closest('[data-action="remove-cone"]');
+            if (removeConeBtn) {
+                const coneId = removeConeBtn.dataset.coneId;
+                const courtId = removeConeBtn.dataset.courtId;
+                const courtKey = getCourtKey(courtId);
+                if (lineupCones[courtKey]) {
+                    lineupCones[courtKey] = lineupCones[courtKey].filter(c => c.id !== coneId);
+                    saveState();
+                    renderCourtBoards();
+                    showToast('Tötterö poistettu.');
+                }
+                return;
+            }
+
+            const removeOpponentBtn = e.target.closest('[data-action="remove-opponent"]');
+            if (removeOpponentBtn) {
+                const oppId = removeOpponentBtn.dataset.oppId;
+                const courtId = removeOpponentBtn.dataset.courtId;
+                const courtKey = getCourtKey(courtId);
+                if (lineupOpponents[courtKey]) {
+                    lineupOpponents[courtKey] = lineupOpponents[courtKey].filter(o => o.id !== oppId);
+                    saveState();
+                    renderCourtBoards();
+                    showToast('Vastustaja poistettu.');
+                }
+                return;
+            }
+
+            const removeRectBtn = e.target.closest('[data-action="remove-rect"]');
+            if (removeRectBtn) {
+                const rectId = removeRectBtn.dataset.rectId;
+                const courtId = removeRectBtn.dataset.courtId;
+                const courtKey = getCourtKey(courtId);
+                if (lineupDrawings[courtKey]) {
+                    lineupDrawings[courtKey] = lineupDrawings[courtKey].filter(d => d.id !== rectId);
+                    saveState();
+                    renderCourtBoards();
+                    showToast('Taktinen alue poistettu.');
+                }
+                return;
+            }
+
+            const removeLineBtn = e.target.closest('[data-action="remove-line"]');
+            if (removeLineBtn) {
+                const lineId = removeLineBtn.dataset.lineId;
+                const courtId = removeLineBtn.dataset.courtId;
+                const courtKey = getCourtKey(courtId);
+                if (lineupDrawings[courtKey]) {
+                    lineupDrawings[courtKey] = lineupDrawings[courtKey].filter(d => d.id !== lineId);
+                    saveState();
+                    renderCourtBoards();
+                    showToast('Viiva poistettu.');
+                }
+                return;
+            }
+        });
 
         document.getElementById('btn-new-team').addEventListener('click', () => {
             teamNameInput.value = '';
@@ -3002,10 +2512,6 @@
         document.getElementById('btn-add-lineup-summary')?.addEventListener('click', () => openLineupConfigModal());
         document.getElementById('btn-manage-lineups-summary')?.addEventListener('click', () => openManageLineupsModal());
         
-        document.getElementById('btn-add-ball')?.addEventListener('click', addBallToActiveLineup);
-        document.getElementById('btn-add-cone')?.addEventListener('click', addConeToActiveLineup);
-        document.getElementById('btn-add-opponent')?.addEventListener('click', addOpponentToActiveLineup);
-
         document.getElementById('btn-edit-active-lineup-name')?.addEventListener('click', () => {
             const config = lineupConfigs.find(c => c.id === activeLineupKey);
             if (config) openLineupConfigModal(config);
@@ -3079,7 +2585,7 @@
                 lineups[activeLineupKey][pos] = '';
                 saveState();
                 renderActiveLineupSlots();
-                renderCourtPlayers();
+                renderCourtBoards();
                 return;
             }
 
@@ -3090,125 +2596,20 @@
             }
         });
 
-        floorballCourt.addEventListener('pointerdown', (e) => {
-            if (drawingTool === 'select' && !e.target.closest('.court-player-node, .court-ball-node, .court-cone-node, .court-opponent-node, .court-rect-node, .court-line-node, .line-endpoint-handle, button')) {
+        document.addEventListener('pointerdown', (e) => {
+            if (!e.target.closest('.court-player-node, .court-ball-node, .court-cone-node, .court-opponent-node, .court-rect-node, .court-line-node, .line-endpoint-handle, button')) {
                 selectCourtElement(null);
             }
         });
 
-        courtPlayersLayer.addEventListener('click', (e) => {
-            const removePlayerBtn = e.target.closest('[data-action="remove-lineup-player"]');
-            if (removePlayerBtn) {
-                const pos = removePlayerBtn.dataset.pos;
-                if (lineups[activeLineupKey]) lineups[activeLineupKey][pos] = '';
-                saveState();
-                renderActiveLineupSlots();
-                renderCourtPlayers();
-                return;
-            }
-
-            const pageKey = getActivePageKey();
-
-            const removeBallBtn = e.target.closest('[data-action="remove-ball"]');
-            if (removeBallBtn) {
-                const ballId = removeBallBtn.dataset.ballId;
-                if (lineupBalls[pageKey] || lineupBalls[activeLineupKey]) {
-                    const keyToUse = lineupBalls[pageKey] ? pageKey : activeLineupKey;
-                    lineupBalls[keyToUse] = lineupBalls[keyToUse].filter(b => b.id !== ballId);
-                    saveState();
-                    renderCourtPlayers();
-                    showToast('Pallo poistettu.');
-                }
-            }
-
-            const removeConeBtn = e.target.closest('[data-action="remove-cone"]');
-            if (removeConeBtn) {
-                const coneId = removeConeBtn.dataset.coneId;
-                if (lineupCones[pageKey] || lineupCones[activeLineupKey]) {
-                    const keyToUse = lineupCones[pageKey] ? pageKey : activeLineupKey;
-                    lineupCones[keyToUse] = lineupCones[keyToUse].filter(c => c.id !== coneId);
-                    saveState();
-                    renderCourtPlayers();
-                    showToast('Tötterö poistettu.');
-                }
-            }
-
-            const removeOpponentBtn = e.target.closest('[data-action="remove-opponent"]');
-            if (removeOpponentBtn) {
-                const oppId = removeOpponentBtn.dataset.oppId;
-                if (lineupOpponents[pageKey] || lineupOpponents[activeLineupKey]) {
-                    const keyToUse = lineupOpponents[pageKey] ? pageKey : activeLineupKey;
-                    lineupOpponents[keyToUse] = lineupOpponents[keyToUse].filter(o => o.id !== oppId);
-                    saveState();
-                    renderCourtPlayers();
-                    showToast('Vastustaja poistettu.');
-                }
-            }
-
-            const removeRectBtn = e.target.closest('[data-action="remove-rect"]');
-            if (removeRectBtn) {
-                const rectId = removeRectBtn.dataset.rectId;
-                if (lineupDrawings[pageKey] || lineupDrawings[activeLineupKey]) {
-                    const keyToUse = lineupDrawings[pageKey] ? pageKey : activeLineupKey;
-                    lineupDrawings[keyToUse] = lineupDrawings[keyToUse].filter(d => d.id !== rectId);
-                    saveState();
-                    renderCourtPlayers();
-                    drawCanvasLines();
-                    showToast('Taktinen alue poistettu.');
-                }
-            }
-
-            const removeLineBtn = e.target.closest('[data-action="remove-line"]');
-            if (removeLineBtn) {
-                const lineId = removeLineBtn.dataset.lineId;
-                if (lineupDrawings[pageKey] || lineupDrawings[activeLineupKey]) {
-                    const keyToUse = lineupDrawings[pageKey] ? pageKey : activeLineupKey;
-                    lineupDrawings[keyToUse] = lineupDrawings[keyToUse].filter(d => d.id !== lineId);
-                    saveState();
-                    renderCourtPlayers();
-                    drawCanvasLines();
-                    showToast('Viiva poistettu.');
-                }
-            }
-        });
-
-        document.getElementById('tool-select').addEventListener('click', (e) => setDrawingTool('select', e.currentTarget));
-        document.getElementById('tool-pass').addEventListener('click', (e) => setDrawingTool('pass', e.currentTarget));
-        document.getElementById('tool-run').addEventListener('click', (e) => setDrawingTool('run', e.currentTarget));
-        document.getElementById('tool-shot').addEventListener('click', (e) => setDrawingTool('shot', e.currentTarget));
-        document.getElementById('tool-rect')?.addEventListener('click', (e) => setDrawingTool('rect', e.currentTarget));
-
-        document.getElementById('tool-undo').addEventListener('click', undoLastDrawing);
-
-        document.getElementById('tool-clear-drawings').addEventListener('click', () => {
-            const pageKey = getActivePageKey();
-            lineupDrawings[pageKey] = [];
-            saveState();
-            renderCourtPlayers();
-            drawCanvasLines();
-            showToast('Piirrokset tyhjennetty tästä taktiikkasivusta.');
-        });
-
-        document.getElementById('btn-toggle-orientation').addEventListener('click', () => {
-            orientationMode = (orientationMode === 'horizontal') ? 'vertical' : 'horizontal';
-            applyOrientation();
-            showToast(`Kentän asento vaihtoi: ${orientationMode === 'vertical' ? 'Pysty (20x40m)' : 'Vaaka (40x20m)'}`);
-        });
-
         document.getElementById('btn-clear-pitch').addEventListener('click', () => {
-            const pageKey = getActivePageKey();
             const lName = getLineupName(activeLineupKey);
-            if (confirm(`Tyhjennetäänkö ${lName} kentältä?`)) {
+            if (confirm(`Tyhjennetäänkö ${lName} kaikilta alustoilta?`)) {
                 lineups[activeLineupKey] = createEmptyLineupSlots();
-                lineupDrawings[pageKey] = [];
-                lineupBalls[pageKey] = [];
-                lineupCones[pageKey] = [];
-                lineupOpponents[pageKey] = [];
                 saveState();
                 renderActiveLineupSlots();
-                renderCourtPlayers();
-                drawCanvasLines();
-                showToast('Kentällinen, pallot, tötteröt, vastustajat ja piirrokset tyhjennetty.');
+                renderCourtBoards();
+                showToast('Kentällinen tyhjennetty.');
             }
         });
 
@@ -3223,28 +2624,12 @@
                 labelMode = 'full';
                 document.getElementById('label-mode-text').textContent = 'Nimi & #';
             }
-            renderCourtPlayers();
+            renderCourtBoards();
         });
 
         document.getElementById('btn-export-text').addEventListener('click', exportLineupsToClipboard);
         document.getElementById('btn-copy-this-lineup').addEventListener('click', exportLineupsToClipboard);
         document.getElementById('btn-copy-all-summary')?.addEventListener('click', exportLineupsToClipboard);
-    }
-
-    function setDrawingTool(tool, btn) {
-        drawingTool = tool;
-        document.querySelectorAll('.toolbar-group .tool-btn').forEach(b => b.classList.remove('active'));
-        if (btn) btn.classList.add('active');
-        
-        if (tool === 'select') {
-            canvas.style.pointerEvents = 'none';
-            canvas.style.touchAction = 'auto';
-            floorballCourt.classList.remove('drawing-active');
-        } else {
-            canvas.style.pointerEvents = 'auto';
-            canvas.style.touchAction = 'none';
-            floorballCourt.classList.add('drawing-active');
-        }
     }
 
     document.addEventListener('DOMContentLoaded', init);
