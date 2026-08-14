@@ -1844,3 +1844,63 @@ body {
         grid-template-columns: repeat(2, 1fr);
     }
 }
+
+/* PITCH TOOLBAR CONE & RECTANGLE HIGHLIGHT STYLES */
+.tool-btn.highlight-cone {
+    background: rgba(249, 115, 22, 0.18);
+    border-color: #f97316;
+    color: #fdba74;
+}
+
+.tool-btn.highlight-cone:hover, .tool-btn.highlight-cone:active {
+    background: #f97316;
+    color: #ffffff;
+}
+
+.tool-btn.tool-rect.active {
+    background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
+    border-color: #60a5fa;
+    color: #ffffff;
+}
+
+/* ON-COURT CONE NODE STYLES */
+.court-cone-node {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    z-index: 18;
+    cursor: grab;
+    touch-action: none;
+}
+
+.cone-circle {
+    width: 28px;
+    height: 28px;
+    background: linear-gradient(135deg, #f97316 0%, #c2410c 100%);
+    border: 2px solid #ffedd5;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.9rem;
+    box-shadow: 0 4px 10px rgba(249, 115, 22, 0.5);
+    position: relative;
+    user-select: none;
+}
+
+.cone-remove-btn {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--accent-danger);
+    color: #fff;
+    border: 1px solid #fff;
+    font-size: 0.55rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
