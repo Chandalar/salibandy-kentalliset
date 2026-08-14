@@ -89,7 +89,7 @@
     // Firebase Auth & Realtime Sync State
     let currentUser = null;
     let unsubscribeFirestore = null;
-    let isCloudLoading = false; // Flag to prevent infinite feedback loops during cloud sync
+    let isCloudLoading = false;
 
     // Global State
     let teams = loadFromStorage('salibandy_teams_v1', DEFAULT_TEAMS);
@@ -107,8 +107,11 @@
     let lineupCourtPositions = loadFromStorage(`salibandy_positions_${currentTeamId}`, {});
     let lineupBalls = loadFromStorage(`salibandy_balls_${currentTeamId}`, { '1': [{ id: 'ball_default', x: 55, y: 50 }] });
     let lineupCones = loadFromStorage(`salibandy_cones_${currentTeamId}`, {});
+    let lineupOpponents = loadFromStorage(`salibandy_opponents_${currentTeamId}`, {});
+    let lineupPages = loadFromStorage(`salibandy_pages_${currentTeamId}`, {});
 
     let activeLineupKey = '1';
+    let activePageId = 'p1';
     let activeFilter = 'all';
     let searchQuery = '';
     let drawingTool = 'select';
@@ -131,6 +134,10 @@
     const canvas = document.getElementById('tactic-canvas');
     const ctx = canvas.getContext('2d');
     const toastEl = document.getElementById('toast');
+
+    const pagesScrollContainer = document.getElementById('pages-scroll-container');
+    const btnAddTacticPage = document.getElementById('btn-add-tactic-page');
+    const btnDeleteTacticPage = document.getElementById('btn-delete-tactic-page');
 
     // Main Sections
     const rosterPanelSection = document.getElementById('roster-panel-section');
@@ -206,12 +213,17 @@
     let selectedPlayerForAssignment = null;
     let selectedSlotTarget = { lineupKey: '', pos: '' };
 
+    function getActivePageKey() {
+        return `${activeLineupKey}_${activePageId}`;
+    }
+
     // ==========================================
     // INITIALIZATION & REAL-TIME FIREBASE SYNC SETUP
     // ==========================================
     function init() {
         renderTeamDropdown();
         renderTabs();
+        renderTacticalPageBadges();
         applyOrientation();
         setupCanvas();
         bindEvents();
@@ -229,7 +241,6 @@
             if (Array.isArray(drawingsObj[lk])) {
                 drawingsObj[lk].forEach(draw => {
                     if (!draw.id) draw.id = 'draw_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4);
-                    // Legacy fallback: convert pixel points to percentages if needed
                     if (!draw.pointsPct && draw.points && Array.isArray(draw.points)) {
                         const courtWidth = 800;
                         const courtHeight = 400;
@@ -329,6 +340,8 @@
         const positionsMap = {};
         const ballsMap = {};
         const conesMap = {};
+        const opponentsMap = {};
+        const pagesMap = {};
 
         teams.forEach(t => {
             const tId = t.id;
@@ -339,6 +352,8 @@
             positionsMap[tId] = (tId === currentTeamId) ? lineupCourtPositions : loadFromStorage(`salibandy_positions_${tId}`, {});
             ballsMap[tId] = (tId === currentTeamId) ? lineupBalls : loadFromStorage(`salibandy_balls_${tId}`, {});
             conesMap[tId] = (tId === currentTeamId) ? lineupCones : loadFromStorage(`salibandy_cones_${tId}`, {});
+            opponentsMap[tId] = (tId === currentTeamId) ? lineupOpponents : loadFromStorage(`salibandy_opponents_${tId}`, {});
+            pagesMap[tId] = (tId === currentTeamId) ? lineupPages : loadFromStorage(`salibandy_pages_${tId}`, {});
         });
 
         return {
@@ -352,7 +367,9 @@
             drawings: drawingsMap,
             positions: positionsMap,
             balls: ballsMap,
-            cones: conesMap
+            cones: conesMap,
+            opponents: opponentsMap,
+            pages: pagesMap
         };
     }
 
@@ -394,7 +411,6 @@
             if (isCloudLoading) return;
 
             if (!doc.exists) {
-                // First time user: Write current local state to cloud
                 isCloudLoading = true;
                 const initialPayload = buildFullCloudPayload();
                 userRef.set(initialPayload, { merge: true }).then(() => {
@@ -410,9 +426,8 @@
             const cloudData = doc.data();
             if (!cloudData) return;
 
-            // If the document existed previously without rosters dictionary, auto-upgrade it immediately!
             if (!cloudData.rosters || !cloudData.lineups) {
-                console.log('🔥 Upgrading Firestore doc with full rosters, lineups, drawings, positions, balls, and cones...');
+                console.log('🔥 Upgrading Firestore doc with full rosters, lineups, drawings, positions, balls, cones, opponents, and pages...');
                 const fullPayload = buildFullCloudPayload();
                 userRef.set(fullPayload, { merge: true });
             }
@@ -420,7 +435,6 @@
             isCloudLoading = true;
             let needCloudUpdateBack = false;
 
-            // 1. INTELLIGENT TEAMS MERGE
             if (cloudData.teams && Array.isArray(cloudData.teams)) {
                 const mergedTeams = [...cloudData.teams];
                 teams.forEach(localT => {
@@ -437,7 +451,6 @@
                 }
             }
 
-            // 2. INTELLIGENT ROSTERS MERGE
             if (cloudData.rosters) {
                 Object.keys(cloudData.rosters).forEach(tId => {
                     const cloudRoster = cloudData.rosters[tId] || [];
@@ -456,7 +469,6 @@
                     localStorage.setItem(`salibandy_roster_${tId}`, JSON.stringify(finalRoster));
                 });
 
-                // Also upload local rosters for any local teams not yet in cloud
                 teams.forEach(t => {
                     if (!cloudData.rosters[t.id]) {
                         const localRoster = loadFromStorage(`salibandy_roster_${t.id}`, []);
@@ -499,8 +511,17 @@
                     localStorage.setItem(`salibandy_cones_${tId}`, JSON.stringify(cloudData.cones[tId]));
                 });
             }
+            if (cloudData.opponents) {
+                Object.keys(cloudData.opponents).forEach(tId => {
+                    localStorage.setItem(`salibandy_opponents_${tId}`, JSON.stringify(cloudData.opponents[tId]));
+                });
+            }
+            if (cloudData.pages) {
+                Object.keys(cloudData.pages).forEach(tId => {
+                    localStorage.setItem(`salibandy_pages_${tId}`, JSON.stringify(cloudData.pages[tId]));
+                });
+            }
 
-            // Reload memory variables for current team
             roster = loadRosterForTeam(currentTeamId);
             lineupConfigs = loadLineupConfigs(currentTeamId);
             lineups = loadLineupsForTeam(currentTeamId, lineupConfigs);
@@ -509,11 +530,14 @@
             lineupCourtPositions = loadFromStorage(`salibandy_positions_${currentTeamId}`, {});
             lineupBalls = loadFromStorage(`salibandy_balls_${currentTeamId}`, {});
             lineupCones = loadFromStorage(`salibandy_cones_${currentTeamId}`, {});
+            lineupOpponents = loadFromStorage(`salibandy_opponents_${currentTeamId}`, {});
+            lineupPages = loadFromStorage(`salibandy_pages_${currentTeamId}`, {});
 
             saveStateLocalOnly();
 
             renderTeamDropdown();
             renderTabs();
+            renderTacticalPageBadges();
             updateRosterCounters();
             renderRoster();
             if (activeLineupKey === 'summary') {
@@ -526,7 +550,6 @@
 
             updateCloudSyncBadge(true);
 
-            // If we merged local desktop teams into cloud data, send updated payload back to Firestore!
             if (needCloudUpdateBack) {
                 const mergedPayload = buildFullCloudPayload();
                 userRef.set(mergedPayload, { merge: true }).then(() => {
@@ -616,6 +639,8 @@
             localStorage.setItem(`salibandy_positions_${currentTeamId}`, JSON.stringify(lineupCourtPositions));
             localStorage.setItem(`salibandy_balls_${currentTeamId}`, JSON.stringify(lineupBalls));
             localStorage.setItem(`salibandy_cones_${currentTeamId}`, JSON.stringify(lineupCones));
+            localStorage.setItem(`salibandy_opponents_${currentTeamId}`, JSON.stringify(lineupOpponents));
+            localStorage.setItem(`salibandy_pages_${currentTeamId}`, JSON.stringify(lineupPages));
         } catch (e) {
             console.error('LocalStorage save error', e);
         }
@@ -672,6 +697,10 @@
         lineupCourtPositions = loadFromStorage(`salibandy_positions_${currentTeamId}`, {});
         lineupBalls = loadFromStorage(`salibandy_balls_${currentTeamId}`, {});
         lineupCones = loadFromStorage(`salibandy_cones_${currentTeamId}`, {});
+        lineupOpponents = loadFromStorage(`salibandy_opponents_${currentTeamId}`, {});
+        lineupPages = loadFromStorage(`salibandy_pages_${currentTeamId}`, {});
+
+        activePageId = 'p1';
 
         if (activeLineupKey !== 'summary' && !lineupConfigs.some(c => c.id === activeLineupKey)) {
             activeLineupKey = lineupConfigs[0] ? lineupConfigs[0].id : '1';
@@ -680,6 +709,7 @@
         saveState();
 
         renderTabs();
+        renderTacticalPageBadges();
         updateRosterCounters();
         renderRoster();
         if (activeLineupKey === 'summary') {
@@ -712,6 +742,8 @@
             localStorage.removeItem(`salibandy_positions_${deleteId}`);
             localStorage.removeItem(`salibandy_balls_${deleteId}`);
             localStorage.removeItem(`salibandy_cones_${deleteId}`);
+            localStorage.removeItem(`salibandy_opponents_${deleteId}`);
+            localStorage.removeItem(`salibandy_pages_${deleteId}`);
 
             const nextTeamId = teams[0].id;
             renderTeamDropdown();
@@ -764,7 +796,9 @@
 
     function switchTab(key) {
         activeLineupKey = key;
+        activePageId = 'p1';
         renderTabs();
+        renderTacticalPageBadges();
 
         if (activeLineupKey === 'summary') {
             if (rosterPanelSection) rosterPanelSection.style.display = 'none';
@@ -780,6 +814,97 @@
             renderActiveLineupSlots();
             renderCourtPlayers();
             setTimeout(resizeCanvas, 60);
+        }
+    }
+
+    // ==========================================
+    // MULTIPLE TACTICAL PAGES / SLIDES MANAGEMENT
+    // ==========================================
+    function getPagesForActiveLineup() {
+        if (!lineupPages[activeLineupKey] || !Array.isArray(lineupPages[activeLineupKey])) {
+            lineupPages[activeLineupKey] = [
+                { id: 'p1', name: 'Sivu 1' }
+            ];
+        }
+        return lineupPages[activeLineupKey];
+    }
+
+    function renderTacticalPageBadges() {
+        if (!pagesScrollContainer) return;
+        pagesScrollContainer.innerHTML = '';
+
+        if (activeLineupKey === 'summary') return;
+
+        const pages = getPagesForActiveLineup();
+
+        if (!pages.some(p => p.id === activePageId)) {
+            activePageId = pages[0] ? pages[0].id : 'p1';
+        }
+
+        pages.forEach((page, index) => {
+            const badge = document.createElement('button');
+            badge.className = `page-badge-btn ${page.id === activePageId ? 'active' : ''}`;
+            badge.textContent = `📄 ${page.name || ('Sivu ' + (index + 1))}`;
+            
+            badge.addEventListener('click', () => {
+                activePageId = page.id;
+                renderTacticalPageBadges();
+                renderCourtPlayers();
+                drawCanvasLines();
+            });
+
+            pagesScrollContainer.appendChild(badge);
+        });
+
+        if (btnDeleteTacticPage) {
+            btnDeleteTacticPage.style.display = pages.length > 1 ? 'inline-block' : 'none';
+        }
+    }
+
+    function addTacticalPage() {
+        const pages = getPagesForActiveLineup();
+        const nextNum = pages.length + 1;
+        const newPageId = 'p_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4);
+
+        pages.push({
+            id: newPageId,
+            name: `Sivu ${nextNum}`
+        });
+
+        activePageId = newPageId;
+        saveState();
+        renderTacticalPageBadges();
+        renderCourtPlayers();
+        drawCanvasLines();
+        showToast(`Uusi taktiikkasivu '${'Sivu ' + nextNum}' luotu! 📄`);
+    }
+
+    function deleteTacticalPage() {
+        const pages = getPagesForActiveLineup();
+        if (pages.length <= 1) {
+            showToast('Et voi poistaa ainoaa taktiikkasivua.');
+            return;
+        }
+
+        const curPage = pages.find(p => p.id === activePageId);
+        const pName = curPage ? curPage.name : 'sivu';
+
+        if (confirm(`Haluatko varmasti poistaa taktiikkasivun '${pName}'?`)) {
+            const pageKeyToDelete = getActivePageKey();
+            delete lineupDrawings[pageKeyToDelete];
+            delete lineupBalls[pageKeyToDelete];
+            delete lineupCones[pageKeyToDelete];
+            delete lineupOpponents[pageKeyToDelete];
+            delete lineupCourtPositions[pageKeyToDelete];
+
+            lineupPages[activeLineupKey] = pages.filter(p => p.id !== activePageId);
+            activePageId = lineupPages[activeLineupKey][0].id;
+
+            saveState();
+            renderTacticalPageBadges();
+            renderCourtPlayers();
+            drawCanvasLines();
+            showToast(`Taktiikkasivu '${pName}' poistettu.`);
         }
     }
 
@@ -1197,8 +1322,10 @@
         if (confirm('Palautetaanko standardit oletuskentät (1. Kenttä, 2. Kenttä, 3. Kenttä, YV, AV, 6v5, Taktiikka)?')) {
             lineupConfigs = JSON.parse(JSON.stringify(DEFAULT_LINEUP_CONFIGS));
             activeLineupKey = '1';
+            activePageId = 'p1';
             saveState();
             renderTabs();
+            renderTacticalPageBadges();
             renderReorderList();
             if (activeLineupKey === 'summary') renderSummaryView();
             else switchTab('1');
@@ -1237,11 +1364,13 @@
             lineupConfigs.push({ id, name, type: 'user' });
             lineups[id] = createEmptyLineupSlots();
             activeLineupKey = id;
+            activePageId = 'p1';
             showToast(`Uusi kentällinen '${name}' luotu!`);
         }
 
         saveState();
         renderTabs();
+        renderTacticalPageBadges();
         renderReorderList();
         if (activeLineupKey === 'summary') {
             renderSummaryView();
@@ -1261,13 +1390,17 @@
             delete lineupDrawings[id];
             delete lineupBalls[id];
             delete lineupCones[id];
+            delete lineupOpponents[id];
+            delete lineupPages[id];
 
             if (activeLineupKey === id) {
                 activeLineupKey = lineupConfigs[0] ? lineupConfigs[0].id : 'summary';
+                activePageId = 'p1';
             }
 
             saveState();
             renderTabs();
+            renderTacticalPageBadges();
             if (activeLineupKey === 'summary') {
                 renderSummaryView();
             } else {
@@ -1636,12 +1769,13 @@
     });
 
     // ==========================================
-    // TACTICAL COURT & DYNAMIC LINEUP PLAYERS, BALLS, CONES, RECTANGLES & LINES
+    // TACTICAL COURT & DYNAMIC LINEUP PLAYERS, BALLS, CONES, OPPONENTS, RECTANGLES & LINES
+    // ==========================================
     let activeSelectedElementId = null;
 
     function selectCourtElement(elementId, elementNode = null) {
         activeSelectedElementId = elementId;
-        document.querySelectorAll('.court-player-node, .court-ball-node, .court-cone-node, .court-rect-node, .court-line-node, .line-endpoint-handle')
+        document.querySelectorAll('.court-player-node, .court-ball-node, .court-cone-node, .court-opponent-node, .court-rect-node, .court-line-node, .line-endpoint-handle')
             .forEach(el => el.classList.remove('is-selected'));
 
         if (elementNode) {
@@ -1656,6 +1790,7 @@
         renderLineupPlayerNodes();
         renderCourtBalls();
         renderCourtCones();
+        renderCourtOpponents();
         renderCourtRectangles();
         renderCourtLineNodes();
     }
@@ -1663,6 +1798,7 @@
     function renderLineupPlayerNodes() {
         const currentLineup = lineups[activeLineupKey] || {};
         const posKeys = ['MV', 'VP', 'OP', 'VH', 'KH', 'OH'];
+        const pageKey = getActivePageKey();
 
         posKeys.forEach(pos => {
             const playerId = currentLineup[pos];
@@ -1672,8 +1808,9 @@
             if (!player) return;
 
             let defaultCoords = DEFAULT_POS_COORDS[orientationMode][pos] || { x: 50, y: 50 };
-            let posKeyStore = `${activeLineupKey}_${pos}_${orientationMode}`;
-            let coords = lineupCourtPositions[posKeyStore] || defaultCoords;
+            let posKeyStore = `${pageKey}_${pos}_${orientationMode}`;
+            let fallbackKeyStore = `${activeLineupKey}_${pos}_${orientationMode}`;
+            let coords = lineupCourtPositions[posKeyStore] || lineupCourtPositions[fallbackKeyStore] || defaultCoords;
 
             const isMv = player.position === 'MV';
             const node = document.createElement('div');
@@ -1702,9 +1839,10 @@
     }
 
     function addBallToActiveLineup() {
+        const pageKey = getActivePageKey();
         if (!lineupBalls || typeof lineupBalls !== 'object') lineupBalls = {};
-        if (!lineupBalls[activeLineupKey] || !Array.isArray(lineupBalls[activeLineupKey])) {
-            lineupBalls[activeLineupKey] = [];
+        if (!lineupBalls[pageKey] || !Array.isArray(lineupBalls[pageKey])) {
+            lineupBalls[pageKey] = [];
         }
 
         const newBall = {
@@ -1713,7 +1851,7 @@
             y: 50
         };
 
-        lineupBalls[activeLineupKey].push(newBall);
+        lineupBalls[pageKey].push(newBall);
         setDrawingTool('select', document.getElementById('tool-select'));
         saveState();
         renderCourtPlayers();
@@ -1721,9 +1859,10 @@
     }
 
     function addConeToActiveLineup() {
+        const pageKey = getActivePageKey();
         if (!lineupCones || typeof lineupCones !== 'object') lineupCones = {};
-        if (!lineupCones[activeLineupKey] || !Array.isArray(lineupCones[activeLineupKey])) {
-            lineupCones[activeLineupKey] = [];
+        if (!lineupCones[pageKey] || !Array.isArray(lineupCones[pageKey])) {
+            lineupCones[pageKey] = [];
         }
 
         const newCone = {
@@ -1732,16 +1871,39 @@
             y: 50
         };
 
-        lineupCones[activeLineupKey].push(newCone);
+        lineupCones[pageKey].push(newCone);
         setDrawingTool('select', document.getElementById('tool-select'));
         saveState();
         renderCourtPlayers();
         showToast('Harjoitustötterö lisätty kentälle! 🔶');
     }
 
+    function addOpponentToActiveLineup() {
+        const pageKey = getActivePageKey();
+        if (!lineupOpponents || typeof lineupOpponents !== 'object') lineupOpponents = {};
+        if (!lineupOpponents[pageKey] || !Array.isArray(lineupOpponents[pageKey])) {
+            lineupOpponents[pageKey] = [];
+        }
+
+        const count = lineupOpponents[pageKey].length + 1;
+        const newOpponent = {
+            id: 'opp_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+            label: `V${count}`,
+            x: 50,
+            y: 35
+        };
+
+        lineupOpponents[pageKey].push(newOpponent);
+        setDrawingTool('select', document.getElementById('tool-select'));
+        saveState();
+        renderCourtPlayers();
+        showToast('Vastustaja lisätty kentälle! 🔴');
+    }
+
     function renderCourtBalls() {
+        const pageKey = getActivePageKey();
         if (!lineupBalls || typeof lineupBalls !== 'object') return;
-        const balls = lineupBalls[activeLineupKey] || [];
+        const balls = lineupBalls[pageKey] || lineupBalls[activeLineupKey] || [];
         balls.forEach(ball => {
             const isSelected = activeSelectedElementId === ball.id;
             const ballNode = document.createElement('div');
@@ -1752,7 +1914,7 @@
 
             ballNode.innerHTML = `
                 <div class="ball-circle" title="Salibandypallo">
-                    <img src="ball.png?v=16.0" class="floorball-png-icon" alt="Pallo">
+                    <img src="ball.png?v=17.0" class="floorball-png-icon" alt="Pallo">
                     <button class="ball-remove-btn" data-action="remove-ball" data-ball-id="${ball.id}">✕</button>
                 </div>
             `;
@@ -1763,8 +1925,9 @@
     }
 
     function renderCourtCones() {
+        const pageKey = getActivePageKey();
         if (!lineupCones || typeof lineupCones !== 'object') return;
-        const cones = lineupCones[activeLineupKey] || [];
+        const cones = lineupCones[pageKey] || lineupCones[activeLineupKey] || [];
         cones.forEach(cone => {
             const isSelected = activeSelectedElementId === cone.id;
             const coneNode = document.createElement('div');
@@ -1785,8 +1948,33 @@
         });
     }
 
+    function renderCourtOpponents() {
+        const pageKey = getActivePageKey();
+        if (!lineupOpponents || typeof lineupOpponents !== 'object') return;
+        const opponents = lineupOpponents[pageKey] || lineupOpponents[activeLineupKey] || [];
+        opponents.forEach(opp => {
+            const isSelected = activeSelectedElementId === opp.id;
+            const oppNode = document.createElement('div');
+            oppNode.className = `court-opponent-node ${isSelected ? 'is-selected' : ''}`;
+            oppNode.style.left = opp.x + '%';
+            oppNode.style.top = opp.y + '%';
+            oppNode.dataset.oppId = opp.id;
+
+            oppNode.innerHTML = `
+                <div class="opponent-circle" title="Vastustajan pelaaja">
+                    ${escapeHtml(opp.label || 'V')}
+                    <button class="opponent-remove-btn" data-action="remove-opponent" data-opp-id="${opp.id}">✕</button>
+                </div>
+            `;
+
+            setupOpponentTouchDragging(oppNode, opp);
+            courtPlayersLayer.appendChild(oppNode);
+        });
+    }
+
     function renderCourtRectangles() {
-        const drawings = lineupDrawings[activeLineupKey] || [];
+        const pageKey = getActivePageKey();
+        const drawings = lineupDrawings[pageKey] || lineupDrawings[activeLineupKey] || [];
         const rects = drawings.filter(d => d.type === 'rect');
 
         rects.forEach(rectObj => {
@@ -1811,7 +1999,8 @@
     }
 
     function renderCourtLineNodes() {
-        const drawings = lineupDrawings[activeLineupKey] || [];
+        const pageKey = getActivePageKey();
+        const drawings = lineupDrawings[pageKey] || lineupDrawings[activeLineupKey] || [];
         const lineDrawings = drawings.filter(d => d.type === 'pass' || d.type === 'shot' || d.type === 'run');
 
         lineDrawings.forEach(lineObj => {
@@ -2029,6 +2218,57 @@
         };
 
         coneNode.addEventListener('pointerdown', onPointerDown);
+    }
+
+    function setupOpponentTouchDragging(oppNode, oppObj) {
+        let isDragging = false;
+        let rafId = null;
+
+        const onPointerDown = (e) => {
+            if (drawingTool !== 'select') return;
+            selectCourtElement(oppObj.id, oppNode);
+            if (e.target.classList.contains('opponent-remove-btn')) return;
+            
+            isDragging = true;
+            oppNode.setPointerCapture(e.pointerId);
+
+            oppNode.addEventListener('pointermove', onPointerMove);
+            oppNode.addEventListener('pointerup', onPointerUp);
+            oppNode.addEventListener('pointercancel', onPointerUp);
+        };
+
+        const onPointerMove = (e) => {
+            if (!isDragging) return;
+            e.preventDefault();
+
+            const rect = floorballCourt.getBoundingClientRect();
+            let newX = ((e.clientX - rect.left) / rect.width) * 100;
+            let newY = ((e.clientY - rect.top) / rect.height) * 100;
+
+            newX = Math.max(3, Math.min(97, newX));
+            newY = Math.max(3, Math.min(97, newY));
+
+            oppObj.x = Math.round(newX * 10) / 10;
+            oppObj.y = Math.round(newY * 10) / 10;
+
+            if (rafId) cancelAnimationFrame(rafId);
+            rafId = requestAnimationFrame(() => {
+                oppNode.style.left = oppObj.x + '%';
+                oppNode.style.top = oppObj.y + '%';
+            });
+        };
+
+        const onPointerUp = (e) => {
+            if (!isDragging) return;
+            isDragging = false;
+            if (rafId) cancelAnimationFrame(rafId);
+            oppNode.removeEventListener('pointermove', onPointerMove);
+            oppNode.removeEventListener('pointerup', onPointerUp);
+            oppNode.removeEventListener('pointercancel', onPointerUp);
+            saveState();
+        };
+
+        oppNode.addEventListener('pointerdown', onPointerDown);
     }
 
     function setupRectTouchDragging(rectNode, rectObj) {
@@ -2265,8 +2505,9 @@
             if (!isDrawing) return;
             isDrawing = false;
 
+            const pageKey = getActivePageKey();
             if (currentPathPct.length >= 2 || (drawingTool === 'run' && currentPathPct.length > 1)) {
-                if (!lineupDrawings[activeLineupKey]) lineupDrawings[activeLineupKey] = [];
+                if (!lineupDrawings[pageKey]) lineupDrawings[pageKey] = [];
 
                 if (drawingTool === 'rect') {
                     const p1 = currentPathPct[0];
@@ -2277,7 +2518,7 @@
                     const wPct = Math.abs(p2.x - p1.x);
                     const hPct = Math.abs(p2.y - p1.y);
 
-                    lineupDrawings[activeLineupKey].push({
+                    lineupDrawings[pageKey].push({
                         id: 'rect_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
                         type: 'rect',
                         x: Math.round(xPct * 10) / 10,
@@ -2295,7 +2536,7 @@
                     if (drawingTool === 'pass') color = '#eab308';
                     if (drawingTool === 'shot') color = '#ec4899';
 
-                    lineupDrawings[activeLineupKey].push({
+                    lineupDrawings[pageKey].push({
                         id: 'draw_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
                         type: drawingTool,
                         pointsPct: [...currentPathPct],
@@ -2323,9 +2564,10 @@
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         if (activeLineupKey === 'summary') return;
 
-        const currentDrawings = lineupDrawings[activeLineupKey] || [];
+        const pageKey = getActivePageKey();
+        const currentDrawings = lineupDrawings[pageKey] || lineupDrawings[activeLineupKey] || [];
         currentDrawings.forEach(draw => {
-            if (draw.type !== 'rect') { // Rectangles are interactive DOM elements on court layer!
+            if (draw.type !== 'rect') {
                 renderPath(draw, draw.type, draw.color);
             }
         });
@@ -2351,7 +2593,6 @@
             y: (p.y / 100) * canvasH
         }));
 
-        // 1. PREVIEW RECTANGLE DURING DRAWING
         if (type === 'rect') {
             const start = points[0];
             const end = points[points.length - 1];
@@ -2371,7 +2612,6 @@
             return;
         }
 
-        // 2. STRAIGHT PASS LINE (Katkoviiva suora)
         if (type === 'pass') {
             const start = points[0];
             const end = points[points.length - 1];
@@ -2386,7 +2626,6 @@
             ctx.lineTo(end.x, end.y);
             ctx.stroke();
 
-            // Arrowhead at end
             const angle = Math.atan2(end.y - start.y, end.x - start.x);
             ctx.setLineDash([]);
             ctx.fillStyle = color || '#eab308';
@@ -2400,7 +2639,6 @@
             return;
         }
 
-        // 3. STRAIGHT SHOT LINE (Suora laukaus maalia kohti)
         if (type === 'shot') {
             const start = points[0];
             const end = points[points.length - 1];
@@ -2415,7 +2653,6 @@
             ctx.lineTo(end.x, end.y);
             ctx.stroke();
 
-            // Arrowhead at end
             const angle = Math.atan2(end.y - start.y, end.x - start.x);
             ctx.setLineDash([]);
             ctx.fillStyle = color || '#ec4899';
@@ -2426,7 +2663,6 @@
             ctx.closePath();
             ctx.fill();
 
-            // Target crosshair
             ctx.strokeStyle = '#ffffff';
             ctx.lineWidth = 2;
             ctx.beginPath();
@@ -2436,7 +2672,6 @@
             return;
         }
 
-        // 4. FREEHAND RUN LINE (Juoksuviiva vapaa käsi)
         ctx.save();
         ctx.strokeStyle = color || '#38bdf8';
         ctx.lineWidth = 3.5;
@@ -2467,7 +2702,8 @@
     }
 
     function undoLastDrawing() {
-        const currentDrawings = lineupDrawings[activeLineupKey] || [];
+        const pageKey = getActivePageKey();
+        const currentDrawings = lineupDrawings[pageKey] || lineupDrawings[activeLineupKey] || [];
         if (currentDrawings.length > 0) {
             currentDrawings.pop();
             saveState();
@@ -2475,7 +2711,7 @@
             drawCanvasLines();
             showToast('Viimeisin piirros kumottu ↩️');
         } else {
-            showToast('Ei piirroksia kumottavaksi tässä kentällisessä.');
+            showToast('Ei piirroksia kumottavaksi tässä taktiikkasivussa.');
         }
     }
 
@@ -2741,6 +2977,9 @@
         btnDeleteTeam?.addEventListener('click', deleteActiveTeam);
         cloudSyncBadge?.addEventListener('click', forceCloudSync);
 
+        btnAddTacticPage?.addEventListener('click', addTacticalPage);
+        btnDeleteTacticPage?.addEventListener('click', deleteTacticalPage);
+
         document.getElementById('btn-new-team').addEventListener('click', () => {
             teamNameInput.value = '';
             teamModal.classList.add('active');
@@ -2765,6 +3004,7 @@
         
         document.getElementById('btn-add-ball')?.addEventListener('click', addBallToActiveLineup);
         document.getElementById('btn-add-cone')?.addEventListener('click', addConeToActiveLineup);
+        document.getElementById('btn-add-opponent')?.addEventListener('click', addOpponentToActiveLineup);
 
         document.getElementById('btn-edit-active-lineup-name')?.addEventListener('click', () => {
             const config = lineupConfigs.find(c => c.id === activeLineupKey);
@@ -2851,7 +3091,7 @@
         });
 
         floorballCourt.addEventListener('pointerdown', (e) => {
-            if (drawingTool === 'select' && !e.target.closest('.court-player-node, .court-ball-node, .court-cone-node, .court-rect-node, .court-line-node, .line-endpoint-handle, button')) {
+            if (drawingTool === 'select' && !e.target.closest('.court-player-node, .court-ball-node, .court-cone-node, .court-opponent-node, .court-rect-node, .court-line-node, .line-endpoint-handle, button')) {
                 selectCourtElement(null);
             }
         });
@@ -2867,11 +3107,14 @@
                 return;
             }
 
+            const pageKey = getActivePageKey();
+
             const removeBallBtn = e.target.closest('[data-action="remove-ball"]');
             if (removeBallBtn) {
                 const ballId = removeBallBtn.dataset.ballId;
-                if (lineupBalls[activeLineupKey]) {
-                    lineupBalls[activeLineupKey] = lineupBalls[activeLineupKey].filter(b => b.id !== ballId);
+                if (lineupBalls[pageKey] || lineupBalls[activeLineupKey]) {
+                    const keyToUse = lineupBalls[pageKey] ? pageKey : activeLineupKey;
+                    lineupBalls[keyToUse] = lineupBalls[keyToUse].filter(b => b.id !== ballId);
                     saveState();
                     renderCourtPlayers();
                     showToast('Pallo poistettu.');
@@ -2881,19 +3124,33 @@
             const removeConeBtn = e.target.closest('[data-action="remove-cone"]');
             if (removeConeBtn) {
                 const coneId = removeConeBtn.dataset.coneId;
-                if (lineupCones[activeLineupKey]) {
-                    lineupCones[activeLineupKey] = lineupCones[activeLineupKey].filter(c => c.id !== coneId);
+                if (lineupCones[pageKey] || lineupCones[activeLineupKey]) {
+                    const keyToUse = lineupCones[pageKey] ? pageKey : activeLineupKey;
+                    lineupCones[keyToUse] = lineupCones[keyToUse].filter(c => c.id !== coneId);
                     saveState();
                     renderCourtPlayers();
                     showToast('Tötterö poistettu.');
                 }
             }
 
+            const removeOpponentBtn = e.target.closest('[data-action="remove-opponent"]');
+            if (removeOpponentBtn) {
+                const oppId = removeOpponentBtn.dataset.oppId;
+                if (lineupOpponents[pageKey] || lineupOpponents[activeLineupKey]) {
+                    const keyToUse = lineupOpponents[pageKey] ? pageKey : activeLineupKey;
+                    lineupOpponents[keyToUse] = lineupOpponents[keyToUse].filter(o => o.id !== oppId);
+                    saveState();
+                    renderCourtPlayers();
+                    showToast('Vastustaja poistettu.');
+                }
+            }
+
             const removeRectBtn = e.target.closest('[data-action="remove-rect"]');
             if (removeRectBtn) {
                 const rectId = removeRectBtn.dataset.rectId;
-                if (lineupDrawings[activeLineupKey]) {
-                    lineupDrawings[activeLineupKey] = lineupDrawings[activeLineupKey].filter(d => d.id !== rectId);
+                if (lineupDrawings[pageKey] || lineupDrawings[activeLineupKey]) {
+                    const keyToUse = lineupDrawings[pageKey] ? pageKey : activeLineupKey;
+                    lineupDrawings[keyToUse] = lineupDrawings[keyToUse].filter(d => d.id !== rectId);
                     saveState();
                     renderCourtPlayers();
                     drawCanvasLines();
@@ -2904,8 +3161,9 @@
             const removeLineBtn = e.target.closest('[data-action="remove-line"]');
             if (removeLineBtn) {
                 const lineId = removeLineBtn.dataset.lineId;
-                if (lineupDrawings[activeLineupKey]) {
-                    lineupDrawings[activeLineupKey] = lineupDrawings[activeLineupKey].filter(d => d.id !== lineId);
+                if (lineupDrawings[pageKey] || lineupDrawings[activeLineupKey]) {
+                    const keyToUse = lineupDrawings[pageKey] ? pageKey : activeLineupKey;
+                    lineupDrawings[keyToUse] = lineupDrawings[keyToUse].filter(d => d.id !== lineId);
                     saveState();
                     renderCourtPlayers();
                     drawCanvasLines();
@@ -2923,11 +3181,12 @@
         document.getElementById('tool-undo').addEventListener('click', undoLastDrawing);
 
         document.getElementById('tool-clear-drawings').addEventListener('click', () => {
-            lineupDrawings[activeLineupKey] = [];
+            const pageKey = getActivePageKey();
+            lineupDrawings[pageKey] = [];
             saveState();
             renderCourtPlayers();
             drawCanvasLines();
-            showToast('Piirrokset tyhjennetty tästä kentällisestä.');
+            showToast('Piirrokset tyhjennetty tästä taktiikkasivusta.');
         });
 
         document.getElementById('btn-toggle-orientation').addEventListener('click', () => {
@@ -2937,17 +3196,19 @@
         });
 
         document.getElementById('btn-clear-pitch').addEventListener('click', () => {
+            const pageKey = getActivePageKey();
             const lName = getLineupName(activeLineupKey);
             if (confirm(`Tyhjennetäänkö ${lName} kentältä?`)) {
                 lineups[activeLineupKey] = createEmptyLineupSlots();
-                lineupDrawings[activeLineupKey] = [];
-                lineupBalls[activeLineupKey] = [];
-                lineupCones[activeLineupKey] = [];
+                lineupDrawings[pageKey] = [];
+                lineupBalls[pageKey] = [];
+                lineupCones[pageKey] = [];
+                lineupOpponents[pageKey] = [];
                 saveState();
                 renderActiveLineupSlots();
                 renderCourtPlayers();
                 drawCanvasLines();
-                showToast('Kentällinen, pallot, tötteröt ja piirrokset tyhjennetty.');
+                showToast('Kentällinen, pallot, tötteröt, vastustajat ja piirrokset tyhjennetty.');
             }
         });
 

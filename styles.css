@@ -1885,10 +1885,137 @@ body {
     color: #ffffff;
 }
 
-.tool-btn.tool-rect.active {
-    background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
-    border-color: #60a5fa;
+.tool-btn.highlight-opponent {
+    background: rgba(239, 68, 68, 0.15);
+    border-color: #f87171;
+    color: #fca5a5;
+}
+
+.tool-btn.highlight-opponent:hover, .tool-btn.highlight-opponent:active {
+    background: #ef4444;
     color: #ffffff;
+}
+
+/* TACTICAL PAGES BAR STYLES */
+.tactical-pages-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.4rem 0.8rem;
+    background: var(--bg-surface-elevated);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    margin-bottom: 0.5rem;
+    box-shadow: var(--shadow-sm);
+    flex-wrap: wrap;
+}
+
+.pages-bar-label {
+    font-size: 0.76rem;
+    font-weight: 700;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.pages-scroll-container {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    overflow-x: auto;
+    scrollbar-width: thin;
+    padding-bottom: 2px;
+}
+
+.page-badge-btn {
+    padding: 0.22rem 0.65rem;
+    border-radius: var(--radius-full);
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    font-size: 0.74rem;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.15s ease;
+}
+
+.page-badge-btn:hover {
+    background: rgba(59, 130, 246, 0.15);
+    color: #60a5fa;
+    border-color: #60a5fa;
+}
+
+.page-badge-btn.active {
+    background: linear-gradient(135deg, var(--accent-field) 0%, var(--accent-field-dark) 100%);
+    color: #ffffff;
+    border-color: #60a5fa;
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.4);
+}
+
+/* ON-COURT OPPONENT NODE STYLES */
+.court-opponent-node {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    z-index: 24 !important;
+    pointer-events: auto !important;
+    cursor: move;
+    touch-action: none;
+}
+
+.opponent-circle {
+    width: 32px;
+    height: 32px;
+    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    border: 2px solid #fee2e2;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-heading);
+    font-weight: 800;
+    font-size: 0.8rem;
+    color: #ffffff;
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.6);
+    position: relative;
+    user-select: none;
+    touch-action: none;
+}
+
+.opponent-remove-btn {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--accent-danger);
+    color: #fff;
+    border: 1px solid #fff;
+    font-size: 0.6rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 30;
+    opacity: 0;
+    visibility: hidden;
+    transform: scale(0.6);
+    transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s ease;
+    pointer-events: none;
+}
+
+.court-opponent-node:hover .opponent-remove-btn,
+.court-opponent-node.is-selected .opponent-remove-btn {
+    opacity: 1;
+    visibility: visible;
+    transform: scale(1);
+    pointer-events: auto;
+}
+
+.court-opponent-node.is-selected .opponent-circle {
+    box-shadow: 0 0 0 3px #ffffff, 0 0 16px rgba(239, 68, 68, 0.9);
 }
 
 /* ON-COURT CONE NODE STYLES */
