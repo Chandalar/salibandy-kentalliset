@@ -102,6 +102,8 @@
     let lineups = loadLineupsForTeam(currentTeamId, lineupConfigs);
     
     let lineupDrawings = loadFromStorage(`salibandy_drawings_${currentTeamId}`, {});
+    lineupDrawings = sanitizeDrawings(lineupDrawings);
+
     let lineupCourtPositions = loadFromStorage(`salibandy_positions_${currentTeamId}`, {});
     let lineupBalls = loadFromStorage(`salibandy_balls_${currentTeamId}`, { '1': [{ id: 'ball_default', x: 55, y: 50 }] });
     let lineupCones = loadFromStorage(`salibandy_cones_${currentTeamId}`, {});
@@ -111,7 +113,7 @@
     let searchQuery = '';
     let drawingTool = 'select';
     let isDrawing = false;
-    let currentPath = [];
+    let currentPathPct = [];
     let labelMode = 'full';
     let orientationMode = window.innerWidth <= 600 ? 'vertical' : 'horizontal';
 
@@ -219,6 +221,27 @@
         renderActiveLineupSlots();
         renderCourtPlayers();
         drawCanvasLines();
+    }
+
+    function sanitizeDrawings(drawingsObj) {
+        if (!drawingsObj || typeof drawingsObj !== 'object') return {};
+        Object.keys(drawingsObj).forEach(lk => {
+            if (Array.isArray(drawingsObj[lk])) {
+                drawingsObj[lk].forEach(draw => {
+                    if (!draw.id) draw.id = 'draw_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4);
+                    // Legacy fallback: convert pixel points to percentages if needed
+                    if (!draw.pointsPct && draw.points && Array.isArray(draw.points)) {
+                        const courtWidth = 800;
+                        const courtHeight = 400;
+                        draw.pointsPct = draw.points.map(p => ({
+                            x: Math.round(((p.x / courtWidth) * 100) * 10) / 10,
+                            y: Math.round(((p.y / courtHeight) * 100) * 10) / 10
+                        }));
+                    }
+                });
+            }
+        });
+        return drawingsObj;
     }
 
     function initFirebaseAuth() {
@@ -457,7 +480,8 @@
             }
             if (cloudData.drawings) {
                 Object.keys(cloudData.drawings).forEach(tId => {
-                    localStorage.setItem(`salibandy_drawings_${tId}`, JSON.stringify(cloudData.drawings[tId]));
+                    const sanitized = sanitizeDrawings({ [tId]: cloudData.drawings[tId] });
+                    localStorage.setItem(`salibandy_drawings_${tId}`, JSON.stringify(sanitized[tId]));
                 });
             }
             if (cloudData.positions) {
@@ -481,6 +505,7 @@
             lineupConfigs = loadLineupConfigs(currentTeamId);
             lineups = loadLineupsForTeam(currentTeamId, lineupConfigs);
             lineupDrawings = loadFromStorage(`salibandy_drawings_${currentTeamId}`, {});
+            lineupDrawings = sanitizeDrawings(lineupDrawings);
             lineupCourtPositions = loadFromStorage(`salibandy_positions_${currentTeamId}`, {});
             lineupBalls = loadFromStorage(`salibandy_balls_${currentTeamId}`, {});
             lineupCones = loadFromStorage(`salibandy_cones_${currentTeamId}`, {});
@@ -643,6 +668,7 @@
         lineupConfigs = loadLineupConfigs(currentTeamId);
         lineups = loadLineupsForTeam(currentTeamId, lineupConfigs);
         lineupDrawings = loadFromStorage(`salibandy_drawings_${currentTeamId}`, {});
+        lineupDrawings = sanitizeDrawings(lineupDrawings);
         lineupCourtPositions = loadFromStorage(`salibandy_positions_${currentTeamId}`, {});
         lineupBalls = loadFromStorage(`salibandy_balls_${currentTeamId}`, {});
         lineupCones = loadFromStorage(`salibandy_cones_${currentTeamId}`, {});
@@ -1610,7 +1636,7 @@
     });
 
     // ==========================================
-    // TACTICAL COURT & DYNAMIC LINEUP PLAYERS, BALLS, CONES & RECTANGLES
+    // TACTICAL COURT & DYNAMIC LINEUP PLAYERS, BALLS, CONES, RECTANGLES & LINES
     // ==========================================
     function renderCourtPlayers() {
         courtPlayersLayer.innerHTML = '';
@@ -1620,6 +1646,7 @@
         renderCourtBalls();
         renderCourtCones();
         renderCourtRectangles();
+        renderCourtLineNodes();
     }
 
     function renderLineupPlayerNodes() {
@@ -1713,7 +1740,7 @@
 
             ballNode.innerHTML = `
                 <div class="ball-circle" title="Salibandypallo">
-                    <img src="ball.png?v=15.0" class="floorball-png-icon" alt="Pallo">
+                    <img src="ball.png?v=16.0" class="floorball-png-icon" alt="Pallo">
                     <button class="ball-remove-btn" data-action="remove-ball" data-ball-id="${ball.id}">✕</button>
                 </div>
             `;
@@ -1767,6 +1794,172 @@
             setupRectTouchDragging(rectNode, rectObj);
             courtPlayersLayer.appendChild(rectNode);
         });
+    }
+
+    function renderCourtLineNodes() {
+        const drawings = lineupDrawings[activeLineupKey] || [];
+        const lineDrawings = drawings.filter(d => d.type === 'pass' || d.type === 'shot' || d.type === 'run');
+
+        lineDrawings.forEach(lineObj => {
+            const pts = lineObj.pointsPct;
+            if (!pts || pts.length < 2) return;
+
+            const startPct = pts[0];
+            const endPct = pts[pts.length - 1];
+            const midPct = {
+                x: (startPct.x + endPct.x) / 2,
+                y: (startPct.y + endPct.y) / 2
+            };
+
+            let icon = '↗️';
+            let handleClass = 'pass-handle';
+            if (lineObj.type === 'shot') { icon = '💥'; handleClass = 'shot-handle'; }
+            if (lineObj.type === 'run') { icon = '🏃'; handleClass = 'run-handle'; }
+
+            // 1. Midpoint Drag Handle (Moves ENTIRE line)
+            const lineNode = document.createElement('div');
+            lineNode.className = 'court-line-node';
+            lineNode.style.left = midPct.x + '%';
+            lineNode.style.top = midPct.y + '%';
+            lineNode.dataset.lineId = lineObj.id;
+
+            lineNode.innerHTML = `
+                <div class="line-mid-handle ${handleClass}" title="Siirrä koko viivaa sormella/hiirellä">
+                    <span style="font-size: 0.72rem; line-height: 1;">${icon}</span>
+                    <button class="line-remove-btn" data-action="remove-line" data-line-id="${lineObj.id}">✕</button>
+                </div>
+            `;
+
+            setupLineMidpointDragging(lineNode, lineObj);
+            courtPlayersLayer.appendChild(lineNode);
+
+            // 2. Endpoint Adjust Handle (Rotates / extends pass and shot lines)
+            if (lineObj.type === 'pass' || lineObj.type === 'shot') {
+                const endpointNode = document.createElement('div');
+                endpointNode.className = `line-endpoint-handle ${lineObj.type === 'shot' ? 'shot-endpoint' : 'pass-endpoint'}`;
+                endpointNode.style.left = endPct.x + '%';
+                endpointNode.style.top = endPct.y + '%';
+                endpointNode.title = 'Käännä tai säädä suuntaa sormella/hiirellä';
+
+                setupLineEndpointDragging(endpointNode, lineObj);
+                courtPlayersLayer.appendChild(endpointNode);
+            }
+        });
+    }
+
+    function setupLineMidpointDragging(lineNode, lineObj) {
+        let isDragging = false;
+        let startPointer = { x: 0, y: 0 };
+        let initialPts = [];
+        let rafId = null;
+
+        const onPointerDown = (e) => {
+            if (drawingTool !== 'select') return;
+            if (e.target.classList.contains('line-remove-btn')) return;
+
+            isDragging = true;
+            startPointer = { x: e.clientX, y: e.clientY };
+            initialPts = JSON.parse(JSON.stringify(lineObj.pointsPct));
+            lineNode.setPointerCapture(e.pointerId);
+
+            lineNode.addEventListener('pointermove', onPointerMove);
+            lineNode.addEventListener('pointerup', onPointerUp);
+            lineNode.addEventListener('pointercancel', onPointerUp);
+        };
+
+        const onPointerMove = (e) => {
+            if (!isDragging) return;
+            e.preventDefault();
+
+            const courtRect = floorballCourt.getBoundingClientRect();
+            const deltaPctX = ((e.clientX - startPointer.x) / courtRect.width) * 100;
+            const deltaPctY = ((e.clientY - startPointer.y) / courtRect.height) * 100;
+
+            for (let i = 0; i < lineObj.pointsPct.length; i++) {
+                let nX = initialPts[i].x + deltaPctX;
+                let nY = initialPts[i].y + deltaPctY;
+                lineObj.pointsPct[i].x = Math.round(nX * 10) / 10;
+                lineObj.pointsPct[i].y = Math.round(nY * 10) / 10;
+            }
+
+            const startPct = lineObj.pointsPct[0];
+            const endPct = lineObj.pointsPct[lineObj.pointsPct.length - 1];
+            const midX = (startPct.x + endPct.x) / 2;
+            const midY = (startPct.y + endPct.y) / 2;
+
+            if (rafId) cancelAnimationFrame(rafId);
+            rafId = requestAnimationFrame(() => {
+                lineNode.style.left = midX + '%';
+                lineNode.style.top = midY + '%';
+                drawCanvasLines();
+            });
+        };
+
+        const onPointerUp = (e) => {
+            if (!isDragging) return;
+            isDragging = false;
+            if (rafId) cancelAnimationFrame(rafId);
+            lineNode.removeEventListener('pointermove', onPointerMove);
+            lineNode.removeEventListener('pointerup', onPointerUp);
+            lineNode.removeEventListener('pointercancel', onPointerUp);
+            saveState();
+            renderCourtPlayers();
+        };
+
+        lineNode.addEventListener('pointerdown', onPointerDown);
+    }
+
+    function setupLineEndpointDragging(endpointNode, lineObj) {
+        let isDragging = false;
+        let rafId = null;
+
+        const onPointerDown = (e) => {
+            if (drawingTool !== 'select') return;
+
+            isDragging = true;
+            endpointNode.setPointerCapture(e.pointerId);
+
+            endpointNode.addEventListener('pointermove', onPointerMove);
+            endpointNode.addEventListener('pointerup', onPointerUp);
+            endpointNode.addEventListener('pointercancel', onPointerUp);
+        };
+
+        const onPointerMove = (e) => {
+            if (!isDragging) return;
+            e.preventDefault();
+
+            const courtRect = floorballCourt.getBoundingClientRect();
+            let newX = ((e.clientX - courtRect.left) / courtRect.width) * 100;
+            let newY = ((e.clientY - courtRect.top) / courtRect.height) * 100;
+
+            newX = Math.max(1, Math.min(99, newX));
+            newY = Math.max(1, Math.min(99, newY));
+
+            lineObj.pointsPct[1] = {
+                x: Math.round(newX * 10) / 10,
+                y: Math.round(newY * 10) / 10
+            };
+
+            if (rafId) cancelAnimationFrame(rafId);
+            rafId = requestAnimationFrame(() => {
+                endpointNode.style.left = lineObj.pointsPct[1].x + '%';
+                endpointNode.style.top = lineObj.pointsPct[1].y + '%';
+                drawCanvasLines();
+            });
+        };
+
+        const onPointerUp = (e) => {
+            if (!isDragging) return;
+            isDragging = false;
+            if (rafId) cancelAnimationFrame(rafId);
+            endpointNode.removeEventListener('pointermove', onPointerMove);
+            endpointNode.removeEventListener('pointerup', onPointerUp);
+            endpointNode.removeEventListener('pointercancel', onPointerUp);
+            saveState();
+            renderCourtPlayers();
+        };
+
+        endpointNode.addEventListener('pointerdown', onPointerDown);
     }
 
     function setupConeTouchDragging(coneNode, coneObj) {
@@ -2015,58 +2208,60 @@
             isDrawing = true;
             e.preventDefault();
             canvas.setPointerCapture(e.pointerId);
-            const rect = canvas.getBoundingClientRect();
-            const pt = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+            const courtRect = floorballCourt.getBoundingClientRect();
+            const ptPct = {
+                x: Math.max(0, Math.min(100, ((e.clientX - courtRect.left) / courtRect.width) * 100)),
+                y: Math.max(0, Math.min(100, ((e.clientY - courtRect.top) / courtRect.height) * 100))
+            };
+
             if (drawingTool === 'pass' || drawingTool === 'shot' || drawingTool === 'rect') {
-                currentPath = [pt, pt];
+                currentPathPct = [ptPct, ptPct];
             } else {
-                currentPath = [pt];
+                currentPathPct = [ptPct];
             }
         });
 
         canvas.addEventListener('pointermove', (e) => {
             if (!isDrawing) return;
             e.preventDefault();
-            const rect = canvas.getBoundingClientRect();
-            const pt = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+            const courtRect = floorballCourt.getBoundingClientRect();
+            const ptPct = {
+                x: Math.max(0, Math.min(100, ((e.clientX - courtRect.left) / courtRect.width) * 100)),
+                y: Math.max(0, Math.min(100, ((e.clientY - courtRect.top) / courtRect.height) * 100))
+            };
+
             if (drawingTool === 'pass' || drawingTool === 'shot' || drawingTool === 'rect') {
-                currentPath = [currentPath[0], pt];
+                currentPathPct = [currentPathPct[0], ptPct];
             } else {
-                currentPath.push(pt);
+                currentPathPct.push(ptPct);
             }
             drawCanvasLines();
-            drawPreviewPath(currentPath);
+            drawPreviewPath(currentPathPct);
         });
 
         canvas.addEventListener('pointerup', () => {
             if (!isDrawing) return;
             isDrawing = false;
 
-            if (currentPath.length >= 2 || (drawingTool === 'run' && currentPath.length > 1)) {
+            if (currentPathPct.length >= 2 || (drawingTool === 'run' && currentPathPct.length > 1)) {
                 if (!lineupDrawings[activeLineupKey]) lineupDrawings[activeLineupKey] = [];
 
                 if (drawingTool === 'rect') {
-                    const courtRect = floorballCourt.getBoundingClientRect();
-                    const p1 = currentPath[0];
-                    const p2 = currentPath[currentPath.length - 1];
+                    const p1 = currentPathPct[0];
+                    const p2 = currentPathPct[currentPathPct.length - 1];
 
-                    const xPx = Math.min(p1.x, p2.x);
-                    const yPx = Math.min(p1.y, p2.y);
-                    const wPx = Math.abs(p2.x - p1.x);
-                    const hPx = Math.abs(p2.y - p1.y);
-
-                    const xPct = Math.max(0, Math.min(95, (xPx / courtRect.width) * 100));
-                    const yPct = Math.max(0, Math.min(95, (yPx / courtRect.height) * 100));
-                    const wPct = Math.max(4, Math.min(95, (wPx / courtRect.width) * 100));
-                    const hPct = Math.max(4, Math.min(95, (hPx / courtRect.height) * 100));
+                    const xPct = Math.min(p1.x, p2.x);
+                    const yPct = Math.min(p1.y, p2.y);
+                    const wPct = Math.abs(p2.x - p1.x);
+                    const hPct = Math.abs(p2.y - p1.y);
 
                     lineupDrawings[activeLineupKey].push({
                         id: 'rect_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
                         type: 'rect',
                         x: Math.round(xPct * 10) / 10,
                         y: Math.round(yPct * 10) / 10,
-                        w: Math.round(wPct * 10) / 10,
-                        h: Math.round(hPct * 10) / 10
+                        w: Math.max(4, Math.round(wPct * 10) / 10),
+                        h: Math.max(4, Math.round(hPct * 10) / 10)
                     });
 
                     setDrawingTool('select', document.getElementById('tool-select'));
@@ -2081,19 +2276,23 @@
                     lineupDrawings[activeLineupKey].push({
                         id: 'draw_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
                         type: drawingTool,
-                        points: [...currentPath],
+                        pointsPct: [...currentPathPct],
                         color: color
                     });
+
+                    setDrawingTool('select', document.getElementById('tool-select'));
                     saveState();
+                    renderCourtPlayers();
+                    showToast(`${drawingTool === 'pass' ? 'Syöttöviiva' : (drawingTool === 'shot' ? 'Vetoviiva' : 'Juoksuviiva')} piirretty! Voit siirtää ja säätää sitä 👆`);
                 }
             }
-            currentPath = [];
+            currentPathPct = [];
             drawCanvasLines();
         });
 
         canvas.addEventListener('pointercancel', () => {
             isDrawing = false;
-            currentPath = [];
+            currentPathPct = [];
             drawCanvasLines();
         });
     }
@@ -2105,21 +2304,30 @@
         const currentDrawings = lineupDrawings[activeLineupKey] || [];
         currentDrawings.forEach(draw => {
             if (draw.type !== 'rect') { // Rectangles are interactive DOM elements on court layer!
-                renderPath(draw.points, draw.type, draw.color);
+                renderPath(draw, draw.type, draw.color);
             }
         });
     }
 
-    function drawPreviewPath(points) {
+    function drawPreviewPath(pointsPct) {
         let color = '#38bdf8';
         if (drawingTool === 'pass') color = '#eab308';
         if (drawingTool === 'shot') color = '#ec4899';
         if (drawingTool === 'rect') color = '#60a5fa';
-        renderPath(points, drawingTool, color);
+        renderPath({ pointsPct: pointsPct }, drawingTool, color);
     }
 
-    function renderPath(points, type, color) {
-        if (!points || points.length < 2) return;
+    function renderPath(drawObj, type, color) {
+        const ptsPct = drawObj.pointsPct;
+        if (!ptsPct || ptsPct.length < 2) return;
+
+        const canvasW = canvas.width;
+        const canvasH = canvas.height;
+
+        const points = ptsPct.map(p => ({
+            x: (p.x / 100) * canvasW,
+            y: (p.y / 100) * canvasH
+        }));
 
         // 1. PREVIEW RECTANGLE DURING DRAWING
         if (type === 'rect') {
@@ -2660,7 +2868,20 @@
                     lineupDrawings[activeLineupKey] = lineupDrawings[activeLineupKey].filter(d => d.id !== rectId);
                     saveState();
                     renderCourtPlayers();
+                    drawCanvasLines();
                     showToast('Taktinen alue poistettu.');
+                }
+            }
+
+            const removeLineBtn = e.target.closest('[data-action="remove-line"]');
+            if (removeLineBtn) {
+                const lineId = removeLineBtn.dataset.lineId;
+                if (lineupDrawings[activeLineupKey]) {
+                    lineupDrawings[activeLineupKey] = lineupDrawings[activeLineupKey].filter(d => d.id !== lineId);
+                    saveState();
+                    renderCourtPlayers();
+                    drawCanvasLines();
+                    showToast('Viiva poistettu.');
                 }
             }
         });
@@ -2698,7 +2919,7 @@
                 renderActiveLineupSlots();
                 renderCourtPlayers();
                 drawCanvasLines();
-                showToast('Kentällinen, pallot ja tötteröt tyhjennetty.');
+                showToast('Kentällinen, pallot, tötteröt ja piirrokset tyhjennetty.');
             }
         });
 
