@@ -283,6 +283,7 @@
             lineupConfigs = loadLineupConfigs(currentTeamId);
         }
 
+        // 1. Lineup Preset Buttons
         lineupConfigs.forEach(config => {
             const btn = document.createElement('button');
             btn.className = `tab-btn ${activeLineupKey === config.id ? 'active' : ''}`;
@@ -297,14 +298,14 @@
             tabsScrollContainer.appendChild(btn);
         });
 
-        // Add "+ Uusi kentällinen" button tab
+        // 2. Add "+ Uusi kentällinen" button tab
         const addBtn = document.createElement('button');
         addBtn.className = 'tab-btn btn-add-tab';
         addBtn.innerHTML = '+ Uusi kentällinen';
         addBtn.addEventListener('click', () => openLineupConfigModal());
         tabsScrollContainer.appendChild(addBtn);
 
-        // Add "📊 Yhteenveto (Kaikki kentälliset)" tab
+        // 3. Add "📊 Yhteenveto (Kaikki kentälliset)" tab BEFORE Hallitse
         const summaryBtn = document.createElement('button');
         summaryBtn.className = `tab-btn highlight-summary ${activeLineupKey === 'summary' ? 'active' : ''}`;
         summaryBtn.dataset.lineup = 'summary';
@@ -312,7 +313,7 @@
         summaryBtn.addEventListener('click', () => switchTab('summary'));
         tabsScrollContainer.appendChild(summaryBtn);
 
-        // Add "⚙️ Hallitse kentällisiä" button tab LAST (Right-hand side after Yhteenveto)
+        // 4. Add "⚙️ Hallitse kentällisiä" button tab ABSOLUTELY LAST!
         const manageBtn = document.createElement('button');
         manageBtn.className = 'tab-btn btn-manage-tab';
         manageBtn.innerHTML = '⚙️ Hallitse kentällisiä';
@@ -1589,7 +1590,7 @@
             lineupDrawings[activeLineupKey] = [];
             saveState();
             drawCanvasLines();
-            showToast('Piirrokset tyhjennetty tästä kentällisestä.');
+            showToast('Piirrokset tyhjennetty tästä kentällisessä.');
         });
 
         document.getElementById('btn-toggle-orientation').addEventListener('click', () => {
