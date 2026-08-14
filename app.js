@@ -2718,9 +2718,8 @@
         // Tactical Pages & Multi-court buttons
         document.getElementById('btn-add-tactic-page')?.addEventListener('click', addTacticalPage);
         document.getElementById('btn-delete-tactic-page')?.addEventListener('click', deleteTacticalPage);
-        document.getElementById('btn-add-court-board')?.addEventListener('click', addCourtToActivePage);
 
-        // Global delegated click handler for full robustness
+        // Global delegated click handler for full robustness (single source of truth)
         document.addEventListener('click', (e) => {
             const addCourtBtn = e.target.closest('#btn-add-court-board, [data-action="add-court-board"]');
             if (addCourtBtn) {
