@@ -1,6 +1,6 @@
 /**
  * Salibandyn Kentälliset & Taktiikkataulu - Advanced Logic & Interactive Engine
- * Sisältää tyhjän pelaajaringin uusille joukkueille sekä pelaajien tuonnin aikaisemmista joukkueista.
+ * Sisältää korjatun joukkueenvaihdon, tyhjän pelaajaringin uusille joukkueille sekä pelaajien tuonnin aikaisemmista joukkueista.
  */
 
 (function() {
@@ -90,6 +90,9 @@
     let teams = loadFromStorage('salibandy_teams_v1', DEFAULT_TEAMS);
     let currentTeamId = loadFromStorage('salibandy_active_team_id', 'team_edustus');
 
+    // Auto-clean any user team that got corrupted by the old saveState bug!
+    cleanCorruptedUserTeams();
+
     let roster = loadRosterForTeam(currentTeamId);
     let lineupConfigs = loadLineupConfigs(currentTeamId);
     let lineups = loadLineupsForTeam(currentTeamId, lineupConfigs);
@@ -109,6 +112,7 @@
 
     // DOM Elements
     const teamSelect = document.getElementById('team-select');
+    const btnDeleteTeam = document.getElementById('btn-delete-team');
     const rosterListContainer = document.getElementById('roster-list-container');
     const rosterSearchInput = document.getElementById('roster-search');
     const filterPillBtns = document.querySelectorAll('.pill-btn');
@@ -202,6 +206,23 @@
         drawCanvasLines();
     }
 
+    function cleanCorruptedUserTeams() {
+        if (!Array.isArray(teams)) return;
+        teams.forEach(t => {
+            if (t.id !== 'team_edustus') {
+                const storedRoster = loadFromStorage(`salibandy_roster_${t.id}`, null);
+                // If user-created team has the demo player 'p_mv23', clean it up!
+                if (storedRoster && Array.isArray(storedRoster) && storedRoster.some(p => p.id === 'p_mv23')) {
+                    console.log(`Auto-clearing corrupted demo roster for team: ${t.name} (${t.id})`);
+                    localStorage.setItem(`salibandy_roster_${t.id}`, JSON.stringify([]));
+                    const emptyLineups = {};
+                    DEFAULT_LINEUP_CONFIGS.forEach(c => { emptyLineups[c.id] = createEmptyLineupSlots(); });
+                    localStorage.setItem(`salibandy_lineups_${t.id}`, JSON.stringify(emptyLineups));
+                }
+            }
+        });
+    }
+
     function loadFromStorage(key, fallback) {
         try {
             const data = localStorage.getItem(key);
@@ -213,7 +234,6 @@
     }
 
     function loadRosterForTeam(teamId) {
-        // Default roster ONLY for the primary demo team if empty, EMPTY [] FOR ANY NEW TEAM!
         if (teamId === 'team_edustus') {
             return loadFromStorage(`salibandy_roster_${teamId}`, DEFAULT_ROSTER);
         }
@@ -287,14 +307,20 @@
 
     function switchTeam(teamId) {
         currentTeamId = teamId;
-        saveState();
         
+        // Load target team data FIRST before calling saveState!
         roster = loadRosterForTeam(currentTeamId);
         lineupConfigs = loadLineupConfigs(currentTeamId);
         lineups = loadLineupsForTeam(currentTeamId, lineupConfigs);
         lineupDrawings = loadFromStorage(`salibandy_drawings_${currentTeamId}`, {});
         lineupCourtPositions = loadFromStorage(`salibandy_positions_${currentTeamId}`, {});
-        lineupBalls = loadFromStorage(`salibandy_balls_${currentTeamId}`, { '1': [{ id: 'ball_default', x: 55, y: 50 }] });
+        lineupBalls = loadFromStorage(`salibandy_balls_${currentTeamId}`, {});
+
+        if (activeLineupKey !== 'summary' && !lineupConfigs.some(c => c.id === activeLineupKey)) {
+            activeLineupKey = lineupConfigs[0] ? lineupConfigs[0].id : '1';
+        }
+
+        saveState();
 
         renderTabs();
         updateRosterCounters();
@@ -306,7 +332,34 @@
             renderCourtPlayers();
             drawCanvasLines();
         }
-        showToast(`Joukkue vaihdettu!`);
+        showToast(`Joukkue vaihdettu: ${teams.find(t => t.id === currentTeamId)?.name || ''}`);
+    }
+
+    function deleteActiveTeam() {
+        if (teams.length <= 1) {
+            showToast('Et voi poistaa ainoaa joukkuetta.');
+            return;
+        }
+
+        const team = teams.find(t => t.id === currentTeamId);
+        if (!team) return;
+
+        if (confirm(`Haluatko varmasti poistaa joukkueen '${team.name}' kaikkine pelaajineen ja kentällisineen?`)) {
+            const deleteId = currentTeamId;
+            teams = teams.filter(t => t.id !== deleteId);
+
+            localStorage.removeItem(`salibandy_roster_${deleteId}`);
+            localStorage.removeItem(`salibandy_lineup_configs_${deleteId}`);
+            localStorage.removeItem(`salibandy_lineups_${deleteId}`);
+            localStorage.removeItem(`salibandy_drawings_${deleteId}`);
+            localStorage.removeItem(`salibandy_positions_${deleteId}`);
+            localStorage.removeItem(`salibandy_balls_${deleteId}`);
+
+            const nextTeamId = teams[0].id;
+            renderTeamDropdown();
+            switchTeam(nextTeamId);
+            showToast(`Joukkue '${team.name}' poistettu.`);
+        }
     }
 
     function renderTabs() {
@@ -596,7 +649,6 @@
             const targetId = cb.value;
             const original = sourceRoster.find(p => p.id === targetId);
             if (original) {
-                // Copy as a new player entry into active team roster
                 const newPlayer = {
                     ...original,
                     id: 'p_imp_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4)
@@ -1233,7 +1285,7 @@
 
             ballNode.innerHTML = `
                 <div class="ball-circle" title="Salibandypallo">
-                    <img src="ball.png?v=5.0" class="floorball-png-icon" alt="Pallo">
+                    <img src="ball.png?v=6.0" class="floorball-png-icon" alt="Pallo">
                     <button class="ball-remove-btn" data-action="remove-ball" data-ball-id="${ball.id}">✕</button>
                 </div>
             `;
@@ -1601,10 +1653,9 @@
         });
         localStorage.setItem(`salibandy_lineups_${newTeamId}`, JSON.stringify(emptyLineups));
 
-        saveState();
         renderTeamDropdown();
-        switchTeam(newTeamId);
         closeModal();
+        switchTeam(newTeamId);
         showToast(`Uusi tyhjä joukkue '${name}' luotu!`);
     });
 
@@ -1759,6 +1810,8 @@
 
     function bindEvents() {
         teamSelect.addEventListener('change', (e) => switchTeam(e.target.value));
+        btnDeleteTeam?.addEventListener('click', deleteActiveTeam);
+
         document.getElementById('btn-new-team').addEventListener('click', () => {
             teamNameInput.value = '';
             teamModal.classList.add('active');
