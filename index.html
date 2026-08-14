@@ -72,15 +72,8 @@
 
     <!-- Lineup Presets Tab Bar -->
     <nav class="lineup-tabs-bar">
-        <div class="tabs-scroll">
-            <button class="tab-btn active" data-lineup="1">1. Kenttä</button>
-            <button class="tab-btn" data-lineup="2">2. Kenttä</button>
-            <button class="tab-btn" data-lineup="3">3. Kenttä</button>
-            <button class="tab-btn highlight-yv" data-lineup="yv">⚡ Ylivoima (YV)</button>
-            <button class="tab-btn highlight-av" data-lineup="av">🛡️ Alivoima (AV)</button>
-            <button class="tab-btn highlight-6v5" data-lineup="6v5">🔥 6v5 (Ilman MV)</button>
-            <button class="tab-btn" data-lineup="custom">📐 Taktiikka</button>
-            <button class="tab-btn highlight-summary" data-lineup="summary">📊 Yhteenveto (Kaikki kentälliset)</button>
+        <div class="tabs-scroll" id="tabs-scroll-container">
+            <!-- Populated dynamically (Built-in + Custom lineups) -->
         </div>
     </nav>
 
@@ -212,7 +205,10 @@
                 <h2>
                     <span id="active-lineup-title">1. Kenttä</span>
                 </h2>
-                <button class="btn-sm btn-outline" id="btn-clear-lineup">Tyhjennä</button>
+                <div style="display: flex; gap: 0.3rem;">
+                    <button class="btn-xs btn-outline" id="btn-edit-active-lineup-name" title="Muokkaa nimeä">✏️</button>
+                    <button class="btn-xs btn-outline" id="btn-clear-lineup">Tyhjennä</button>
+                </div>
             </div>
 
             <p class="panel-hint">Täppää tai vedä pelaaja kentälliseen:</p>
@@ -235,21 +231,45 @@
                     📊 Kaikki Kentälliset Yhteenvedossa
                 </h2>
                 <div class="summary-actions">
-                    <button class="btn btn-sm btn-primary" id="btn-copy-all-summary">
-                        📋 Kopioi kaikki tekstinä
+                    <button class="btn btn-sm btn-primary" id="btn-add-lineup-summary">
+                        + Lisää kentällinen
                     </button>
-                    <button class="btn btn-sm btn-secondary" onclick="window.print()">
-                        🖨️ Tulosta kokoonpanot
+                    <button class="btn btn-sm btn-secondary" id="btn-copy-all-summary">
+                        📋 Kopioi tekstinä
+                    </button>
+                    <button class="btn btn-sm btn-outline" onclick="window.print()">
+                        🖨️ Tulosta
                     </button>
                 </div>
             </div>
 
             <div class="summary-grid-container" id="summary-grid-container">
-                <!-- Dynamically rendered 6 lineup cards -->
+                <!-- Dynamically rendered lineup cards -->
             </div>
         </section>
 
     </main>
+
+    <!-- Modal: Add / Edit Lineup -->
+    <div class="modal-overlay" id="lineup-config-modal">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3 id="lineup-config-modal-title">Uusi kentällinen</h3>
+                <button class="close-btn" id="btn-close-lineup-config-modal">&times;</button>
+            </div>
+            <form id="lineup-config-form">
+                <input type="hidden" id="form-lineup-id" value="">
+                <div class="form-group">
+                    <label for="form-lineup-name">Kentällisen Nimi *</label>
+                    <input type="text" id="form-lineup-name" required placeholder="Esim. 3v5 Alivoima, 4. Kenttä, Erityis-YV..." class="form-input">
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" id="btn-cancel-lineup-config-modal">Peruuta</button>
+                    <button type="submit" class="btn btn-primary">Tallenna Kentällinen</button>
+                </div>
+            </form>
+        </div>
+    </div>
 
     <!-- Modal: Slot Player Picker (Täppää paikkaa valitaksesi pelaajan) -->
     <div class="modal-overlay" id="slot-picker-modal">

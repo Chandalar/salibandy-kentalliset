@@ -1,6 +1,6 @@
 /**
  * Salibandyn Kentälliset & Taktiikkataulu - Advanced Logic & Interactive Engine
- * Sisältää mobiilin täppäysvalikon (Tap-to-Assign) ja Paikkakohtaisen pelaajavalitsimen (Slot-Picker) kaikissa näkymissä.
+ * Sisältää dynaamiset kentälliset (Lisää / Muokkaa / Poista kentällisiä, esim. 3v5 Alivoima).
  */
 
 (function() {
@@ -47,6 +47,16 @@
         { id: 'p_66', name: 'Miika', number: 66, position: 'H', isLoan: false, notes: '?' }
     ];
 
+    const DEFAULT_LINEUP_CONFIGS = [
+        { id: '1', name: '1. Kenttä', type: 'preset' },
+        { id: '2', name: '2. Kenttä', type: 'preset' },
+        { id: '3', name: '3. Kenttä', type: 'preset' },
+        { id: 'yv', name: '⚡ Ylivoima (YV)', type: 'preset' },
+        { id: 'av', name: '🛡️ Alivoima (AV)', type: 'preset' },
+        { id: '6v5', name: '🔥 6v5 (Ilman MV)', type: 'preset' },
+        { id: 'custom', name: '📐 Taktiikkataulu', type: 'preset' }
+    ];
+
     const DEFAULT_LINEUPS = {
         '1': { MV: 'p_mv23', VP: 'p_19', OP: 'p_20', VH: 'p_64', KH: 'p_42', OH: 'p_88' },
         '2': { MV: 'p_mv45', VP: 'p_71', OP: 'p_4', VH: 'p_11', KH: 'p_55', OH: 'p_2' },
@@ -76,26 +86,15 @@
         }
     };
 
-    const LINEUP_NAMES = {
-        '1': '1. Kenttä',
-        '2': '2. Kenttä',
-        '3': '3. Kenttä',
-        'yv': '⚡ Ylivoima (YV)',
-        'av': '🛡️ Alivoima (AV)',
-        '6v5': '🔥 6v5 (Ilman MV)',
-        'custom': '📐 Taktiikkataulu (Vapaa)'
-    };
-
     // Global State
     let teams = loadFromStorage('salibandy_teams_v1', DEFAULT_TEAMS);
     let currentTeamId = loadFromStorage('salibandy_active_team_id', 'team_edustus');
 
     let roster = loadFromStorage(`salibandy_roster_${currentTeamId}`, DEFAULT_ROSTER);
+    let lineupConfigs = loadFromStorage(`salibandy_lineup_configs_${currentTeamId}`, DEFAULT_LINEUP_CONFIGS);
     let lineups = loadFromStorage(`salibandy_lineups_${currentTeamId}`, DEFAULT_LINEUPS);
     
-    let lineupDrawings = loadFromStorage(`salibandy_drawings_${currentTeamId}`, {
-        '1': [], '2': [], '3': [], 'yv': [], 'av': [], '6v5': [], 'custom': []
-    });
+    let lineupDrawings = loadFromStorage(`salibandy_drawings_${currentTeamId}`, {});
 
     let lineupCourtPositions = loadFromStorage(`salibandy_positions_${currentTeamId}`, {});
 
@@ -113,7 +112,7 @@
     const rosterListContainer = document.getElementById('roster-list-container');
     const rosterSearchInput = document.getElementById('roster-search');
     const filterPillBtns = document.querySelectorAll('.pill-btn');
-    const lineupTabBtns = document.querySelectorAll('.tab-btn');
+    const tabsScrollContainer = document.getElementById('tabs-scroll-container');
     const activeLineupTitle = document.getElementById('active-lineup-title');
     const lineupSlotsContainer = document.getElementById('lineup-slots-container');
     const courtPlayersLayer = document.getElementById('court-players-layer');
@@ -134,6 +133,12 @@
     const countLoanEl = document.getElementById('count-loan');
 
     // Modals
+    const lineupConfigModal = document.getElementById('lineup-config-modal');
+    const lineupConfigForm = document.getElementById('lineup-config-form');
+    const lineupConfigModalTitle = document.getElementById('lineup-config-modal-title');
+    const formLineupId = document.getElementById('form-lineup-id');
+    const formLineupName = document.getElementById('form-lineup-name');
+
     const slotPickerModal = document.getElementById('slot-picker-modal');
     const slotPickerTitle = document.getElementById('slot-picker-title');
     const slotPickerInfo = document.getElementById('slot-picker-info');
@@ -175,6 +180,7 @@
     // ==========================================
     function init() {
         renderTeamDropdown();
+        renderTabs();
         applyOrientation();
         setupCanvas();
         bindEvents();
@@ -200,12 +206,18 @@
             localStorage.setItem('salibandy_teams_v1', JSON.stringify(teams));
             localStorage.setItem('salibandy_active_team_id', JSON.stringify(currentTeamId));
             localStorage.setItem(`salibandy_roster_${currentTeamId}`, JSON.stringify(roster));
+            localStorage.setItem(`salibandy_lineup_configs_${currentTeamId}`, JSON.stringify(lineupConfigs));
             localStorage.setItem(`salibandy_lineups_${currentTeamId}`, JSON.stringify(lineups));
             localStorage.setItem(`salibandy_drawings_${currentTeamId}`, JSON.stringify(lineupDrawings));
             localStorage.setItem(`salibandy_positions_${currentTeamId}`, JSON.stringify(lineupCourtPositions));
         } catch (e) {
             console.error('LocalStorage save error', e);
         }
+    }
+
+    function getLineupName(key) {
+        const found = lineupConfigs.find(c => c.id === key);
+        return found ? found.name : 'Kentällinen';
     }
 
     function showToast(message) {
@@ -232,12 +244,12 @@
         saveState();
         
         roster = loadFromStorage(`salibandy_roster_${currentTeamId}`, DEFAULT_ROSTER);
+        lineupConfigs = loadFromStorage(`salibandy_lineup_configs_${currentTeamId}`, DEFAULT_LINEUP_CONFIGS);
         lineups = loadFromStorage(`salibandy_lineups_${currentTeamId}`, DEFAULT_LINEUPS);
-        lineupDrawings = loadFromStorage(`salibandy_drawings_${currentTeamId}`, {
-            '1': [], '2': [], '3': [], 'yv': [], 'av': [], '6v5': [], 'custom': []
-        });
+        lineupDrawings = loadFromStorage(`salibandy_drawings_${currentTeamId}`, {});
         lineupCourtPositions = loadFromStorage(`salibandy_positions_${currentTeamId}`, {});
 
+        renderTabs();
         updateRosterCounters();
         renderRoster();
         if (activeLineupKey === 'summary') {
@@ -248,6 +260,58 @@
             drawCanvasLines();
         }
         showToast(`Joukkue vaihdettu!`);
+    }
+
+    function renderTabs() {
+        tabsScrollContainer.innerHTML = '';
+
+        lineupConfigs.forEach(config => {
+            const btn = document.createElement('button');
+            btn.className = `tab-btn ${activeLineupKey === config.id ? 'active' : ''}`;
+            if (config.id === 'yv') btn.classList.add('highlight-yv');
+            if (config.id === 'av') btn.classList.add('highlight-av');
+            if (config.id === '6v5') btn.classList.add('highlight-6v5');
+
+            btn.dataset.lineup = config.id;
+            btn.textContent = config.name;
+
+            btn.addEventListener('click', () => switchTab(config.id));
+            tabsScrollContainer.appendChild(btn);
+        });
+
+        // Add "+ Uusi kentällinen" button tab
+        const addBtn = document.createElement('button');
+        addBtn.className = 'tab-btn btn-add-tab';
+        addBtn.textContent = '+ Uusi kentällinen';
+        addBtn.addEventListener('click', () => openLineupConfigModal());
+        tabsScrollContainer.appendChild(addBtn);
+
+        // Add "📊 Yhteenveto" tab
+        const summaryBtn = document.createElement('button');
+        summaryBtn.className = `tab-btn highlight-summary ${activeLineupKey === 'summary' ? 'active' : ''}`;
+        summaryBtn.dataset.lineup = 'summary';
+        summaryBtn.textContent = '📊 Yhteenveto';
+        summaryBtn.addEventListener('click', () => switchTab('summary'));
+        tabsScrollContainer.appendChild(summaryBtn);
+    }
+
+    function switchTab(key) {
+        activeLineupKey = key;
+        renderTabs();
+
+        if (activeLineupKey === 'summary') {
+            pitchPanelSection.style.display = 'none';
+            lineupPanelSection.style.display = 'none';
+            summaryViewPanel.style.display = 'flex';
+            renderSummaryView();
+        } else {
+            pitchPanelSection.style.display = 'flex';
+            lineupPanelSection.style.display = 'flex';
+            summaryViewPanel.style.display = 'none';
+            renderActiveLineupSlots();
+            renderCourtPlayers();
+            setTimeout(resizeCanvas, 60);
+        }
     }
 
     function applyOrientation() {
@@ -362,19 +426,86 @@
     }
 
     // ==========================================
-    // SLOT-PICKER PLAYER MODAL (Täppää paikkaa valitaksesi pelaajan)
+    // LINEUP CONFIGURATION (Add / Edit / Delete Lineups)
+    // ==========================================
+    function openLineupConfigModal(lineupConfig = null) {
+        if (lineupConfig) {
+            lineupConfigModalTitle.textContent = 'Muokkaa kentällisen nimeä';
+            formLineupId.value = lineupConfig.id;
+            formLineupName.value = lineupConfig.name;
+        } else {
+            lineupConfigModalTitle.textContent = 'Uusi kentällinen';
+            lineupConfigForm.reset();
+            formLineupId.value = '';
+        }
+        lineupConfigModal.classList.add('active');
+    }
+
+    lineupConfigForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const id = formLineupId.value || 'lineup_' + Date.now();
+        const name = formLineupName.value.trim();
+
+        if (!name) return;
+
+        const existing = lineupConfigs.find(c => c.id === id);
+        if (existing) {
+            existing.name = name;
+            showToast('Kentällisen nimi päivitetty!');
+        } else {
+            lineupConfigs.push({ id, name, type: 'user' });
+            lineups[id] = { MV: '', VP: '', OP: '', VH: '', KH: '', OH: '' };
+            activeLineupKey = id;
+            showToast(`Uusi kentällinen '${name}' luotu!`);
+        }
+
+        saveState();
+        renderTabs();
+        if (activeLineupKey === 'summary') {
+            renderSummaryView();
+        } else {
+            switchTab(id);
+        }
+        closeModal();
+    });
+
+    function deleteLineupConfig(id) {
+        const config = lineupConfigs.find(c => c.id === id);
+        if (!config) return;
+
+        if (confirm(`Haluatko varmasti poistaa kentällisen '${config.name}'?`)) {
+            lineupConfigs = lineupConfigs.filter(c => c.id !== id);
+            delete lineups[id];
+            delete lineupDrawings[id];
+
+            if (activeLineupKey === id) {
+                activeLineupKey = lineupConfigs[0] ? lineupConfigs[0].id : '1';
+            }
+
+            saveState();
+            renderTabs();
+            if (activeLineupKey === 'summary') {
+                renderSummaryView();
+            } else {
+                switchTab(activeLineupKey);
+            }
+            showToast('Kentällinen poistettu.');
+        }
+    }
+
+    // ==========================================
+    // SLOT-PICKER PLAYER MODAL
     // ==========================================
     function openSlotPickerModal(lineupKey, pos) {
         selectedSlotTarget = { lineupKey, pos };
         const isMv = pos === 'MV';
-        const lineupName = LINEUP_NAMES[lineupKey] || 'Kentällinen';
+        const lineupName = getLineupName(lineupKey);
 
         slotPickerTitle.textContent = `Valitse pelaaja: ${lineupName} - ${pos}`;
         slotPickerInfo.textContent = `Valitse pelaaja ringistä paikkaan ${pos}:`;
 
         const currentOccupantId = (lineups[lineupKey] || {})[pos];
 
-        // Sort roster: Goalkeepers first if MV slot, otherwise field players
         const sortedRoster = [...roster].sort((a, b) => {
             if (isMv) {
                 if (a.position === 'MV' && b.position !== 'MV') return -1;
@@ -445,12 +576,12 @@
         assignModalTitle.textContent = `Sijoita kentälliseen`;
         assignModalPlayerInfo.innerHTML = `Valitse paikka pelaajalle <strong>#${player.number} ${escapeHtml(player.name)}</strong>:`;
 
-        const lineupKeys = ['1', '2', '3', 'yv', 'av', '6v5'];
         const slotTypes = ['MV', 'VP', 'OP', 'VH', 'KH', 'OH'];
 
         assignOptionsGrid.innerHTML = '';
 
-        lineupKeys.forEach(lKey => {
+        lineupConfigs.forEach(cConfig => {
+            const lKey = cConfig.id;
             const groupCard = document.createElement('div');
             groupCard.className = 'assign-group-card';
 
@@ -469,7 +600,7 @@
             });
 
             groupCard.innerHTML = `
-                <h4>${LINEUP_NAMES[lKey]}</h4>
+                <h4>${escapeHtml(cConfig.name)}</h4>
                 <div class="assign-btn-row">
                     ${btnsHtml}
                 </div>
@@ -490,14 +621,14 @@
 
         assignPlayerToLineupSlot(lKey, pos, selectedPlayerForAssignment.id);
         assignModal.classList.remove('active');
-        showToast(`Pelaaja #${selectedPlayerForAssignment.number} sijoitettu: ${LINEUP_NAMES[lKey]} - ${pos}`);
+        showToast(`Pelaaja #${selectedPlayerForAssignment.number} sijoitettu: ${getLineupName(lKey)} - ${pos}`);
     });
 
     // ==========================================
     // LINEUP SLOTS RENDER & DRAG DROP
     // ==========================================
     function renderActiveLineupSlots() {
-        activeLineupTitle.textContent = LINEUP_NAMES[activeLineupKey] || 'Kentällinen';
+        activeLineupTitle.textContent = getLineupName(activeLineupKey);
         const currentLineup = lineups[activeLineupKey] || {};
 
         const slotTypes = [
@@ -592,10 +723,10 @@
     // ==========================================
     function renderSummaryView() {
         summaryGridContainer.innerHTML = '';
-        const lineupKeys = ['1', '2', '3', 'yv', 'av', '6v5'];
         const slotTypes = ['MV', 'VP', 'OP', 'VH', 'KH', 'OH'];
 
-        lineupKeys.forEach(lKey => {
+        lineupConfigs.forEach(cConfig => {
+            const lKey = cConfig.id;
             const card = document.createElement('div');
             card.className = 'summary-lineup-card';
             const lineup = lineups[lKey] || {};
@@ -626,8 +757,12 @@
 
             card.innerHTML = `
                 <div class="summary-card-header">
-                    <h3>${LINEUP_NAMES[lKey]}</h3>
-                    <button class="btn-xs btn-outline" data-action="clear-summary-lineup" data-lineup="${lKey}">Tyhjennä</button>
+                    <h3>${escapeHtml(cConfig.name)}</h3>
+                    <div class="summary-card-header-actions">
+                        <button class="btn-xs btn-outline" data-action="edit-summary-lineup-name" data-lineup="${lKey}" title="Muokkaa nimeä">✏️</button>
+                        ${cConfig.type === 'user' ? `<button class="btn-xs btn-outline danger-text" data-action="delete-summary-lineup" data-lineup="${lKey}" title="Poista kentällinen">🗑️</button>` : ''}
+                        <button class="btn-xs btn-outline" data-action="clear-summary-lineup" data-lineup="${lKey}" title="Tyhjennä pelaajat">Tyhjennä</button>
+                    </div>
                 </div>
                 <div class="summary-slots-list">
                     ${rowsHtml}
@@ -678,14 +813,30 @@
             return;
         }
 
+        const editNameBtn = e.target.closest('[data-action="edit-summary-lineup-name"]');
+        if (editNameBtn) {
+            const lKey = editNameBtn.dataset.lineup;
+            const config = lineupConfigs.find(c => c.id === lKey);
+            if (config) openLineupConfigModal(config);
+            return;
+        }
+
+        const deleteLineupBtn = e.target.closest('[data-action="delete-summary-lineup"]');
+        if (deleteLineupBtn) {
+            const lKey = deleteLineupBtn.dataset.lineup;
+            deleteLineupConfig(lKey);
+            return;
+        }
+
         const clearBtn = e.target.closest('[data-action="clear-summary-lineup"]');
         if (clearBtn) {
             const lKey = clearBtn.dataset.lineup;
-            if (confirm(`Tyhjennetäänkö ${LINEUP_NAMES[lKey]}?`)) {
+            const lName = getLineupName(lKey);
+            if (confirm(`Tyhjennetäänkö ${lName}?`)) {
                 lineups[lKey] = { MV: '', VP: '', OP: '', VH: '', KH: '', OH: '' };
                 saveState();
                 renderSummaryView();
-                showToast(`${LINEUP_NAMES[lKey]} tyhjennetty.`);
+                showToast(`${lName} tyhjennetty.`);
             }
         }
     });
@@ -707,7 +858,7 @@
             const player = roster.find(p => p.id === playerId);
             if (!player) return;
 
-            let defaultCoords = DEFAULT_POS_COORDS[orientationMode][pos];
+            let defaultCoords = DEFAULT_POS_COORDS[orientationMode][pos] || { x: 50, y: 50 };
             let posKeyStore = `${activeLineupKey}_${pos}_${orientationMode}`;
             let coords = lineupCourtPositions[posKeyStore] || defaultCoords;
 
@@ -963,6 +1114,7 @@
         photoModal.classList.remove('active');
         assignModal.classList.remove('active');
         slotPickerModal.classList.remove('active');
+        lineupConfigModal.classList.remove('active');
     }
 
     playerForm.addEventListener('submit', (e) => {
@@ -1153,8 +1305,9 @@
     function exportLineupsToClipboard() {
         let text = `🏑 ${teams.find(t => t.id === currentTeamId)?.name || 'SALIBANDY'} - KENTÄLLISET\n\n`;
 
-        Object.keys(LINEUP_NAMES).forEach(key => {
-            const name = LINEUP_NAMES[key];
+        lineupConfigs.forEach(cConfig => {
+            const key = cConfig.id;
+            const name = cConfig.name;
             const lineup = lineups[key] || {};
             const hasPlayers = Object.values(lineup).some(val => val !== '');
 
@@ -1192,6 +1345,14 @@
         document.getElementById('btn-cancel-team-modal').addEventListener('click', closeModal);
         document.getElementById('btn-close-assign-modal')?.addEventListener('click', closeModal);
         document.getElementById('btn-close-slot-picker-modal')?.addEventListener('click', closeModal);
+        document.getElementById('btn-close-lineup-config-modal')?.addEventListener('click', closeModal);
+        document.getElementById('btn-cancel-lineup-config-modal')?.addEventListener('click', closeModal);
+
+        document.getElementById('btn-add-lineup-summary')?.addEventListener('click', () => openLineupConfigModal());
+        document.getElementById('btn-edit-active-lineup-name')?.addEventListener('click', () => {
+            const config = lineupConfigs.find(c => c.id === activeLineupKey);
+            if (config) openLineupConfigModal(config);
+        });
 
         document.getElementById('btn-import-photo').addEventListener('click', () => {
             photoPreviewStep.style.display = 'none';
@@ -1227,29 +1388,7 @@
             });
         });
 
-        lineupTabBtns.forEach(btn => {
-            btn.addEventListener('click', () => {
-                lineupTabBtns.forEach(b => b.classList.remove('active'));
-                btn.classList.add('active');
-                activeLineupKey = btn.dataset.lineup;
-
-                if (activeLineupKey === 'summary') {
-                    pitchPanelSection.style.display = 'none';
-                    lineupPanelSection.style.display = 'none';
-                    summaryViewPanel.style.display = 'flex';
-                    renderSummaryView();
-                } else {
-                    pitchPanelSection.style.display = 'flex';
-                    lineupPanelSection.style.display = 'flex';
-                    summaryViewPanel.style.display = 'none';
-                    renderActiveLineupSlots();
-                    renderCourtPlayers();
-                    setTimeout(resizeCanvas, 60);
-                }
-            });
-        });
-
-        // Roster Tap & Action Delegate (Support mobile tap-to-assign!)
+        // Roster Tap & Action Delegate
         rosterListContainer.addEventListener('click', (e) => {
             const tapAssignTrigger = e.target.closest('[data-action="tap-assign"]');
             if (tapAssignTrigger) {
@@ -1324,7 +1463,8 @@
         });
 
         document.getElementById('btn-clear-pitch').addEventListener('click', () => {
-            if (confirm(`Tyhjennetäänkö ${LINEUP_NAMES[activeLineupKey]} kentältä?`)) {
+            const lName = getLineupName(activeLineupKey);
+            if (confirm(`Tyhjennetäänkö ${lName} kentältä?`)) {
                 lineups[activeLineupKey] = { MV: '', VP: '', OP: '', VH: '', KH: '', OH: '' };
                 lineupDrawings[activeLineupKey] = [];
                 saveState();
@@ -1336,7 +1476,8 @@
         });
 
         document.getElementById('btn-clear-lineup').addEventListener('click', () => {
-            if (confirm(`Tyhjennetäänkö valittu ${LINEUP_NAMES[activeLineupKey]}?`)) {
+            const lName = getLineupName(activeLineupKey);
+            if (confirm(`Tyhjennetäänkö valittu ${lName}?`)) {
                 lineups[activeLineupKey] = { MV: '', VP: '', OP: '', VH: '', KH: '', OH: '' };
                 lineupDrawings[activeLineupKey] = [];
                 saveState();

@@ -306,6 +306,18 @@ body {
     background: rgba(139, 92, 246, 0.15);
 }
 
+.tab-btn.btn-add-tab {
+    color: var(--accent-mv);
+    border: 1px dashed var(--accent-mv);
+    border-bottom: none;
+    background: rgba(16, 185, 129, 0.08);
+}
+
+.tab-btn.btn-add-tab:hover {
+    background: var(--accent-mv);
+    color: #022c22;
+}
+
 /* Main Layout Grid - Desktop Default */
 .main-workspace {
     flex: 1;
@@ -1196,6 +1208,15 @@ body {
     font-family: var(--font-heading);
     font-size: 0.9rem;
     color: #ffffff;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.summary-card-header-actions {
+    display: flex;
+    gap: 0.25rem;
+    align-items: center;
 }
 
 .summary-slots-list {
