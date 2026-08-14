@@ -270,9 +270,11 @@
         if (isCloudActive) {
             cloudSyncBadge.className = 'cloud-sync-badge';
             cloudSyncBadge.innerHTML = '☁️ Synkronoitu';
+            cloudSyncBadge.title = 'Tiedot tallennettu pilveen. Klikkaa pakottaaksesi synkronointi.';
         } else {
             cloudSyncBadge.className = 'cloud-sync-badge is-offline';
             cloudSyncBadge.innerHTML = '💻 Paikallinen';
+            cloudSyncBadge.title = 'Offline-tila / Ei kirjautunut';
         }
     }
 
@@ -323,6 +325,30 @@
             positions: positionsMap,
             balls: ballsMap
         };
+    }
+
+    function forceCloudSync() {
+        if (!currentUser || !window.SalibandyFirebase || !window.SalibandyFirebase.isReady()) {
+            showToast('Kirjaudu sisään synkronoidaksesi pilveen.');
+            return;
+        }
+
+        const db = window.SalibandyFirebase.getDb();
+        const payload = buildFullCloudPayload();
+
+        db.collection('users').doc(currentUser.uid).set(payload, { merge: true })
+            .then(() => {
+                updateCloudSyncBadge(true);
+                showToast('☁️ Kaikki joukkueet ja kentälliset tallennettu pilveen!');
+            })
+            .catch(err => {
+                console.error('Firestore force sync error:', err);
+                if (err.code === 'permission-denied') {
+                    alert('Firestore Permission Denied! Tarkista Firebase Console -> Firestore Database -> Rules -> "allow read, write: if request.auth != null;"');
+                } else {
+                    showToast('Pilvitallennusvirhe: ' + err.message);
+                }
+            });
     }
 
     function listenToCloudFirestore(user) {
@@ -423,6 +449,9 @@
 
         }, (err) => {
             console.warn('Firestore real-time snapshot error:', err);
+            if (err.code === 'permission-denied') {
+                console.error('Firestore Rules Error: Allow read/write in Firebase Console -> Firestore -> Rules');
+            }
             updateCloudSyncBadge(false);
             isCloudLoading = false;
         });
@@ -828,6 +857,7 @@
             .then((userCredential) => {
                 closeModal();
                 showToast(`Tervetuloa takaisin, ${userCredential.user.email}! 🔒`);
+                setTimeout(forceCloudSync, 500);
             })
             .catch((err) => {
                 alert(`Kirjautumisvirhe: ${err.message}`);
@@ -848,6 +878,7 @@
             .then((userCredential) => {
                 closeModal();
                 showToast(`Tili luotu onnistuneesti: ${userCredential.user.email}! ✨`);
+                setTimeout(forceCloudSync, 500);
             })
             .catch((err) => {
                 alert(`Tilin luontivirhe: ${err.message}`);
@@ -865,6 +896,7 @@
             .then((result) => {
                 closeModal();
                 showToast(`Kirjauduttu Google-tilillä: ${result.user.email} 🎉`);
+                setTimeout(forceCloudSync, 500);
             })
             .catch((err) => {
                 alert(`Google-kirjautumisvirhe: ${err.message}`);
@@ -1591,7 +1623,7 @@
 
             ballNode.innerHTML = `
                 <div class="ball-circle" title="Salibandypallo">
-                    <img src="ball.png?v=9.0" class="floorball-png-icon" alt="Pallo">
+                    <img src="ball.png?v=11.0" class="floorball-png-icon" alt="Pallo">
                     <button class="ball-remove-btn" data-action="remove-ball" data-ball-id="${ball.id}">✕</button>
                 </div>
             `;
@@ -2117,6 +2149,7 @@
     function bindEvents() {
         teamSelect.addEventListener('change', (e) => switchTeam(e.target.value));
         btnDeleteTeam?.addEventListener('click', deleteActiveTeam);
+        cloudSyncBadge?.addEventListener('click', forceCloudSync);
 
         document.getElementById('btn-new-team').addEventListener('click', () => {
             teamNameInput.value = '';

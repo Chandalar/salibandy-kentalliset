@@ -10,8 +10,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 
-    <!-- CSS Stylesheet (Cache Busted v10.0) -->
-    <link rel="stylesheet" href="styles.css?v=10.0">
+    <!-- CSS Stylesheet (Cache Busted v11.0) -->
+    <link rel="stylesheet" href="styles.css?v=11.0">
 
     <!-- OCR Tesseract.js (Optinen tekstintunnistus valokuvista) -->
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4.1.1/dist/tesseract.min.js"></script>
@@ -50,8 +50,8 @@
                 <span class="stat-value" id="count-loan">0</span>
                 <span class="stat-label">Laina</span>
             </div>
-            <!-- Cloud Sync Indicator -->
-            <div class="cloud-sync-badge" id="cloud-sync-badge" title="Tiedot synkronoidaan turvallisesti pilveen">
+            <!-- Cloud Sync Indicator (Clickable to force sync) -->
+            <div class="cloud-sync-badge" id="cloud-sync-badge" title="Klikkaa pakottaaksesi synkronoinnin pilveen">
                 ☁️ Local
             </div>
         </div>
@@ -146,7 +146,7 @@
 
                 <div class="toolbar-group">
                     <button class="tool-btn highlight-ball" id="btn-add-ball" title="Lisää salibandypallo kentälle">
-                        <img src="ball.png?v=10.0" width="18" height="18" alt="Pallo" style="vertical-align: middle; display: inline-block;"> + Pallo
+                        <img src="ball.png?v=11.0" width="18" height="18" alt="Pallo" style="vertical-align: middle; display: inline-block;"> + Pallo
                     </button>
                     <button class="tool-btn" id="tool-undo" title="Kumoaa viimeisen piirroksen">
                         ↩️ Kumoa
@@ -230,9 +230,9 @@
             <div class="panel-header">
                 <h2>📊 Kaikki kentälliset (Yhteenveto)</h2>
                 <div class="summary-actions">
-                    <button class="btn btn-xs btn-outline" id="btn-add-lineup-summary">+ Uusi kentällinen</button>
-                    <button class="btn btn-xs btn-outline" id="btn-manage-lineups-summary">⚙️ Järjestä / Poista</button>
-                    <button class="btn btn-xs btn-primary" id="btn-copy-all-summary">📋 Kopioi kaikki kentät</button>
+                    <button class="btn-xs btn-outline" id="btn-add-lineup-summary">+ Uusi kentällinen</button>
+                    <button class="btn-xs btn-outline" id="btn-manage-lineups-summary">⚙️ Järjestä / Poista</button>
+                    <button class="btn-xs btn-primary" id="btn-copy-all-summary">📋 Kopioi kaikki kentät</button>
                 </div>
             </div>
             
@@ -525,9 +525,9 @@
     <!-- TOAST NOTIFICATION CONTAINER -->
     <div id="toast" class="toast-notification"></div>
 
-    <!-- Firebase Config & App Engine (Cache Busted v10.0) -->
-    <script src="firebase-config.js?v=10.0"></script>
-    <script src="app.js?v=10.0"></script>
+    <!-- Firebase Config & App Engine (Cache Busted v11.0) -->
+    <script src="firebase-config.js?v=11.0"></script>
+    <script src="app.js?v=11.0"></script>
 
 </body>
 </html>
