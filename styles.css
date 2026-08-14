@@ -1330,7 +1330,7 @@ body {
     margin-top: auto;
 }
 
-/* SUMMARY VIEW PANEL */
+/* SUMMARY VIEW PANEL - Sleek Multi-Column Grid Layout */
 .summary-view-panel {
     grid-column: span 2;
     height: 100%;
@@ -1345,20 +1345,21 @@ body {
 }
 
 .summary-grid-container {
-    display grid;
-    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-    gap: 0.8rem;
-    padding: 0.8rem;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    gap: 0.75rem;
+    padding: 0.75rem;
 }
 
 .summary-lineup-card {
     background: var(--bg-card-light);
     border: 1px solid var(--border-highlight);
     border-radius: var(--radius-md);
-    padding: 0.75rem;
+    padding: 0.6rem 0.7rem;
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    gap: 0.4rem;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 .summary-card-header {
@@ -1371,7 +1372,8 @@ body {
 
 .summary-card-header h3 {
     font-family: var(--font-heading);
-    font-size: 0.9rem;
+    font-size: 0.86rem;
+    font-weight: 700;
     color: #ffffff;
     display: flex;
     align-items: center;
@@ -1380,26 +1382,26 @@ body {
 
 .summary-card-header-actions {
     display: flex;
-    gap: 0.25rem;
+    gap: 0.2rem;
     align-items: center;
 }
 
 .summary-slots-list {
     display: flex;
     flex-direction: column;
-    gap: 0.35rem;
+    gap: 0.3rem;
 }
 
 .summary-slot-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0.35rem 0.55rem;
+    padding: 0.22rem 0.45rem;
     border-radius: var(--radius-sm);
     background: var(--bg-main);
-    font-size: 0.78rem;
+    font-size: 0.75rem;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: all 0.15s ease;
     user-select: none;
     touch-action: manipulation;
 }
@@ -1418,22 +1420,28 @@ body {
 }
 
 .summary-pos-tag {
-    font-weight: 700;
-    font-size: 0.7rem;
+    font-weight: 800;
+    font-size: 0.68rem;
     color: var(--text-secondary);
-    width: 30px;
+    width: 26px;
+    flex-shrink: 0;
 }
 
 .summary-player-val {
     flex: 1;
     font-weight: 600;
+    font-size: 0.76rem;
     color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .summary-player-val.empty-val {
     color: var(--text-muted);
     font-style: italic;
     font-weight: 400;
+    font-size: 0.72rem;
 }
 
 /* Modal Styling */
