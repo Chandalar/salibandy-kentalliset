@@ -818,6 +818,10 @@ body {
     position: relative;
     background: #080c14;
     height: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 0.6rem;
+    -webkit-overflow-scrolling: touch;
 }
 
 .pitch-toolbar {
@@ -830,6 +834,7 @@ body {
     gap: 0.4rem;
     flex-wrap: wrap;
     flex-shrink: 0;
+    border-radius: var(--radius-sm);
 }
 
 .toolbar-group {
@@ -892,14 +897,11 @@ body {
 
 /* Outer Pitch Container Wrapper */
 .pitch-outer-wrapper {
-    flex: 1;
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     justify-content: center;
-    padding: 0.5rem;
-    overflow: hidden;
+    padding: 0.5rem 0;
     width: 100%;
-    height: 100%;
     position: relative;
 }
 
