@@ -70,10 +70,18 @@
         </div>
     </header>
 
-    <!-- Lineup Presets Tab Bar -->
+    <!-- Lineup Presets Tab Bar - Always Guaranteed Visible -->
     <nav class="lineup-tabs-bar">
         <div class="tabs-scroll" id="tabs-scroll-container">
-            <!-- Populated dynamically (Built-in + Custom lineups) -->
+            <button class="tab-btn active" data-lineup="1">1. Kenttä</button>
+            <button class="tab-btn" data-lineup="2">2. Kenttä</button>
+            <button class="tab-btn" data-lineup="3">3. Kenttä</button>
+            <button class="tab-btn highlight-yv" data-lineup="yv">⚡ Ylivoima (YV)</button>
+            <button class="tab-btn highlight-av" data-lineup="av">🛡️ Alivoima (AV)</button>
+            <button class="tab-btn highlight-6v5" data-lineup="6v5">🔥 6v5 (Ilman MV)</button>
+            <button class="tab-btn" data-lineup="custom">📐 Taktiikka</button>
+            <button class="tab-btn btn-add-tab" id="btn-add-new-lineup-tab">+ Uusi kentällinen</button>
+            <button class="tab-btn highlight-summary" data-lineup="summary">📊 Yhteenveto (Kaikki kentälliset)</button>
         </div>
     </nav>
 

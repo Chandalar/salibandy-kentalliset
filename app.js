@@ -1,6 +1,6 @@
 /**
  * Salibandyn Kentälliset & Taktiikkataulu - Advanced Logic & Interactive Engine
- * Varmistettu kentällisvälilehtien lataus (Tab bar auto-healing) ja dynaaminen hallinta (Lisää, muokkaa, poista).
+ * Auto-healing välilehtipalkki takaa kaikkienkentällisten näkyvyyden tismalleen kuten kuvassa.
  */
 
 (function() {
@@ -203,8 +203,11 @@
 
     function loadLineupConfigs(teamId) {
         let configs = loadFromStorage(`salibandy_lineup_configs_${teamId}`, null);
-        if (!configs || !Array.isArray(configs) || configs.length === 0) {
-            configs = JSON.parse(JSON.stringify(DEFAULT_LINEUP_CONFIGS));
+        
+        // Check that all standard default tabs exist
+        if (!configs || !Array.isArray(configs) || configs.length < DEFAULT_LINEUP_CONFIGS.length) {
+            const customTabs = (configs && Array.isArray(configs)) ? configs.filter(c => c.type === 'user') : [];
+            configs = JSON.parse(JSON.stringify(DEFAULT_LINEUP_CONFIGS)).concat(customTabs);
             localStorage.setItem(`salibandy_lineup_configs_${teamId}`, JSON.stringify(configs));
         }
         return configs;
@@ -272,11 +275,11 @@
     }
 
     function renderTabs() {
+        if (!tabsScrollContainer) return;
         tabsScrollContainer.innerHTML = '';
 
-        if (!lineupConfigs || lineupConfigs.length === 0) {
-            lineupConfigs = JSON.parse(JSON.stringify(DEFAULT_LINEUP_CONFIGS));
-            saveState();
+        if (!lineupConfigs || !Array.isArray(lineupConfigs) || lineupConfigs.length < DEFAULT_LINEUP_CONFIGS.length) {
+            lineupConfigs = loadLineupConfigs(currentTeamId);
         }
 
         lineupConfigs.forEach(config => {
@@ -289,7 +292,6 @@
             btn.dataset.lineup = config.id;
             btn.innerHTML = `<span>${escapeHtml(config.name)}</span>`;
 
-            // If user-created custom lineup, show inline delete icon
             if (config.type === 'user') {
                 const delIcon = document.createElement('span');
                 delIcon.className = 'tab-delete-icon';
@@ -313,11 +315,11 @@
         addBtn.addEventListener('click', () => openLineupConfigModal());
         tabsScrollContainer.appendChild(addBtn);
 
-        // Add "📊 Yhteenveto" tab
+        // Add "📊 Yhteenveto (Kaikki kentälliset)" tab
         const summaryBtn = document.createElement('button');
         summaryBtn.className = `tab-btn highlight-summary ${activeLineupKey === 'summary' ? 'active' : ''}`;
         summaryBtn.dataset.lineup = 'summary';
-        summaryBtn.textContent = '📊 Yhteenveto';
+        summaryBtn.textContent = '📊 Yhteenveto (Kaikki kentälliset)';
         summaryBtn.addEventListener('click', () => switchTab('summary'));
         tabsScrollContainer.appendChild(summaryBtn);
     }
