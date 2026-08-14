@@ -7,14 +7,15 @@
 window.SalibandyFirebase = (function() {
     'use strict';
 
-    // Standard Firebase App Configuration
+    // Official Firebase Project Config for line-up-a773b
     const firebaseConfig = {
-        apiKey: "AIzaSyB-DemoSalibandyAppKeyForFirestore100",
-        authDomain: "salibandy-kentalliset.firebaseapp.com",
-        projectId: "salibandy-kentalliset",
-        storageBucket: "salibandy-kentalliset.appspot.com",
-        messagingSenderId: "987654321012",
-        appId: "1:987654321012:web:a1b2c3d4e5f6g7h8i9j0"
+        apiKey: "AIzaSyC_Fy2MXyq7gg8BacS-W5c9Sq2R1EhPqhw",
+        authDomain: "line-up-a773b.firebaseapp.com",
+        projectId: "line-up-a773b",
+        storageBucket: "line-up-a773b.firebasestorage.app",
+        messagingSenderId: "54510547272",
+        appId: "1:54510547272:web:35942078ab5037091ec37d",
+        measurementId: "G-3Y14E074N2"
     };
 
     let isInitialized = false;
@@ -40,7 +41,7 @@ window.SalibandyFirebase = (function() {
                 });
 
                 isInitialized = true;
-                console.log('🔥 Firebase Auth & Cloud Firestore Initialized Successfully');
+                console.log('🔥 Firebase Auth & Cloud Firestore Initialized Successfully for line-up-a773b');
             } catch (err) {
                 console.warn('Firebase initialization error, fallback to LocalStorage:', err);
             }
