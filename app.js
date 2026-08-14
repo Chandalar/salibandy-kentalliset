@@ -1637,7 +1637,18 @@
 
     // ==========================================
     // TACTICAL COURT & DYNAMIC LINEUP PLAYERS, BALLS, CONES, RECTANGLES & LINES
-    // ==========================================
+    let activeSelectedElementId = null;
+
+    function selectCourtElement(elementId, elementNode = null) {
+        activeSelectedElementId = elementId;
+        document.querySelectorAll('.court-player-node, .court-ball-node, .court-cone-node, .court-rect-node, .court-line-node, .line-endpoint-handle')
+            .forEach(el => el.classList.remove('is-selected'));
+
+        if (elementNode) {
+            elementNode.classList.add('is-selected');
+        }
+    }
+
     function renderCourtPlayers() {
         courtPlayersLayer.innerHTML = '';
         if (activeLineupKey === 'summary') return;
@@ -1666,7 +1677,7 @@
 
             const isMv = player.position === 'MV';
             const node = document.createElement('div');
-            node.className = `court-player-node ${isMv ? 'is-mv' : 'is-field'}`;
+            node.className = `court-player-node ${isMv ? 'is-mv' : 'is-field'} ${activeSelectedElementId === posKeyStore ? 'is-selected' : ''}`;
             node.style.left = coords.x + '%';
             node.style.top = coords.y + '%';
             node.dataset.posKey = posKeyStore;
@@ -1732,8 +1743,9 @@
         if (!lineupBalls || typeof lineupBalls !== 'object') return;
         const balls = lineupBalls[activeLineupKey] || [];
         balls.forEach(ball => {
+            const isSelected = activeSelectedElementId === ball.id;
             const ballNode = document.createElement('div');
-            ballNode.className = 'court-ball-node';
+            ballNode.className = `court-ball-node ${isSelected ? 'is-selected' : ''}`;
             ballNode.style.left = ball.x + '%';
             ballNode.style.top = ball.y + '%';
             ballNode.dataset.ballId = ball.id;
@@ -1754,8 +1766,9 @@
         if (!lineupCones || typeof lineupCones !== 'object') return;
         const cones = lineupCones[activeLineupKey] || [];
         cones.forEach(cone => {
+            const isSelected = activeSelectedElementId === cone.id;
             const coneNode = document.createElement('div');
-            coneNode.className = 'court-cone-node';
+            coneNode.className = `court-cone-node ${isSelected ? 'is-selected' : ''}`;
             coneNode.style.left = cone.x + '%';
             coneNode.style.top = cone.y + '%';
             coneNode.dataset.coneId = cone.id;
@@ -1777,8 +1790,9 @@
         const rects = drawings.filter(d => d.type === 'rect');
 
         rects.forEach(rectObj => {
+            const isSelected = activeSelectedElementId === rectObj.id;
             const rectNode = document.createElement('div');
-            rectNode.className = 'court-rect-node';
+            rectNode.className = `court-rect-node ${isSelected ? 'is-selected' : ''}`;
             rectNode.style.left = rectObj.x + '%';
             rectNode.style.top = rectObj.y + '%';
             rectNode.style.width = rectObj.w + '%';
@@ -1816,9 +1830,11 @@
             if (lineObj.type === 'shot') { icon = '💥'; handleClass = 'shot-handle'; }
             if (lineObj.type === 'run') { icon = '🏃'; handleClass = 'run-handle'; }
 
+            const isSelected = activeSelectedElementId === lineObj.id;
+
             // 1. Midpoint Drag Handle (Moves ENTIRE line)
             const lineNode = document.createElement('div');
-            lineNode.className = 'court-line-node';
+            lineNode.className = `court-line-node ${isSelected ? 'is-selected' : ''}`;
             lineNode.style.left = midPct.x + '%';
             lineNode.style.top = midPct.y + '%';
             lineNode.dataset.lineId = lineObj.id;
@@ -1836,7 +1852,7 @@
             // 2. Endpoint Adjust Handle (Rotates / extends pass and shot lines)
             if (lineObj.type === 'pass' || lineObj.type === 'shot') {
                 const endpointNode = document.createElement('div');
-                endpointNode.className = `line-endpoint-handle ${lineObj.type === 'shot' ? 'shot-endpoint' : 'pass-endpoint'}`;
+                endpointNode.className = `line-endpoint-handle ${lineObj.type === 'shot' ? 'shot-endpoint' : 'pass-endpoint'} ${isSelected ? 'is-selected' : ''}`;
                 endpointNode.style.left = endPct.x + '%';
                 endpointNode.style.top = endPct.y + '%';
                 endpointNode.title = 'Käännä tai säädä suuntaa sormella/hiirellä';
@@ -1855,6 +1871,7 @@
 
         const onPointerDown = (e) => {
             if (drawingTool !== 'select') return;
+            selectCourtElement(lineObj.id, lineNode);
             if (e.target.classList.contains('line-remove-btn')) return;
 
             isDragging = true;
@@ -1915,6 +1932,7 @@
 
         const onPointerDown = (e) => {
             if (drawingTool !== 'select') return;
+            selectCourtElement(lineObj.id, endpointNode);
 
             isDragging = true;
             endpointNode.setPointerCapture(e.pointerId);
@@ -1968,6 +1986,7 @@
 
         const onPointerDown = (e) => {
             if (drawingTool !== 'select') return;
+            selectCourtElement(coneObj.id, coneNode);
             if (e.target.classList.contains('cone-remove-btn')) return;
             
             isDragging = true;
@@ -2020,6 +2039,7 @@
 
         const onPointerDown = (e) => {
             if (drawingTool !== 'select') return;
+            selectCourtElement(rectObj.id, rectNode);
             if (e.target.classList.contains('rect-remove-btn')) return;
 
             isDragging = true;
@@ -2075,6 +2095,7 @@
 
         const onPointerDown = (e) => {
             if (drawingTool !== 'select') return;
+            selectCourtElement(ballObj.id, ballNode);
             if (e.target.classList.contains('ball-remove-btn')) return;
             
             isDragging = true;
@@ -2125,6 +2146,7 @@
 
         const onPointerDown = (e) => {
             if (drawingTool !== 'select') return;
+            selectCourtElement(posKeyStore, node);
             if (e.target.classList.contains('node-remove-btn')) return;
             
             isDragging = true;
@@ -2825,6 +2847,12 @@
             if (slotEl) {
                 const pos = slotEl.dataset.position;
                 if (pos) openSlotPickerModal(activeLineupKey, pos);
+            }
+        });
+
+        floorballCourt.addEventListener('pointerdown', (e) => {
+            if (drawingTool === 'select' && !e.target.closest('.court-player-node, .court-ball-node, .court-cone-node, .court-rect-node, .court-line-node, .line-endpoint-handle, button')) {
+                selectCourtElement(null);
             }
         });
 
