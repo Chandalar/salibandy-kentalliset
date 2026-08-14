@@ -4,287 +4,262 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Salibandyn Kentälliset & Taktiikkataulu</title>
+
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-    
-    <!-- Tesseract.js OCR for Photo Import -->
-    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 
+    <!-- CSS Stylesheet -->
     <link rel="stylesheet" href="styles.css">
+
+    <!-- OCR Tesseract.js (Optinen tekstintunnistus valokuvista) -->
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4.1.1/dist/tesseract.min.js"></script>
 </head>
 <body>
 
-    <!-- Main Header -->
+    <!-- APP HEADER -->
     <header class="app-header">
         <div class="header-brand">
-            <div class="logo-icon">
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                    <circle cx="12" cy="12" r="10"/>
-                    <circle cx="12" cy="12" r="3"/>
-                    <path d="M12 2v4M12 18v4M2 12h4M18 12h4"/>
-                </svg>
-            </div>
+            <div class="logo-icon">🏑</div>
             <div>
                 <h1>Salibandyn Kentälliset</h1>
-                <!-- Team Selector -->
                 <div class="team-selector-wrapper">
-                    <select id="team-select" class="team-dropdown">
-                        <!-- Populated dynamically -->
-                    </select>
-                    <button class="btn-xs btn-outline" id="btn-new-team" title="Luo uusi joukkue">+ Uusi</button>
+                    <select id="team-select" class="team-dropdown"></select>
+                    <button class="btn-xs btn-outline" id="btn-new-team" title="Uusi joukkue">+ Uusi</button>
                 </div>
             </div>
         </div>
 
         <div class="header-stats">
-            <div class="stat-badge mv-stat">
-                <span class="stat-icon">🟢</span>
+            <div class="stat-badge">
                 <span class="stat-value" id="count-mv">0</span>
                 <span class="stat-label">MV</span>
             </div>
-            <div class="stat-badge field-stat">
-                <span class="stat-icon">🔵</span>
+            <div class="stat-badge">
                 <span class="stat-value" id="count-field">0</span>
                 <span class="stat-label">Kenttä</span>
             </div>
-            <div class="stat-badge loan-stat">
-                <span class="stat-icon">⭐</span>
+            <div class="stat-badge">
                 <span class="stat-value" id="count-loan">0</span>
                 <span class="stat-label">Laina</span>
             </div>
         </div>
 
         <div class="header-actions">
+            <button class="btn btn-photo" id="btn-import-photo">
+                📷 Lue kokoonpano kuvasta
+            </button>
             <button class="btn btn-primary" id="btn-add-player">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                Lisää pelaaja
+                + Lisää pelaaja
             </button>
-            <button class="btn btn-photo" id="btn-import-photo" title="Lue pelaajalista valokuvasta">
-                📷 Valokuva
-            </button>
-            <button class="btn btn-secondary" id="btn-export-text" title="Kopioi kentälliset tekstinä">
-                📋 Kopioi tekstinä
+            <button class="btn btn-secondary" id="btn-export-text" title="Kopioi tekstinä viestejä varten">
+                📋 Kopioi viestinä
             </button>
         </div>
     </header>
 
-    <!-- Lineup Presets Tab Bar - Always Guaranteed Visible -->
-    <nav class="lineup-tabs-bar">
+    <!-- LINEUP TABS BAR (GUARANTEED STATIC FALLBACK HTML) -->
+    <div class="lineup-tabs-bar">
         <div class="tabs-scroll" id="tabs-scroll-container">
-            <button class="tab-btn active" data-lineup="1">1. Kenttä</button>
-            <button class="tab-btn" data-lineup="2">2. Kenttä</button>
-            <button class="tab-btn" data-lineup="3">3. Kenttä</button>
-            <button class="tab-btn highlight-yv" data-lineup="yv">⚡ Ylivoima (YV)</button>
-            <button class="tab-btn highlight-av" data-lineup="av">🛡️ Alivoima (AV)</button>
-            <button class="tab-btn highlight-6v5" data-lineup="6v5">🔥 6v5 (Ilman MV)</button>
-            <button class="tab-btn" data-lineup="custom">📐 Taktiikka</button>
-            <button class="tab-btn btn-add-tab" id="btn-add-new-lineup-tab">+ Uusi kentällinen</button>
+            <button class="tab-btn active" data-lineup="1"><span>1. Kenttä</span></button>
+            <button class="tab-btn" data-lineup="2"><span>2. Kenttä</span></button>
+            <button class="tab-btn" data-lineup="3"><span>3. Kenttä</span></button>
+            <button class="tab-btn highlight-yv" data-lineup="yv"><span>⚡ Ylivoima (YV)</span></button>
+            <button class="tab-btn highlight-av" data-lineup="av"><span>🛡️ Alivoima (AV)</span></button>
+            <button class="tab-btn highlight-6v5" data-lineup="6v5"><span>🔥 6v5 (Ilman MV)</span></button>
+            <button class="tab-btn" data-lineup="custom"><span>📐 Taktiikka</span></button>
+            <button class="tab-btn btn-add-tab" id="btn-add-tab-fallback">+ Uusi kentällinen</button>
             <button class="tab-btn highlight-summary" data-lineup="summary">📊 Yhteenveto (Kaikki kentälliset)</button>
-            <button class="tab-btn btn-manage-tab" id="btn-manage-lineups-tab">⚙️ Hallitse kentällisiä</button>
+            <button class="tab-btn btn-manage-tab" id="btn-manage-tab-fallback">⚙️ Hallitse kentällisiä</button>
         </div>
-    </nav>
+    </div>
 
-    <!-- Main Workspace Grid -->
+    <!-- MAIN WORKSPACE -->
     <main class="main-workspace">
-
-        <!-- Left Column: Roster & Players -->
-        <aside class="panel roster-panel">
+        
+        <!-- LEFT PANEL: PLAYER ROSTER -->
+        <section class="panel roster-panel" id="roster-panel-section">
             <div class="panel-header">
-                <h2>
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-                    Pelaajarinki
-                </h2>
+                <h2>👥 Pelaajarinki</h2>
                 <div class="roster-header-btns">
-                    <button class="btn-icon" id="btn-photo-add" title="Lue valokuvasta">📷</button>
-                    <button class="btn-icon" id="btn-quick-add" title="Lisää käsin">+</button>
+                    <button class="btn-xs btn-outline" id="btn-photo-add" title="Lue kuvasta">📷 Kuvasta</button>
+                    <button class="btn-xs btn-primary" id="btn-quick-add">+ Uusi</button>
                 </div>
             </div>
 
-            <!-- Filters -->
             <div class="roster-filters">
-                <input type="text" id="roster-search" placeholder="Hae nimellä tai numerolla..." class="search-input">
+                <input type="text" id="roster-search" class="search-input" placeholder="Hae nimellä tai numerolla...">
                 <div class="filter-pills">
                     <button class="pill-btn active" data-filter="all">Kaikki</button>
-                    <button class="pill-btn pill-mv" data-filter="mv">🟢 MV</button>
-                    <button class="pill-btn pill-field" data-filter="field">🔵 Kenttä</button>
-                    <button class="pill-btn pill-loan" data-filter="loan">⭐ Laina</button>
+                    <button class="pill-btn pill-mv" data-filter="mv">MV</button>
+                    <button class="pill-btn pill-field" data-filter="field">Kenttä</button>
+                    <button class="pill-btn pill-loan" data-filter="loan">Lainat</button>
                 </div>
             </div>
 
-            <!-- Roster Player Cards List -->
-            <div class="roster-list" id="roster-list-container">
-                <!-- Dynamically populated player cards -->
-            </div>
-        </aside>
+            <p class="panel-hint">💡 Vinkki puhelimelle: Täppää pelaajaa tai sijoituspaikkaa valitaksesi paikan!</p>
 
-        <!-- Center Column: Tactical Pitch -->
+            <div class="roster-list" id="roster-list-container">
+                <!-- Dynamic Player Cards -->
+            </div>
+        </section>
+
+        <!-- CENTER PANEL: TACTICAL COURT & DRAWING -->
         <section class="panel pitch-panel" id="pitch-panel-section">
+            
+            <!-- PITCH TOOLBAR -->
             <div class="pitch-toolbar">
                 <div class="toolbar-group">
                     <span class="group-label">Tila:</span>
-                    <button class="tool-btn active" id="tool-select" title="Siirrä pelaajia ja palloa">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3l7 18 3-7 7-3L3 3z"/></svg>
-                        Liikuta
+                    <button class="tool-btn active" id="tool-select" title="Siirrä pelaajia ja palloja sormella/hiirellä">
+                        👆 Liikuta
                     </button>
-                    <button class="tool-btn" id="tool-pass" title="Syöttölinja (keltainen katkoviiva)">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14" stroke-dasharray="3 3"/><polyline points="12 5 19 12 12 19"/></svg>
-                        Syöttö
+                    <button class="tool-btn" id="tool-pass" title="Piirrä syöttöviiva (Katkoviiva)">
+                        ↗️ Syöttö
                     </button>
-                    <button class="tool-btn" id="tool-run" title="Juoksulinja (sininen nuoli)">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><polyline points="12 5 19 12 12 19"/></svg>
-                        Juoksu
+                    <button class="tool-btn" id="tool-run" title="Piirrä juoksuviiva">
+                        🏃 Juoksu
                     </button>
-                    <button class="tool-btn tool-shot" id="tool-shot" title="Veto maalia kohti (punainen nuoli)">
+                    <button class="tool-btn tool-shot" id="tool-shot" title="Piirrä laukaus maalia kohti">
                         💥 Veto
                     </button>
-                    <button class="tool-btn highlight-ball" id="btn-add-ball" title="Lisää pallo kentälle">
-                        ⚪ + Pallo
-                    </button>
                 </div>
 
                 <div class="toolbar-group">
-                    <button class="tool-btn" id="tool-undo" title="Kumoa viimeisin piirros">
+                    <button class="tool-btn highlight-ball" id="btn-add-ball" title="Lisää pallo kentälle">
+                        <svg viewBox="0 0 100 100" width="16" height="16" style="vertical-align: middle;">
+                          <circle cx="50" cy="50" r="46" fill="#ffffff" stroke="#334155" stroke-width="6"/>
+                          <circle cx="50" cy="50" r="8" fill="#1e293b"/>
+                          <circle cx="50" cy="30" r="7" fill="#1e293b"/>
+                          <circle cx="70" cy="50" r="7" fill="#1e293b"/>
+                          <circle cx="50" cy="70" r="7" fill="#1e293b"/>
+                          <circle cx="30" cy="50" r="7" fill="#1e293b"/>
+                        </svg> + Pallo
+                    </button>
+                    <button class="tool-btn" id="tool-undo" title="Kumoaa viimeisen piirroksen">
                         ↩️ Kumoa
                     </button>
-                    <button class="tool-btn" id="tool-clear-drawings" title="Pyyhi kaikki piirrokset">
-                        🗑️ Tyhjennä
+                    <button class="tool-btn" id="tool-clear-drawings" title="Tyhjennä piirrokset">
+                        🧹 Tyhjennä
                     </button>
-                </div>
-
-                <div class="toolbar-group">
-                    <!-- Orientation Switch (20m x 40m) -->
-                    <button class="tool-btn highlight-orient" id="btn-toggle-orientation" title="Käännä kenttä (Pysty 20x40m / Vaaka 40x20m)">
-                        🔄 <span id="orient-mode-text">Vaaka (40x20m)</span>
-                    </button>
-                    <button class="tool-btn" id="btn-toggle-labels">
-                        <span id="label-mode-text">Nimi & #</span>
-                    </button>
-                    <button class="tool-btn danger-text" id="btn-clear-pitch">
-                        Tyhjennä kenttä
+                    <button class="tool-btn highlight-orient" id="btn-toggle-orientation" title="Vaihda kentän asentoa (Pysty / Vaaka)">
+                        🔄 <span id="orient-mode-text">Asento</span>
                     </button>
                 </div>
             </div>
 
-            <!-- Floorball Court Container - Matches Exact User Diagram (20m x 40m) -->
+            <!-- INTERACTIVE FLOORBALL PITCH CANVAS AREA -->
             <div class="pitch-outer-wrapper">
                 <div class="pitch-container mode-horizontal" id="floorball-court">
-                    <!-- Tactical Canvas Layer -->
-                    <canvas id="tactic-canvas"></canvas>
+                    
+                    <!-- COURT LINES (SVG Rendered) -->
+                    <div class="court-surface"></div>
+                    <div class="court-center-line"></div>
+                    <div class="center-spot-pink"></div>
+                    <div class="center-line-tick tick-left"></div>
+                    <div class="center-line-tick tick-right"></div>
 
-                    <!-- Official Floorball Court Graphics & Markings -->
-                    <div class="court-surface">
-                        <div class="court-border"></div>
-                        
-                        <!-- Center Line & Pink Center Spot -->
-                        <div class="court-center-line">
-                            <div class="center-line-tick tick-left"></div>
-                            <div class="center-spot-pink"></div>
-                            <div class="center-line-tick tick-right"></div>
-                        </div>
-
-                        <!-- Goal Area 1 (Top / Left) -->
-                        <div class="goal-area-container goal-1">
-                            <div class="goal-outer-box"></div>
-                            <div class="goal-inner-crease"></div>
-                            <div class="goal-net-frame"></div>
-                        </div>
-
-                        <!-- Goal Area 2 (Bottom / Right) -->
-                        <div class="goal-area-container goal-2">
-                            <div class="goal-outer-box"></div>
-                            <div class="goal-inner-crease"></div>
-                            <div class="goal-net-frame"></div>
-                        </div>
-
-                        <!-- 4 Solid Black Face-off Dots -->
-                        <div class="faceoff-dot dot-tl"></div>
-                        <div class="faceoff-dot dot-tr"></div>
-                        <div class="faceoff-dot dot-bl"></div>
-                        <div class="faceoff-dot dot-br"></div>
+                    <!-- GOAL AREAS (Goal 1 & Goal 2) -->
+                    <div class="goal-area-container goal-1">
+                        <div class="goal-outer-box"></div>
+                        <div class="goal-inner-crease"></div>
+                        <div class="goal-net-frame"></div>
                     </div>
 
-                    <!-- Active Players & Balls Dropped on Court Layer -->
+                    <div class="goal-area-container goal-2">
+                        <div class="goal-outer-box"></div>
+                        <div class="goal-inner-crease"></div>
+                        <div class="goal-net-frame"></div>
+                    </div>
+
+                    <!-- FACEOFF DOTS -->
+                    <div class="faceoff-dot dot-tl"></div>
+                    <div class="faceoff-dot dot-tr"></div>
+                    <div class="faceoff-dot dot-bl"></div>
+                    <div class="faceoff-dot dot-br"></div>
+
+                    <!-- DRAWING CANVAS LAYER -->
+                    <canvas id="tactic-canvas"></canvas>
+
+                    <!-- ON-COURT PLAYER & BALL NODES LAYER -->
                     <div id="court-players-layer"></div>
+
                 </div>
             </div>
         </section>
 
-        <!-- Right Column: Single Lineup Slots Panel -->
-        <aside class="panel lineup-panel" id="lineup-panel-section">
+        <!-- RIGHT PANEL: ACTIVE LINEUP SLOTS -->
+        <section class="panel lineup-panel" id="lineup-panel-section">
             <div class="panel-header">
-                <h2>
-                    <span id="active-lineup-title">1. Kenttä</span>
-                </h2>
-                <div style="display: flex; gap: 0.3rem;">
+                <h2 id="active-lineup-title">1. Kenttä</h2>
+                <div class="roster-header-btns">
                     <button class="btn-xs btn-outline" id="btn-edit-active-lineup-name" title="Muokkaa nimeä">✏️</button>
-                    <button class="btn-xs btn-outline danger-text" id="btn-delete-active-lineup" title="Poista tämä kentällinen">🗑️</button>
-                    <button class="btn-xs btn-outline" id="btn-clear-lineup">Tyhjennä</button>
+                    <button class="btn-xs btn-outline danger-text" id="btn-delete-active-lineup" title="Poista kentällinen">🗑️</button>
+                    <button class="btn-xs btn-outline" id="btn-clear-pitch" title="Tyhjennä kenttä">Tyhjennä</button>
                 </div>
             </div>
 
-            <p class="panel-hint">Täppää tai vedä pelaaja kentälliseen:</p>
-
             <div class="lineup-slots-grid" id="lineup-slots-container">
-                <!-- Dynamically populated lineup slots -->
+                <!-- Dynamic Lineup Slots (MV, VP, OP, VH, KH, OH) -->
             </div>
 
             <div class="lineup-footer-actions">
-                <button class="btn btn-block btn-secondary" id="btn-copy-this-lineup">
-                    📋 Kopioi kentälliset tekstinä
+                <button class="btn btn-secondary btn-block" id="btn-toggle-labels">
+                    🏷️ Selitteet: <span id="label-mode-text">Nimi & #</span>
+                </button>
+                <button class="btn btn-primary btn-block" id="btn-copy-this-lineup" style="margin-top: 0.4rem;">
+                    📋 Kopioi kentällinen
                 </button>
             </div>
-        </aside>
+        </section>
 
-        <!-- Dynamic Summary View -->
+        <!-- SUMMARY VIEW PANEL (Kaikki kentälliset kerralla) -->
         <section class="panel summary-view-panel" id="summary-view-panel" style="display: none;">
             <div class="panel-header">
-                <h2>
-                    📊 Kaikki Kentälliset Yhteenvedossa
-                </h2>
+                <h2>📊 Kaikki kentälliset (Yhteenveto)</h2>
                 <div class="summary-actions">
-                    <button class="btn btn-sm btn-primary" id="btn-add-lineup-summary">
-                        + Lisää kentällinen
-                    </button>
-                    <button class="btn btn-sm btn-outline" id="btn-manage-lineups-summary">
-                        ⚙️ Järjestä / Poista
-                    </button>
-                    <button class="btn btn-sm btn-secondary" id="btn-copy-all-summary">
-                        📋 Kopioi tekstinä
-                    </button>
-                    <button class="btn btn-sm btn-outline" onclick="window.print()">
-                        🖨️ Tulosta
-                    </button>
+                    <button class="btn btn-xs btn-outline" id="btn-add-lineup-summary">+ Uusi kentällinen</button>
+                    <button class="btn btn-xs btn-outline" id="btn-manage-lineups-summary">⚙️ Järjestä / Poista</button>
+                    <button class="btn btn-xs btn-primary" id="btn-copy-all-summary">📋 Kopioi kaikki kentät</button>
                 </div>
             </div>
+            
+            <p class="panel-hint" style="padding: 0.6rem 0.9rem 0;">
+                💡 Täppää mitä tahansa sijoituspaikkaa valitaksesi tai muuttaaksesi pelaajaa!
+            </p>
 
             <div class="summary-grid-container" id="summary-grid-container">
-                <!-- Dynamically rendered lineup cards -->
+                <!-- Dynamic Summary Lineup Cards -->
             </div>
         </section>
 
     </main>
 
-    <!-- Modal: Reorder / Manage Lineups (Mobiiliystävällinen kentällisten järjestely) -->
+    <!-- REORDER & MANAGE LINEUPS MODAL (Kännykkäystävällinen nuolijärjestys ⬆️ ⬇️) -->
     <div class="modal-overlay" id="manage-lineups-modal">
         <div class="modal-card">
             <div class="modal-header">
-                <h3>⚙️ Hallitse & Järjestä Kentällisiä</h3>
+                <h3>⚙️ Hallitse ja järjestä kentällisiä</h3>
                 <button class="close-btn" id="btn-close-manage-lineups-modal">&times;</button>
             </div>
-            <p class="form-hint">Siirrä kentällisten järjestystä nuolilla (⬆️ / ⬇️) tai poista/muokkaa mitä tahansa kentällistä:</p>
+            
+            <p class="panel-hint" style="padding: 0 0 0.5rem 0;">
+                Järjestä kentällisiä nuolilla ⬆️ ⬇️ tai poista/muokkaa kentällisiä. Voit poistaa minkä tahansa kentän.
+            </p>
+
             <div class="reorder-lineups-list" id="reorder-lineups-list">
-                <!-- Dynamically populated reorder list -->
+                <!-- Dynamic reorder items -->
             </div>
-            <div class="modal-actions" style="margin-top: 1rem; justify-content: space-between;">
-                <button type="button" class="btn btn-xs btn-outline" id="btn-reset-default-lineups">🔄 Palauta oletuskentät</button>
-                <button type="button" class="btn btn-primary" id="btn-close-manage-done">Valmis</button>
+
+            <div class="modal-actions" style="justify-content: space-between; margin-top: 1rem;">
+                <button class="btn btn-outline btn-sm" id="btn-reset-default-lineups">🔄 Palauta oletuskentät</button>
+                <button class="btn btn-primary btn-sm" id="btn-close-manage-done">Valmis</button>
             </div>
         </div>
     </div>
 
-    <!-- Modal: Add / Edit Lineup -->
+    <!-- LINEUP CONFIG (ADD / EDIT) MODAL -->
     <div class="modal-overlay" id="lineup-config-modal">
         <div class="modal-card">
             <div class="modal-header">
@@ -292,51 +267,53 @@
                 <button class="close-btn" id="btn-close-lineup-config-modal">&times;</button>
             </div>
             <form id="lineup-config-form">
-                <input type="hidden" id="form-lineup-id" value="">
+                <input type="hidden" id="form-lineup-id">
                 <div class="form-group">
-                    <label for="form-lineup-name">Kentällisen Nimi *</label>
-                    <input type="text" id="form-lineup-name" required placeholder="Esim. 3v5 Alivoima, 4. Kenttä, Erityis-YV..." class="form-input">
+                    <label for="form-lineup-name">Kentällisen nimi / Tyyppi *</label>
+                    <input type="text" id="form-lineup-name" class="form-input" placeholder="esim. 3. Kenttä, 3v3 Alivoima..." required>
                 </div>
                 <div class="modal-actions">
-                    <button type="button" class="btn btn-secondary" id="btn-cancel-lineup-config-modal">Peruuta</button>
-                    <button type="submit" class="btn btn-primary">Tallenna Kentällinen</button>
+                    <button type="button" class="btn btn-outline" id="btn-cancel-lineup-config-modal">Peruuta</button>
+                    <button type="submit" class="btn btn-primary">Tallenna</button>
                 </div>
             </form>
         </div>
     </div>
 
-    <!-- Modal: Slot Player Picker (Täppää paikkaa valitaksesi pelaajan) -->
+    <!-- SLOT-PICKER PLAYER MODAL -->
     <div class="modal-overlay" id="slot-picker-modal">
         <div class="modal-card">
             <div class="modal-header">
-                <h3 id="slot-picker-title">Valitse pelaaja paikkaan</h3>
+                <h3 id="slot-picker-title">Valitse pelaaja</h3>
                 <button class="close-btn" id="btn-close-slot-picker-modal">&times;</button>
             </div>
-            <p class="form-hint" id="slot-picker-info">Valitse ringistä pelaaja tälle paikalle:</p>
+            <p id="slot-picker-info" class="panel-hint" style="padding: 0 0 0.6rem 0;">Valitse pelaaja ringistä:</p>
             <div class="slot-picker-player-list" id="slot-picker-player-list">
-                <!-- Dynamically populated roster options -->
+                <!-- Dynamic player picker items -->
             </div>
-            <div class="modal-actions" style="margin-top: 0.8rem;">
-                <button type="button" class="btn btn-secondary danger-text" id="btn-clear-slot-picker">🚫 Tyhjennä paikka</button>
+            <div class="modal-actions" style="justify-content: space-between;">
+                <button type="button" class="btn btn-outline danger-text" id="btn-clear-slot-picker">Tyhjennä paikka</button>
+                <button type="button" class="btn btn-secondary" onclick="document.getElementById('slot-picker-modal').classList.remove('active')">Sulje</button>
             </div>
         </div>
     </div>
 
-    <!-- Modal: Tap-to-Assign Player to Lineup (Mobiilivalikko) -->
+    <!-- TAP-TO-ASSIGN MOBILE MODAL -->
     <div class="modal-overlay" id="assign-modal">
         <div class="modal-card">
             <div class="modal-header">
                 <h3 id="assign-modal-title">Sijoita pelaaja kentälliseen</h3>
                 <button class="close-btn" id="btn-close-assign-modal">&times;</button>
             </div>
-            <p class="form-hint" id="assign-modal-player-info">Valitse paikka mihin pelaaja sijoitetaan:</p>
+            <p id="assign-modal-player-info" class="panel-hint" style="padding:0 0 0.6rem 0;"></p>
+            
             <div class="assign-options-grid" id="assign-options-grid">
-                <!-- Dynamically generated mobile assignment buttons -->
+                <!-- Dynamic lineup slot assignment options -->
             </div>
         </div>
     </div>
 
-    <!-- Modal: Add / Edit Player -->
+    <!-- ADD/EDIT PLAYER MODAL -->
     <div class="modal-overlay" id="player-modal">
         <div class="modal-card">
             <div class="modal-header">
@@ -344,26 +321,25 @@
                 <button class="close-btn" id="btn-close-modal">&times;</button>
             </div>
             <form id="player-form">
-                <input type="hidden" id="form-player-id" value="">
+                <input type="hidden" id="form-player-id">
                 
                 <div class="form-group">
-                    <label for="form-name">Pelaajan Nimi *</label>
-                    <input type="text" id="form-name" required placeholder="Esim. Matti Meikäläinen" class="form-input">
+                    <label for="form-name">Nimi *</label>
+                    <input type="text" id="form-name" class="form-input" placeholder="esim. Teemu Teekkari" required>
                 </div>
 
                 <div class="form-row">
                     <div class="form-group">
-                        <label for="form-number">Pelinumero (#) *</label>
-                        <input type="number" id="form-number" min="1" max="99" required placeholder="Esim. 88" class="form-input">
+                        <label for="form-number">Pelinumero *</label>
+                        <input type="number" id="form-number" class="form-input" min="1" max="99" placeholder="99" required>
                     </div>
-
                     <div class="form-group">
                         <label for="form-position">Pelipaikka *</label>
                         <select id="form-position" class="form-input">
-                            <option value="MV">Maalivahti (MV - Vihreä)</option>
-                            <option value="P">Puolustaja (P - Sininen)</option>
-                            <option value="KH">Keskushyökkääjä (KH - Sininen)</option>
-                            <option value="H">Hyökkääjä (H - Sininen)</option>
+                            <option value="H">Hyökkääjä (H)</option>
+                            <option value="KH">Sentteri / KH</option>
+                            <option value="P">Puolustaja (P)</option>
+                            <option value="MV">Maalivahti (MV)</option>
                         </select>
                     </div>
                 </div>
@@ -371,28 +347,24 @@
                 <div class="form-group">
                     <label class="checkbox-label">
                         <input type="checkbox" id="form-is-loan">
-                        <span class="checkbox-custom"></span>
-                        <span class="label-text">
-                            <strong>Lainapelaaja</strong>
-                            <small>(Merkitään tähti-badgella)</small>
-                        </span>
+                        <span>⭐ Lainapelaaja (Muu seura / juniorit)</span>
                     </label>
                 </div>
 
                 <div class="form-group">
-                    <label for="form-notes">Lisätiedot (Valinnainen)</label>
-                    <input type="text" id="form-notes" placeholder="Esim. Lainalla FBC Turusta" class="form-input">
+                    <label for="form-notes">Lisätiedot (valinnainen)</label>
+                    <input type="text" id="form-notes" class="form-input" placeholder="esim. Kätisyys L / In 👍">
                 </div>
 
                 <div class="modal-actions">
-                    <button type="button" class="btn btn-secondary" id="btn-cancel-modal">Peruuta</button>
-                    <button type="submit" class="btn btn-primary" id="btn-save-player">Tallenna Pelaaja</button>
+                    <button type="button" class="btn btn-outline" id="btn-cancel-modal">Peruuta</button>
+                    <button type="submit" class="btn btn-primary">Tallenna pelaaja</button>
                 </div>
             </form>
         </div>
     </div>
 
-    <!-- Modal: New Team -->
+    <!-- NEW TEAM MODAL -->
     <div class="modal-overlay" id="team-modal">
         <div class="modal-card">
             <div class="modal-header">
@@ -401,58 +373,61 @@
             </div>
             <form id="team-form">
                 <div class="form-group">
-                    <label for="team-name-input">Joukkueen Nimi *</label>
-                    <input type="text" id="team-name-input" required placeholder="Esim. Edustusjoukkue, A-Juniorit..." class="form-input">
+                    <label for="team-name-input">Joukkueen nimi *</label>
+                    <input type="text" id="team-name-input" class="form-input" placeholder="esim. B-Juniorit, Säbä Starat" required>
                 </div>
                 <div class="modal-actions">
-                    <button type="button" class="btn btn-secondary" id="btn-cancel-team-modal">Peruuta</button>
-                    <button type="submit" class="btn btn-primary">Luo Joukkue</button>
+                    <button type="button" class="btn btn-outline" id="btn-cancel-team-modal">Peruuta</button>
+                    <button type="submit" class="btn btn-primary">Luo joukkue</button>
                 </div>
             </form>
         </div>
     </div>
 
-    <!-- Modal: Photo / OCR Player Import -->
+    <!-- PHOTO IMPORT OCR MODAL -->
     <div class="modal-overlay" id="photo-modal">
         <div class="modal-card modal-large">
             <div class="modal-header">
-                <h3>📷 Lue pelaajat valokuvasta</h3>
+                <h3>📷 Lue pelaajalista valokuvasta</h3>
                 <button class="close-btn" id="btn-close-photo-modal">&times;</button>
             </div>
             
-            <div class="photo-upload-step">
-                <p class="form-hint">Ota kuva tai valitse valokuva pelaajalistasta/nimenhuudosta. Tekstintunnistus (OCR) lukee nimet ja numerot automaattisesti!</p>
-                <div class="file-drop-area" id="file-drop-zone">
-                    <input type="file" id="photo-file-input" accept="image/*" capture="environment">
-                    <div class="drop-prompt">
-                        <span class="drop-icon">📷</span>
-                        <strong>Klikkaa tai valitse kuva laitteeltasi</strong>
-                        <small>Tuetut muodot: JPG, PNG, WEBP</small>
-                    </div>
-                </div>
-                <div id="ocr-status" class="ocr-status-box" style="display: none;">
-                    <div class="spinner"></div>
-                    <span id="ocr-status-text">Luetaan tekstiä kuvalapusta...</span>
+            <p class="panel-hint" style="padding:0 0 0.8rem 0;">
+                Ota kuva pöytäkirjasta, fläppitaulusta tai WhatsApp-listasta. Optinen lukija tunnistaa nimet ja pelinumerot automaattisesti!
+            </p>
+
+            <div class="file-drop-area" id="file-drop-area">
+                <input type="file" id="photo-file-input" accept="image/*">
+                <div class="drop-prompt">
+                    <span class="drop-icon">📷</span>
+                    <strong>Valitse kuva tai ota valokuva</strong>
+                    <small>Tukee JPG, PNG ja WEBP -kuvia</small>
                 </div>
             </div>
 
-            <!-- Preview of detected players -->
-            <div class="photo-preview-step" id="photo-preview-step" style="display: none;">
-                <h4>Tunnistetut pelaajat:</h4>
+            <div class="ocr-status-box" id="ocr-status" style="display: none;">
+                <div class="spinner"></div>
+                <span id="ocr-status-text">Luetaan tekstiä...</span>
+            </div>
+
+            <div id="photo-preview-step" style="display: none;">
+                <h4 style="margin-top: 1rem; font-size: 0.88rem;">Tunnistetut pelaajat (voit korjata ennen tallennusta):</h4>
                 <div class="ocr-results-list" id="ocr-results-list">
-                    <!-- Populated dynamically -->
+                    <!-- Dynamic OCR Editable Rows -->
                 </div>
                 <div class="modal-actions">
-                    <button type="button" class="btn btn-secondary" id="btn-reselect-photo">Valitse uusi kuva</button>
-                    <button type="button" class="btn btn-primary" id="btn-confirm-ocr-import">Tuo pelaajat rinkiin</button>
+                    <button type="button" class="btn btn-outline" id="btn-reselect-photo">Valitse uusi kuva</button>
+                    <button type="button" class="btn btn-primary" id="btn-confirm-ocr-import">Tallenna rinkiin 🎉</button>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Notification Toast -->
-    <div class="toast-notification" id="toast"></div>
+    <!-- TOAST NOTIFICATION CONTAINER -->
+    <div id="toast" class="toast-notification"></div>
 
+    <!-- JavaScript Application Logic -->
     <script src="app.js"></script>
+
 </body>
 </html>
