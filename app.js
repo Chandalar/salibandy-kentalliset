@@ -1,6 +1,6 @@
 /**
  * Salibandyn Kentälliset & Taktiikkataulu - Advanced Logic & Interactive Engine
- * Sisältää dynaamiset kentälliset (Lisää / Muokkaa / Poista kentällisiä, esim. 3v5 Alivoima).
+ * Varmistettu kentällisvälilehtien lataus (Tab bar auto-healing) ja dynaaminen hallinta (Lisää, muokkaa, poista).
  */
 
 (function() {
@@ -54,7 +54,7 @@
         { id: 'yv', name: '⚡ Ylivoima (YV)', type: 'preset' },
         { id: 'av', name: '🛡️ Alivoima (AV)', type: 'preset' },
         { id: '6v5', name: '🔥 6v5 (Ilman MV)', type: 'preset' },
-        { id: 'custom', name: '📐 Taktiikkataulu', type: 'preset' }
+        { id: 'custom', name: '📐 Taktiikka', type: 'preset' }
     ];
 
     const DEFAULT_LINEUPS = {
@@ -91,7 +91,7 @@
     let currentTeamId = loadFromStorage('salibandy_active_team_id', 'team_edustus');
 
     let roster = loadFromStorage(`salibandy_roster_${currentTeamId}`, DEFAULT_ROSTER);
-    let lineupConfigs = loadFromStorage(`salibandy_lineup_configs_${currentTeamId}`, DEFAULT_LINEUP_CONFIGS);
+    let lineupConfigs = loadLineupConfigs(currentTeamId);
     let lineups = loadFromStorage(`salibandy_lineups_${currentTeamId}`, DEFAULT_LINEUPS);
     
     let lineupDrawings = loadFromStorage(`salibandy_drawings_${currentTeamId}`, {});
@@ -176,7 +176,7 @@
     let selectedSlotTarget = { lineupKey: '', pos: '' };
 
     // ==========================================
-    // INITIALIZATION
+    // INITIALIZATION & TAB AUTO-HEALING
     // ==========================================
     function init() {
         renderTeamDropdown();
@@ -199,6 +199,15 @@
             console.error('LocalStorage load error', e);
             return fallback;
         }
+    }
+
+    function loadLineupConfigs(teamId) {
+        let configs = loadFromStorage(`salibandy_lineup_configs_${teamId}`, null);
+        if (!configs || !Array.isArray(configs) || configs.length === 0) {
+            configs = JSON.parse(JSON.stringify(DEFAULT_LINEUP_CONFIGS));
+            localStorage.setItem(`salibandy_lineup_configs_${teamId}`, JSON.stringify(configs));
+        }
+        return configs;
     }
 
     function saveState() {
@@ -244,7 +253,7 @@
         saveState();
         
         roster = loadFromStorage(`salibandy_roster_${currentTeamId}`, DEFAULT_ROSTER);
-        lineupConfigs = loadFromStorage(`salibandy_lineup_configs_${currentTeamId}`, DEFAULT_LINEUP_CONFIGS);
+        lineupConfigs = loadLineupConfigs(currentTeamId);
         lineups = loadFromStorage(`salibandy_lineups_${currentTeamId}`, DEFAULT_LINEUPS);
         lineupDrawings = loadFromStorage(`salibandy_drawings_${currentTeamId}`, {});
         lineupCourtPositions = loadFromStorage(`salibandy_positions_${currentTeamId}`, {});
@@ -265,6 +274,11 @@
     function renderTabs() {
         tabsScrollContainer.innerHTML = '';
 
+        if (!lineupConfigs || lineupConfigs.length === 0) {
+            lineupConfigs = JSON.parse(JSON.stringify(DEFAULT_LINEUP_CONFIGS));
+            saveState();
+        }
+
         lineupConfigs.forEach(config => {
             const btn = document.createElement('button');
             btn.className = `tab-btn ${activeLineupKey === config.id ? 'active' : ''}`;
@@ -273,7 +287,20 @@
             if (config.id === '6v5') btn.classList.add('highlight-6v5');
 
             btn.dataset.lineup = config.id;
-            btn.textContent = config.name;
+            btn.innerHTML = `<span>${escapeHtml(config.name)}</span>`;
+
+            // If user-created custom lineup, show inline delete icon
+            if (config.type === 'user') {
+                const delIcon = document.createElement('span');
+                delIcon.className = 'tab-delete-icon';
+                delIcon.innerHTML = ' ✕';
+                delIcon.title = 'Poista kentällinen';
+                delIcon.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    deleteLineupConfig(config.id);
+                });
+                btn.appendChild(delIcon);
+            }
 
             btn.addEventListener('click', () => switchTab(config.id));
             tabsScrollContainer.appendChild(btn);
@@ -282,7 +309,7 @@
         // Add "+ Uusi kentällinen" button tab
         const addBtn = document.createElement('button');
         addBtn.className = 'tab-btn btn-add-tab';
-        addBtn.textContent = '+ Uusi kentällinen';
+        addBtn.innerHTML = '+ Uusi kentällinen';
         addBtn.addEventListener('click', () => openLineupConfigModal());
         tabsScrollContainer.appendChild(addBtn);
 
