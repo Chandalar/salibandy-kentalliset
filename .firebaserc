@@ -1,5 +1,14 @@
 {
   "projects": {
     "default": "line-up-a773b"
+  },
+  "targets": {
+    "line-up-a773b": {
+      "hosting": {
+        "kokoonpano": [
+          "kokoonpano"
+        ]
+      }
+    }
   }
 }
