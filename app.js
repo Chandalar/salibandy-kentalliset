@@ -222,6 +222,12 @@
     // INITIALIZATION & REAL-TIME FIREBASE SYNC SETUP
     // ==========================================
     function init() {
+        if (currentTeamId === 'team_edustus' && (!roster || !Array.isArray(roster) || roster.length === 0)) {
+            roster = JSON.parse(JSON.stringify(DEFAULT_ROSTER));
+            lineups = JSON.parse(JSON.stringify(DEFAULT_LINEUPS));
+            saveStateLocalOnly();
+        }
+
         renderTeamDropdown();
         renderTabs();
         renderTacticalPageBadges();
@@ -1100,7 +1106,13 @@
         if (!courtContainer || !canvasEl || !layersEl) return;
 
         const ctxEl = canvasEl.getContext('2d');
-        const courtRect = courtContainer.getBoundingClientRect();
+        let courtRect = courtContainer.getBoundingClientRect();
+
+        if (courtRect.width === 0 || courtRect.height === 0) {
+            setTimeout(() => initCourtBoardInstance(courtId), 60);
+            return;
+        }
+
         canvasEl.width = courtRect.width;
         canvasEl.height = courtRect.height;
 

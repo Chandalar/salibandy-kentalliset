@@ -934,7 +934,7 @@ body {
     margin-top: 0;
 }
 
-#tactic-canvas {
+.pitch-container canvas {
     position: absolute;
     top: 0;
     left: 0;
@@ -1152,7 +1152,7 @@ body {
 .pitch-container.mode-horizontal .dot-br { right: 8.75%; bottom: 12.5%; transform: translate(50%, 50%); }
 
 /* On-Court Moveable Player & Ball Nodes */
-#court-players-layer {
+.pitch-container [id^="court-players-layer"] {
     position: absolute;
     top: 0;
     left: 0;
