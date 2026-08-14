@@ -1610,12 +1610,19 @@
     });
 
     // ==========================================
-    // TACTICAL COURT & DYNAMIC LINEUP PLAYERS, BALLS & CONES
+    // TACTICAL COURT & DYNAMIC LINEUP PLAYERS, BALLS, CONES & RECTANGLES
     // ==========================================
     function renderCourtPlayers() {
         courtPlayersLayer.innerHTML = '';
         if (activeLineupKey === 'summary') return;
 
+        renderLineupPlayerNodes();
+        renderCourtBalls();
+        renderCourtCones();
+        renderCourtRectangles();
+    }
+
+    function renderLineupPlayerNodes() {
         const currentLineup = lineups[activeLineupKey] || {};
         const posKeys = ['MV', 'VP', 'OP', 'VH', 'KH', 'OH'];
 
@@ -1654,9 +1661,6 @@
             setupNodeTouchDragging(node, coords, posKeyStore);
             courtPlayersLayer.appendChild(node);
         });
-
-        renderCourtBalls();
-        renderCourtCones();
     }
 
     function addBallToActiveLineup() {
@@ -1672,9 +1676,7 @@
         };
 
         lineupBalls[activeLineupKey].push(newBall);
-        
         setDrawingTool('select', document.getElementById('tool-select'));
-
         saveState();
         renderCourtPlayers();
         showToast('Salibandypallo lisätty kentälle! ⚪');
@@ -1711,7 +1713,7 @@
 
             ballNode.innerHTML = `
                 <div class="ball-circle" title="Salibandypallo">
-                    <img src="ball.png?v=14.0" class="floorball-png-icon" alt="Pallo">
+                    <img src="ball.png?v=15.0" class="floorball-png-icon" alt="Pallo">
                     <button class="ball-remove-btn" data-action="remove-ball" data-ball-id="${ball.id}">✕</button>
                 </div>
             `;
@@ -1733,13 +1735,37 @@
 
             coneNode.innerHTML = `
                 <div class="cone-circle" title="Harjoitustötterö / Kartio">
-                    <span style="font-size: 0.85rem; line-height: 1;">🔶</span>
+                    <span style="font-size: 0.95rem; line-height: 1;">🔶</span>
                     <button class="cone-remove-btn" data-action="remove-cone" data-cone-id="${cone.id}">✕</button>
                 </div>
             `;
 
             setupConeTouchDragging(coneNode, cone);
             courtPlayersLayer.appendChild(coneNode);
+        });
+    }
+
+    function renderCourtRectangles() {
+        const drawings = lineupDrawings[activeLineupKey] || [];
+        const rects = drawings.filter(d => d.type === 'rect');
+
+        rects.forEach(rectObj => {
+            const rectNode = document.createElement('div');
+            rectNode.className = 'court-rect-node';
+            rectNode.style.left = rectObj.x + '%';
+            rectNode.style.top = rectObj.y + '%';
+            rectNode.style.width = rectObj.w + '%';
+            rectNode.style.height = rectObj.h + '%';
+            rectNode.dataset.rectId = rectObj.id;
+
+            rectNode.innerHTML = `
+                <div class="rect-border-box" title="Siirrettävä taktinen alue">
+                    <button class="rect-remove-btn" data-action="remove-rect" data-rect-id="${rectObj.id}">✕</button>
+                </div>
+            `;
+
+            setupRectTouchDragging(rectNode, rectObj);
+            courtPlayersLayer.appendChild(rectNode);
         });
     }
 
@@ -1770,13 +1796,13 @@
             newX = Math.max(3, Math.min(97, newX));
             newY = Math.max(3, Math.min(97, newY));
 
-            coneObj.x = newX;
-            coneObj.y = newY;
+            coneObj.x = Math.round(newX * 10) / 10;
+            coneObj.y = Math.round(newY * 10) / 10;
 
             if (rafId) cancelAnimationFrame(rafId);
             rafId = requestAnimationFrame(() => {
-                coneNode.style.left = newX + '%';
-                coneNode.style.top = newY + '%';
+                coneNode.style.left = coneObj.x + '%';
+                coneNode.style.top = coneObj.y + '%';
             });
         };
 
@@ -1791,6 +1817,63 @@
         };
 
         coneNode.addEventListener('pointerdown', onPointerDown);
+    }
+
+    function setupRectTouchDragging(rectNode, rectObj) {
+        let isDragging = false;
+        let startPointer = { x: 0, y: 0 };
+        let startRectPos = { x: rectObj.x, y: rectObj.y };
+        let rafId = null;
+
+        const onPointerDown = (e) => {
+            if (drawingTool !== 'select') return;
+            if (e.target.classList.contains('rect-remove-btn')) return;
+
+            isDragging = true;
+            startPointer = { x: e.clientX, y: e.clientY };
+            startRectPos = { x: rectObj.x, y: rectObj.y };
+            rectNode.setPointerCapture(e.pointerId);
+
+            rectNode.addEventListener('pointermove', onPointerMove);
+            rectNode.addEventListener('pointerup', onPointerUp);
+            rectNode.addEventListener('pointercancel', onPointerUp);
+        };
+
+        const onPointerMove = (e) => {
+            if (!isDragging) return;
+            e.preventDefault();
+
+            const courtRect = floorballCourt.getBoundingClientRect();
+            const deltaPctX = ((e.clientX - startPointer.x) / courtRect.width) * 100;
+            const deltaPctY = ((e.clientY - startPointer.y) / courtRect.height) * 100;
+
+            let newX = startRectPos.x + deltaPctX;
+            let newY = startRectPos.y + deltaPctY;
+
+            newX = Math.max(0, Math.min(100 - rectObj.w, newX));
+            newY = Math.max(0, Math.min(100 - rectObj.h, newY));
+
+            rectObj.x = Math.round(newX * 10) / 10;
+            rectObj.y = Math.round(newY * 10) / 10;
+
+            if (rafId) cancelAnimationFrame(rafId);
+            rafId = requestAnimationFrame(() => {
+                rectNode.style.left = rectObj.x + '%';
+                rectNode.style.top = rectObj.y + '%';
+            });
+        };
+
+        const onPointerUp = (e) => {
+            if (!isDragging) return;
+            isDragging = false;
+            if (rafId) cancelAnimationFrame(rafId);
+            rectNode.removeEventListener('pointermove', onPointerMove);
+            rectNode.removeEventListener('pointerup', onPointerUp);
+            rectNode.removeEventListener('pointercancel', onPointerUp);
+            saveState();
+        };
+
+        rectNode.addEventListener('pointerdown', onPointerDown);
     }
 
     function setupBallTouchDragging(ballNode, ballObj) {
@@ -1958,19 +2041,51 @@
         canvas.addEventListener('pointerup', () => {
             if (!isDrawing) return;
             isDrawing = false;
-            if (currentPath.length >= 2 || (drawingTool === 'run' && currentPath.length > 1)) {
-                let color = '#38bdf8';
-                if (drawingTool === 'pass') color = '#eab308';
-                if (drawingTool === 'shot') color = '#ec4899';
-                if (drawingTool === 'rect') color = '#60a5fa';
 
+            if (currentPath.length >= 2 || (drawingTool === 'run' && currentPath.length > 1)) {
                 if (!lineupDrawings[activeLineupKey]) lineupDrawings[activeLineupKey] = [];
-                lineupDrawings[activeLineupKey].push({
-                    type: drawingTool,
-                    points: [...currentPath],
-                    color: color
-                });
-                saveState();
+
+                if (drawingTool === 'rect') {
+                    const courtRect = floorballCourt.getBoundingClientRect();
+                    const p1 = currentPath[0];
+                    const p2 = currentPath[currentPath.length - 1];
+
+                    const xPx = Math.min(p1.x, p2.x);
+                    const yPx = Math.min(p1.y, p2.y);
+                    const wPx = Math.abs(p2.x - p1.x);
+                    const hPx = Math.abs(p2.y - p1.y);
+
+                    const xPct = Math.max(0, Math.min(95, (xPx / courtRect.width) * 100));
+                    const yPct = Math.max(0, Math.min(95, (yPx / courtRect.height) * 100));
+                    const wPct = Math.max(4, Math.min(95, (wPx / courtRect.width) * 100));
+                    const hPct = Math.max(4, Math.min(95, (hPx / courtRect.height) * 100));
+
+                    lineupDrawings[activeLineupKey].push({
+                        id: 'rect_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+                        type: 'rect',
+                        x: Math.round(xPct * 10) / 10,
+                        y: Math.round(yPct * 10) / 10,
+                        w: Math.round(wPct * 10) / 10,
+                        h: Math.round(hPct * 10) / 10
+                    });
+
+                    setDrawingTool('select', document.getElementById('tool-select'));
+                    saveState();
+                    renderCourtPlayers();
+                    showToast('Taktinen alue luotu! Voit siirtää sitä sormella/hiirellä 🔲');
+                } else {
+                    let color = '#38bdf8';
+                    if (drawingTool === 'pass') color = '#eab308';
+                    if (drawingTool === 'shot') color = '#ec4899';
+
+                    lineupDrawings[activeLineupKey].push({
+                        id: 'draw_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+                        type: drawingTool,
+                        points: [...currentPath],
+                        color: color
+                    });
+                    saveState();
+                }
             }
             currentPath = [];
             drawCanvasLines();
@@ -1989,7 +2104,9 @@
 
         const currentDrawings = lineupDrawings[activeLineupKey] || [];
         currentDrawings.forEach(draw => {
-            renderPath(draw.points, draw.type, draw.color);
+            if (draw.type !== 'rect') { // Rectangles are interactive DOM elements on court layer!
+                renderPath(draw.points, draw.type, draw.color);
+            }
         });
     }
 
@@ -2004,7 +2121,7 @@
     function renderPath(points, type, color) {
         if (!points || points.length < 2) return;
 
-        // 1. TRANSPARENT TACTICAL RECTANGLE ZONE
+        // 1. PREVIEW RECTANGLE DURING DRAWING
         if (type === 'rect') {
             const start = points[0];
             const end = points[points.length - 1];
@@ -2124,6 +2241,7 @@
         if (currentDrawings.length > 0) {
             currentDrawings.pop();
             saveState();
+            renderCourtPlayers();
             drawCanvasLines();
             showToast('Viimeisin piirros kumottu ↩️');
         } else {
@@ -2534,6 +2652,17 @@
                     showToast('Tötterö poistettu.');
                 }
             }
+
+            const removeRectBtn = e.target.closest('[data-action="remove-rect"]');
+            if (removeRectBtn) {
+                const rectId = removeRectBtn.dataset.rectId;
+                if (lineupDrawings[activeLineupKey]) {
+                    lineupDrawings[activeLineupKey] = lineupDrawings[activeLineupKey].filter(d => d.id !== rectId);
+                    saveState();
+                    renderCourtPlayers();
+                    showToast('Taktinen alue poistettu.');
+                }
+            }
         });
 
         document.getElementById('tool-select').addEventListener('click', (e) => setDrawingTool('select', e.currentTarget));
@@ -2547,6 +2676,7 @@
         document.getElementById('tool-clear-drawings').addEventListener('click', () => {
             lineupDrawings[activeLineupKey] = [];
             saveState();
+            renderCourtPlayers();
             drawCanvasLines();
             showToast('Piirrokset tyhjennetty tästä kentällisestä.');
         });
