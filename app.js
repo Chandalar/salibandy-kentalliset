@@ -270,11 +270,11 @@
         if (isCloudActive) {
             cloudSyncBadge.className = 'cloud-sync-badge';
             cloudSyncBadge.innerHTML = '☁️ Synkronoitu';
-            cloudSyncBadge.title = 'Tiedot tallennettu pilveen. Klikkaa pakottaaksesi synkronointi.';
+            cloudSyncBadge.title = 'Tiedot tallennettu pilveen. Klikkaa synkronoidaksesi kaksi suuntaisesti.';
         } else {
             cloudSyncBadge.className = 'cloud-sync-badge is-offline';
             cloudSyncBadge.innerHTML = '💻 Paikallinen';
-            cloudSyncBadge.title = 'Offline-tila / Ei kirjautunut';
+            cloudSyncBadge.title = 'Kirjaudu sisään synkronoidaksesi pilveen';
         }
     }
 
@@ -293,7 +293,7 @@
     }
 
     // ==========================================
-    // COMPLETE REAL-TIME BI-DIRECTIONAL CLOUD SYNC
+    // COMPLETE REAL-TIME BI-DIRECTIONAL CLOUD SYNC WITH INTELLIGENT MERGE
     // ==========================================
     function buildFullCloudPayload() {
         const rostersMap = {};
@@ -330,6 +330,7 @@
     function forceCloudSync() {
         if (!currentUser || !window.SalibandyFirebase || !window.SalibandyFirebase.isReady()) {
             showToast('Kirjaudu sisään synkronoidaksesi pilveen.');
+            authModal.classList.add('active');
             return;
         }
 
@@ -339,15 +340,11 @@
         db.collection('users').doc(currentUser.uid).set(payload, { merge: true })
             .then(() => {
                 updateCloudSyncBadge(true);
-                showToast('☁️ Kaikki joukkueet ja kentälliset tallennettu pilveen!');
+                showToast('☁️ Kaikki tietokoneen joukkueet ja kentälliset tallennettu pilveen!');
             })
             .catch(err => {
                 console.error('Firestore force sync error:', err);
-                if (err.code === 'permission-denied') {
-                    alert('Firestore Permission Denied! Tarkista Firebase Console -> Firestore Database -> Rules -> "allow read, write: if request.auth != null;"');
-                } else {
-                    showToast('Pilvitallennusvirhe: ' + err.message);
-                }
+                showToast('Pilvitallennusvirhe: ' + err.message);
             });
     }
 
@@ -362,10 +359,10 @@
             if (isCloudLoading) return;
 
             if (!doc.exists) {
-                // First time cloud user creation: Save current local state to Firestore
+                // First time user: Write current local state to cloud
                 isCloudLoading = true;
                 const initialPayload = buildFullCloudPayload();
-                userRef.set(initialPayload).then(() => {
+                userRef.set(initialPayload, { merge: true }).then(() => {
                     updateCloudSyncBadge(true);
                     isCloudLoading = false;
                 }).catch(err => {
@@ -380,22 +377,54 @@
 
             isCloudLoading = true;
 
-            // 1. Unpack Teams
-            if (cloudData.teams && Array.isArray(cloudData.teams) && cloudData.teams.length > 0) {
-                teams = cloudData.teams;
+            let needCloudUpdateBack = false;
+
+            // 1. INTELLIGENT TEAMS MERGE (Merge local teams with cloud teams so desktop creation is never lost)
+            if (cloudData.teams && Array.isArray(cloudData.teams)) {
+                const mergedTeams = [...cloudData.teams];
+                teams.forEach(localT => {
+                    if (!mergedTeams.some(cT => cT.id === localT.id)) {
+                        mergedTeams.push(localT);
+                        needCloudUpdateBack = true;
+                    }
+                });
+                teams = mergedTeams;
                 if (cloudData.currentTeamId && teams.some(t => t.id === cloudData.currentTeamId)) {
                     currentTeamId = cloudData.currentTeamId;
-                } else {
+                } else if (!teams.some(t => t.id === currentTeamId)) {
                     currentTeamId = teams[0].id;
                 }
             }
 
-            // 2. Unpack All Dictionaries into Local Storage
+            // 2. INTELLIGENT ROSTERS MERGE
             if (cloudData.rosters) {
                 Object.keys(cloudData.rosters).forEach(tId => {
-                    localStorage.setItem(`salibandy_roster_${tId}`, JSON.stringify(cloudData.rosters[tId]));
+                    const cloudRoster = cloudData.rosters[tId] || [];
+                    const localRoster = loadFromStorage(`salibandy_roster_${tId}`, []);
+                    
+                    const mergedRosterMap = {};
+                    cloudRoster.forEach(p => { mergedRosterMap[p.id] = p; });
+                    localRoster.forEach(p => {
+                        if (!mergedRosterMap[p.id]) {
+                            mergedRosterMap[p.id] = p;
+                            needCloudUpdateBack = true;
+                        }
+                    });
+
+                    const finalRoster = Object.values(mergedRosterMap);
+                    localStorage.setItem(`salibandy_roster_${tId}`, JSON.stringify(finalRoster));
+                });
+
+                // Also upload local rosters for any local teams not yet in cloud
+                teams.forEach(t => {
+                    if (!cloudData.rosters[t.id]) {
+                        const localRoster = loadFromStorage(`salibandy_roster_${t.id}`, []);
+                        cloudData.rosters[t.id] = localRoster;
+                        needCloudUpdateBack = true;
+                    }
                 });
             }
+
             if (cloudData.lineupConfigs) {
                 Object.keys(cloudData.lineupConfigs).forEach(tId => {
                     localStorage.setItem(`salibandy_lineup_configs_${tId}`, JSON.stringify(cloudData.lineupConfigs[tId]));
@@ -422,7 +451,7 @@
                 });
             }
 
-            // 3. Reload current active team variables in memory
+            // Reload memory variables for current team
             roster = loadRosterForTeam(currentTeamId);
             lineupConfigs = loadLineupConfigs(currentTeamId);
             lineups = loadLineupsForTeam(currentTeamId, lineupConfigs);
@@ -445,13 +474,22 @@
             }
 
             updateCloudSyncBadge(true);
-            setTimeout(() => { isCloudLoading = false; }, 300);
+
+            // If we merged local desktop teams into cloud data, send updated payload back to Firestore!
+            if (needCloudUpdateBack) {
+                const mergedPayload = buildFullCloudPayload();
+                userRef.set(mergedPayload, { merge: true }).then(() => {
+                    console.log('☁️ Merged local desktop data successfully with Cloud Firestore!');
+                    isCloudLoading = false;
+                }).catch(() => {
+                    isCloudLoading = false;
+                });
+            } else {
+                setTimeout(() => { isCloudLoading = false; }, 300);
+            }
 
         }, (err) => {
             console.warn('Firestore real-time snapshot error:', err);
-            if (err.code === 'permission-denied') {
-                console.error('Firestore Rules Error: Allow read/write in Firebase Console -> Firestore -> Rules');
-            }
             updateCloudSyncBadge(false);
             isCloudLoading = false;
         });
@@ -1623,7 +1661,7 @@
 
             ballNode.innerHTML = `
                 <div class="ball-circle" title="Salibandypallo">
-                    <img src="ball.png?v=11.0" class="floorball-png-icon" alt="Pallo">
+                    <img src="ball.png?v=12.0" class="floorball-png-icon" alt="Pallo">
                     <button class="ball-remove-btn" data-action="remove-ball" data-ball-id="${ball.id}">✕</button>
                 </div>
             `;
