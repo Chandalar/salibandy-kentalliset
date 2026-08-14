@@ -1,6 +1,6 @@
 /**
  * Salibandyn Kentälliset & Taktiikkataulu - Advanced Logic & Interactive Engine
- * Sisältää mobiiliystävällisen kentällisten järjestelyn (Reorder ⬆️ ⬇️) ja kaikkien kentällisten poiston.
+ * Sisältää liikuteltavat salibandypallot (⚪ + Pallo) samankokoisena kuin pelaajien numeropallot.
  */
 
 (function() {
@@ -97,6 +97,7 @@
     let lineupDrawings = loadFromStorage(`salibandy_drawings_${currentTeamId}`, {});
 
     let lineupCourtPositions = loadFromStorage(`salibandy_positions_${currentTeamId}`, {});
+    let lineupBalls = loadFromStorage(`salibandy_balls_${currentTeamId}`, { '1': [{ id: 'ball_default', x: 55, y: 50 }] });
 
     let activeLineupKey = '1';
     let activeFilter = 'all';
@@ -223,6 +224,7 @@
             localStorage.setItem(`salibandy_lineups_${currentTeamId}`, JSON.stringify(lineups));
             localStorage.setItem(`salibandy_drawings_${currentTeamId}`, JSON.stringify(lineupDrawings));
             localStorage.setItem(`salibandy_positions_${currentTeamId}`, JSON.stringify(lineupCourtPositions));
+            localStorage.setItem(`salibandy_balls_${currentTeamId}`, JSON.stringify(lineupBalls));
         } catch (e) {
             console.error('LocalStorage save error', e);
         }
@@ -261,6 +263,7 @@
         lineups = loadFromStorage(`salibandy_lineups_${currentTeamId}`, DEFAULT_LINEUPS);
         lineupDrawings = loadFromStorage(`salibandy_drawings_${currentTeamId}`, {});
         lineupCourtPositions = loadFromStorage(`salibandy_positions_${currentTeamId}`, {});
+        lineupBalls = loadFromStorage(`salibandy_balls_${currentTeamId}`, { '1': [{ id: 'ball_default', x: 55, y: 50 }] });
 
         renderTabs();
         updateRosterCounters();
@@ -605,6 +608,7 @@
             lineupConfigs = lineupConfigs.filter(c => c.id !== id);
             delete lineups[id];
             delete lineupDrawings[id];
+            delete lineupBalls[id];
 
             if (activeLineupKey === id) {
                 activeLineupKey = lineupConfigs[0] ? lineupConfigs[0].id : 'summary';
@@ -970,12 +974,13 @@
     });
 
     // ==========================================
-    // TACTICAL COURT & DYNAMIC LINEUP PLAYERS
+    // TACTICAL COURT & DYNAMIC LINEUP PLAYERS & BALLS
     // ==========================================
     function renderCourtPlayers() {
         courtPlayersLayer.innerHTML = '';
         if (activeLineupKey === 'summary') return;
 
+        // 1. Render Player Nodes
         const currentLineup = lineups[activeLineupKey] || {};
         const posKeys = ['MV', 'VP', 'OP', 'VH', 'KH', 'OH'];
 
@@ -1014,6 +1019,88 @@
             setupNodeTouchDragging(node, coords, posKeyStore);
             courtPlayersLayer.appendChild(node);
         });
+
+        // 2. Render Floorball Balls (MATCHES PLAYER CIRCLE SIZE EXACTLY)
+        renderCourtBalls();
+    }
+
+    function addBallToActiveLineup() {
+        if (!lineupBalls[activeLineupKey]) lineupBalls[activeLineupKey] = [];
+        const newBall = {
+            id: 'ball_' + Date.now(),
+            x: 50,
+            y: 50
+        };
+        lineupBalls[activeLineupKey].push(newBall);
+        saveState();
+        renderCourtPlayers();
+        showToast('Pallo lisätty kentälle! ⚪');
+    }
+
+    function renderCourtBalls() {
+        const balls = lineupBalls[activeLineupKey] || [];
+        balls.forEach(ball => {
+            const ballNode = document.createElement('div');
+            ballNode.className = 'court-ball-node';
+            ballNode.style.left = ball.x + '%';
+            ballNode.style.top = ball.y + '%';
+            ballNode.dataset.ballId = ball.id;
+
+            ballNode.innerHTML = `
+                <div class="ball-circle" title="Salibandypallo (Liikuteltava)">
+                    <div class="ball-holes-icon"></div>
+                    <button class="ball-remove-btn" data-action="remove-ball" data-ball-id="${ball.id}">✕</button>
+                </div>
+            `;
+
+            setupBallTouchDragging(ballNode, ball);
+            courtPlayersLayer.appendChild(ballNode);
+        });
+    }
+
+    function setupBallTouchDragging(ballNode, ballObj) {
+        let isDragging = false;
+
+        const onPointerDown = (e) => {
+            if (drawingTool !== 'select') return;
+            if (e.target.classList.contains('ball-remove-btn')) return;
+            
+            isDragging = true;
+            ballNode.setPointerCapture(e.pointerId);
+
+            ballNode.addEventListener('pointermove', onPointerMove);
+            ballNode.addEventListener('pointerup', onPointerUp);
+            ballNode.addEventListener('pointercancel', onPointerUp);
+        };
+
+        const onPointerMove = (e) => {
+            if (!isDragging) return;
+            e.preventDefault();
+
+            const rect = floorballCourt.getBoundingClientRect();
+            let newX = ((e.clientX - rect.left) / rect.width) * 100;
+            let newY = ((e.clientY - rect.top) / rect.height) * 100;
+
+            newX = Math.max(3, Math.min(97, newX));
+            newY = Math.max(3, Math.min(97, newY));
+
+            ballObj.x = newX;
+            ballObj.y = newY;
+
+            ballNode.style.left = newX + '%';
+            ballNode.style.top = newY + '%';
+        };
+
+        const onPointerUp = (e) => {
+            if (!isDragging) return;
+            isDragging = false;
+            ballNode.removeEventListener('pointermove', onPointerMove);
+            ballNode.removeEventListener('pointerup', onPointerUp);
+            ballNode.removeEventListener('pointercancel', onPointerUp);
+            saveState();
+        };
+
+        ballNode.addEventListener('pointerdown', onPointerDown);
     }
 
     function setupNodeTouchDragging(node, coords, posKeyStore) {
@@ -1482,6 +1569,8 @@
         document.getElementById('btn-add-lineup-summary')?.addEventListener('click', () => openLineupConfigModal());
         document.getElementById('btn-manage-lineups-summary')?.addEventListener('click', () => openManageLineupsModal());
         
+        document.getElementById('btn-add-ball')?.addEventListener('click', addBallToActiveLineup);
+
         document.getElementById('btn-edit-active-lineup-name')?.addEventListener('click', () => {
             const config = lineupConfigs.find(c => c.id === activeLineupKey);
             if (config) openLineupConfigModal(config);
@@ -1569,13 +1658,25 @@
         });
 
         courtPlayersLayer.addEventListener('click', (e) => {
-            const removeBtn = e.target.closest('[data-action="remove-lineup-player"]');
-            if (removeBtn) {
-                const pos = removeBtn.dataset.pos;
+            const removePlayerBtn = e.target.closest('[data-action="remove-lineup-player"]');
+            if (removePlayerBtn) {
+                const pos = removePlayerBtn.dataset.pos;
                 if (lineups[activeLineupKey]) lineups[activeLineupKey][pos] = '';
                 saveState();
                 renderActiveLineupSlots();
                 renderCourtPlayers();
+                return;
+            }
+
+            const removeBallBtn = e.target.closest('[data-action="remove-ball"]');
+            if (removeBallBtn) {
+                const ballId = removeBallBtn.dataset.ballId;
+                if (lineupBalls[activeLineupKey]) {
+                    lineupBalls[activeLineupKey] = lineupBalls[activeLineupKey].filter(b => b.id !== ballId);
+                    saveState();
+                    renderCourtPlayers();
+                    showToast('Pallo poistettu.');
+                }
             }
         });
 
@@ -1590,7 +1691,7 @@
             lineupDrawings[activeLineupKey] = [];
             saveState();
             drawCanvasLines();
-            showToast('Piirrokset tyhjennetty tästä kentällisessä.');
+            showToast('Piirrokset tyhjennetty tästä kentällisestä.');
         });
 
         document.getElementById('btn-toggle-orientation').addEventListener('click', () => {
@@ -1604,11 +1705,12 @@
             if (confirm(`Tyhjennetäänkö ${lName} kentältä?`)) {
                 lineups[activeLineupKey] = { MV: '', VP: '', OP: '', VH: '', KH: '', OH: '' };
                 lineupDrawings[activeLineupKey] = [];
+                lineupBalls[activeLineupKey] = [];
                 saveState();
                 renderActiveLineupSlots();
                 renderCourtPlayers();
                 drawCanvasLines();
-                showToast('Kentällinen tyhjennetty.');
+                showToast('Kentällinen ja pallot tyhjennetty.');
             }
         });
 
@@ -1617,11 +1719,12 @@
             if (confirm(`Tyhjennetäänkö valittu ${lName}?`)) {
                 lineups[activeLineupKey] = { MV: '', VP: '', OP: '', VH: '', KH: '', OH: '' };
                 lineupDrawings[activeLineupKey] = [];
+                lineupBalls[activeLineupKey] = [];
                 saveState();
                 renderActiveLineupSlots();
                 renderCourtPlayers();
                 drawCanvasLines();
-                showToast('Kentällinen tyhjennetty.');
+                showToast('Kentällinen ja pallot tyhjennetty.');
             }
         });
 

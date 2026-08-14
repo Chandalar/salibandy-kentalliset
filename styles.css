@@ -807,6 +807,17 @@ body {
     color: #93c5fd;
 }
 
+.tool-btn.highlight-ball {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.3);
+    color: #ffffff;
+}
+
+.tool-btn.highlight-ball:hover, .tool-btn.highlight-ball:active {
+    background: #ffffff;
+    color: #0f172a;
+}
+
 /* Outer Pitch Container Wrapper */
 .pitch-outer-wrapper {
     flex: 1;
@@ -851,7 +862,8 @@ body {
     margin-top: 0;
 }
 
-.pitch-container.drawing-active .court-player-node {
+.pitch-container.drawing-active .court-player-node,
+.pitch-container.drawing-active .court-ball-node {
     pointer-events: none !important;
 }
 
@@ -1072,7 +1084,7 @@ body {
 .pitch-container.mode-horizontal .dot-bl { left: 8.75%; bottom: 12.5%; transform: translate(-50%, 50%); }
 .pitch-container.mode-horizontal .dot-br { right: 8.75%; bottom: 12.5%; transform: translate(50%, 50%); }
 
-/* On-Court Moveable Player Nodes */
+/* On-Court Moveable Player & Ball Nodes */
 #court-players-layer {
     position: absolute;
     top: 0;
@@ -1114,6 +1126,72 @@ body {
     border: 2px solid #ffffff;
     position: relative;
     touch-action: none;
+}
+
+/* BALL NODE STYLES - EXACTLY MATCHES PLAYER CIRCLE SIZE (34px / 26px) */
+.court-ball-node {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    pointer-events: auto;
+    cursor: move;
+    touch-action: none;
+    z-index: 15;
+}
+
+.court-ball-node:hover {
+    z-index: 25;
+}
+
+.ball-circle {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, #ffffff 0%, #f1f5f9 60%, #cbd5e1 100%);
+    border: 2px solid #0f172a;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.6), inset -2px -2px 5px rgba(0, 0, 0, 0.25);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    touch-action: none;
+}
+
+/* Floorball Ball Air Holes Pattern */
+.ball-holes-icon {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-image: 
+        radial-gradient(circle at 30% 30%, #334155 1.5px, transparent 2px),
+        radial-gradient(circle at 70% 30%, #334155 1.5px, transparent 2px),
+        radial-gradient(circle at 50% 50%, #334155 1.8px, transparent 2.3px),
+        radial-gradient(circle at 30% 70%, #334155 1.5px, transparent 2px),
+        radial-gradient(circle at 70% 70%, #334155 1.5px, transparent 2px);
+}
+
+.ball-remove-btn {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--accent-danger);
+    color: #fff;
+    border: none;
+    font-size: 0.68rem;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    touch-action: manipulation;
+}
+
+.court-ball-node:hover .ball-remove-btn {
+    display: flex;
 }
 
 .court-player-node.is-mv .node-circle {
@@ -1679,7 +1757,7 @@ body {
         gap: 0.08rem !important;
     }
 
-    .node-circle {
+    .node-circle, .ball-circle {
         width: 26px !important;
         height: 26px !important;
         font-size: 0.72rem !important;

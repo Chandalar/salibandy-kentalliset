@@ -124,7 +124,7 @@
             <div class="pitch-toolbar">
                 <div class="toolbar-group">
                     <span class="group-label">Tila:</span>
-                    <button class="tool-btn active" id="tool-select" title="Siirrä pelaajia">
+                    <button class="tool-btn active" id="tool-select" title="Siirrä pelaajia ja palloa">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3l7 18 3-7 7-3L3 3z"/></svg>
                         Liikuta
                     </button>
@@ -138,6 +138,9 @@
                     </button>
                     <button class="tool-btn tool-shot" id="tool-shot" title="Veto maalia kohti (punainen nuoli)">
                         💥 Veto
+                    </button>
+                    <button class="tool-btn highlight-ball" id="btn-add-ball" title="Lisää pallo kentälle">
+                        ⚪ + Pallo
                     </button>
                 </div>
 
@@ -202,7 +205,7 @@
                         <div class="faceoff-dot dot-br"></div>
                     </div>
 
-                    <!-- Active Players Dropped on Court Layer -->
+                    <!-- Active Players & Balls Dropped on Court Layer -->
                     <div id="court-players-layer"></div>
                 </div>
             </div>
