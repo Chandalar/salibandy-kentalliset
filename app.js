@@ -1,6 +1,6 @@
 /**
  * Salibandyn Kentälliset & Taktiikkataulu - Advanced Logic & Interactive Engine
- * Sisältää korjatun joukkueenvaihdon, tyhjän pelaajaringin uusille joukkueille sekä pelaajien tuonnin aikaisemmista joukkueista.
+ * Sisältää täysileveän rinnakkaisen yhteenvetonäkymän yhdellä silmäyksellä.
  */
 
 (function() {
@@ -90,7 +90,6 @@
     let teams = loadFromStorage('salibandy_teams_v1', DEFAULT_TEAMS);
     let currentTeamId = loadFromStorage('salibandy_active_team_id', 'team_edustus');
 
-    // Auto-clean any user team that got corrupted by the old saveState bug!
     cleanCorruptedUserTeams();
 
     let roster = loadRosterForTeam(currentTeamId);
@@ -126,6 +125,7 @@
     const toastEl = document.getElementById('toast');
 
     // Main Sections
+    const rosterPanelSection = document.getElementById('roster-panel-section');
     const pitchPanelSection = document.getElementById('pitch-panel-section');
     const lineupPanelSection = document.getElementById('lineup-panel-section');
     const summaryViewPanel = document.getElementById('summary-view-panel');
@@ -211,7 +211,6 @@
         teams.forEach(t => {
             if (t.id !== 'team_edustus') {
                 const storedRoster = loadFromStorage(`salibandy_roster_${t.id}`, null);
-                // If user-created team has the demo player 'p_mv23', clean it up!
                 if (storedRoster && Array.isArray(storedRoster) && storedRoster.some(p => p.id === 'p_mv23')) {
                     console.log(`Auto-clearing corrupted demo roster for team: ${t.name} (${t.id})`);
                     localStorage.setItem(`salibandy_roster_${t.id}`, JSON.stringify([]));
@@ -308,7 +307,6 @@
     function switchTeam(teamId) {
         currentTeamId = teamId;
         
-        // Load target team data FIRST before calling saveState!
         roster = loadRosterForTeam(currentTeamId);
         lineupConfigs = loadLineupConfigs(currentTeamId);
         lineups = loadLineupsForTeam(currentTeamId, lineupConfigs);
@@ -413,11 +411,13 @@
         renderTabs();
 
         if (activeLineupKey === 'summary') {
+            if (rosterPanelSection) rosterPanelSection.style.display = 'none';
             pitchPanelSection.style.display = 'none';
             lineupPanelSection.style.display = 'none';
             summaryViewPanel.style.display = 'flex';
             renderSummaryView();
         } else {
+            if (rosterPanelSection) rosterPanelSection.style.display = 'flex';
             pitchPanelSection.style.display = 'flex';
             lineupPanelSection.style.display = 'flex';
             summaryViewPanel.style.display = 'none';
@@ -1285,7 +1285,7 @@
 
             ballNode.innerHTML = `
                 <div class="ball-circle" title="Salibandypallo">
-                    <img src="ball.png?v=6.0" class="floorball-png-icon" alt="Pallo">
+                    <img src="ball.png?v=8.0" class="floorball-png-icon" alt="Pallo">
                     <button class="ball-remove-btn" data-action="remove-ball" data-ball-id="${ball.id}">✕</button>
                 </div>
             `;
@@ -1644,7 +1644,6 @@
         const newTeamId = 'team_' + Date.now();
         teams.push({ id: newTeamId, name: name });
 
-        // GUARANTEE NEW CREATED TEAM HAS EMPTY ROSTER AND EMPTY LINEUPS!
         localStorage.setItem(`salibandy_roster_${newTeamId}`, JSON.stringify([]));
         
         const emptyLineups = {};
