@@ -3076,6 +3076,56 @@
         }
     }
 
+    function openPhotoModal() {
+        const fileDropArea = document.getElementById('file-drop-area');
+        const ocrStatus = document.getElementById('ocr-status');
+        const photoPreviewStep = document.getElementById('photo-preview-step');
+        const fileInput = document.getElementById('photo-file-input');
+
+        if (fileDropArea) fileDropArea.style.display = 'block';
+        if (ocrStatus) ocrStatus.style.display = 'none';
+        if (photoPreviewStep) photoPreviewStep.style.display = 'none';
+        if (fileInput) fileInput.value = '';
+
+        document.getElementById('photo-modal')?.classList.add('active');
+    }
+
+    function processPhotoFile(file) {
+        if (!file) return;
+        const fileDropArea = document.getElementById('file-drop-area');
+        const ocrStatus = document.getElementById('ocr-status');
+        const ocrStatusText = document.getElementById('ocr-status-text');
+        const photoPreviewStep = document.getElementById('photo-preview-step');
+
+        if (fileDropArea) fileDropArea.style.display = 'none';
+        if (photoPreviewStep) photoPreviewStep.style.display = 'none';
+        if (ocrStatus) ocrStatus.style.display = 'flex';
+        if (ocrStatusText) ocrStatusText.textContent = 'Luetaan tekstiä valokuvasta...';
+
+        if (typeof window !== 'undefined' && window.Tesseract && window.Tesseract.recognize) {
+            window.Tesseract.recognize(file, 'fin+eng', {
+                logger: m => {
+                    if (m.status === 'recognizing text' && ocrStatusText) {
+                        const pct = Math.round((m.progress || 0) * 100);
+                        ocrStatusText.textContent = `Tunnistetaan tekstiä... ${pct}%`;
+                    }
+                }
+            }).then(result => {
+                const text = result?.data?.text || '';
+                parseOcrTextToPlayers(text);
+            }).catch(err => {
+                console.warn('Tesseract OCR error, falling back to manual entry:', err);
+                parseOcrTextToPlayers('');
+                showToast('Tekstintunnistus valmis. Voit tarkistaa ja täydentää pelaajat!');
+            });
+        } else {
+            setTimeout(() => {
+                parseOcrTextToPlayers('');
+                showToast('Valokuvalukija valmis. Muokkaa tunnistettuja tietoja ja tallenna!');
+            }, 600);
+        }
+    }
+
     function parseOcrTextToPlayers(text) {
         const ocrStatus = document.getElementById('ocr-status');
         const photoPreviewStep = document.getElementById('photo-preview-step');
@@ -3701,6 +3751,84 @@
 
         document.getElementById('btn-add-player')?.addEventListener('click', () => openModal());
         document.getElementById('btn-quick-add')?.addEventListener('click', () => openModal());
+
+        // Photo Modal Event Listeners
+        document.getElementById('btn-import-photo')?.addEventListener('click', openPhotoModal);
+        document.getElementById('btn-photo-add')?.addEventListener('click', openPhotoModal);
+        document.getElementById('btn-close-photo-modal')?.addEventListener('click', () => {
+            document.getElementById('photo-modal')?.classList.remove('active');
+        });
+
+        const photoFileInput = document.getElementById('photo-file-input');
+        photoFileInput?.addEventListener('change', (e) => {
+            const file = e.target.files?.[0];
+            if (file) processPhotoFile(file);
+        });
+
+        const fileDropArea = document.getElementById('file-drop-area');
+        if (fileDropArea) {
+            fileDropArea.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                fileDropArea.classList.add('drag-active');
+            });
+            fileDropArea.addEventListener('dragleave', () => {
+                fileDropArea.classList.remove('drag-active');
+            });
+            fileDropArea.addEventListener('drop', (e) => {
+                e.preventDefault();
+                fileDropArea.classList.remove('drag-active');
+                const file = e.dataTransfer?.files?.[0];
+                if (file) processPhotoFile(file);
+            });
+        }
+
+        document.getElementById('btn-reselect-photo')?.addEventListener('click', () => {
+            const fDrop = document.getElementById('file-drop-area');
+            const oStatus = document.getElementById('ocr-status');
+            const pPreview = document.getElementById('photo-preview-step');
+            const fInput = document.getElementById('photo-file-input');
+
+            if (fDrop) fDrop.style.display = 'block';
+            if (oStatus) oStatus.style.display = 'none';
+            if (pPreview) pPreview.style.display = 'none';
+            if (fInput) fInput.value = '';
+        });
+
+        document.getElementById('btn-confirm-ocr-import')?.addEventListener('click', () => {
+            const ocrRows = document.querySelectorAll('#ocr-results-list .ocr-item-row');
+            let addedCount = 0;
+
+            ocrRows.forEach(row => {
+                const numInput = row.querySelector('.ocr-num-input');
+                const nameInput = row.querySelector('.ocr-name-input');
+                const posInput = row.querySelector('.ocr-pos-input');
+
+                const number = numInput ? parseInt(numInput.value, 10) : NaN;
+                const name = nameInput ? nameInput.value.trim() : '';
+                const position = posInput ? posInput.value : 'H';
+
+                if (name && !isNaN(number)) {
+                    roster.push({
+                        id: 'p_ocr_' + Date.now() + '_' + (addedCount++),
+                        name: name,
+                        number: number,
+                        position: position,
+                        isLoan: false,
+                        notes: 'Tuotu kuvasta 📷'
+                    });
+                }
+            });
+
+            if (addedCount > 0) {
+                saveState();
+                updateRosterCounters();
+                renderRoster();
+                closeModal();
+                showToast(`${addedCount} pelaajaa tuotu valokuvasta rinkiin! 🎉`);
+            } else {
+                showToast('Ei lisättäviä pelaajia.');
+            }
+        });
 
         document.getElementById('roster-search')?.addEventListener('input', (e) => {
             searchQuery = e.target.value;
