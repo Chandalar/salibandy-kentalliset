@@ -2414,7 +2414,34 @@ body {
 
 .add-court-bottom-bar {
     margin-top: 0.8rem;
-    text-align: center;
+    display: flex;
+    gap: 0.6rem;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.add-court-bottom-bar .btn {
+    flex: 1;
+    min-width: 220px;
+    padding: 0.65rem 1rem;
+    font-size: 0.85rem;
+    font-weight: 700;
+}
+
+.btn-duplicate-court {
+    background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%) !important;
+    border-color: #818cf8 !important;
+    color: #ffffff !important;
+    box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-duplicate-court:hover {
+    background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%) !important;
+    box-shadow: 0 6px 18px rgba(99, 102, 241, 0.5);
+    transform: translateY(-1px);
 }
 
 /* ON-COURT OPPONENT NODE STYLES */

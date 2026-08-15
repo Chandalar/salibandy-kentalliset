@@ -1207,6 +1207,103 @@
         showToast(`Uusi kuvio lisätty alapuolelle! 🏒`);
     }
 
+    function duplicateLastCourtToActivePage() {
+        const page = getCurrentPage();
+        if (!page.courts || !Array.isArray(page.courts) || page.courts.length === 0) {
+            page.courts = [{ id: 'c1', title: 'Kuvio 1' }];
+        }
+
+        const sourceCourt = page.courts[page.courts.length - 1];
+        duplicateCourtBoard(sourceCourt.id);
+    }
+
+    function duplicateCourtBoard(sourceCourtId) {
+        const page = getCurrentPage();
+        if (!page.courts || !Array.isArray(page.courts)) return;
+
+        const sourceCourt = page.courts.find(c => c.id === sourceCourtId);
+        if (!sourceCourt) return;
+
+        const sourceIndex = page.courts.indexOf(sourceCourt);
+        const sourceCourtKey = getCourtKey(sourceCourtId);
+
+        const newCourtId = 'c_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4);
+        const newCourtKey = getCourtKey(newCourtId);
+
+        const nextNum = page.courts.length + 1;
+        const sourceTitle = sourceCourt.title || `Kuvio ${sourceIndex + 1}`;
+        const newTitle = sourceTitle.includes('Kuvio') 
+            ? `Kuvio ${nextNum} (Vaihe ${nextNum})` 
+            : `${sourceTitle} (Kopio)`;
+
+        page.courts.splice(sourceIndex + 1, 0, {
+            id: newCourtId,
+            title: newTitle
+        });
+
+        // Deep copy drawings
+        if (lineupDrawings[sourceCourtKey]) {
+            lineupDrawings[newCourtKey] = JSON.parse(JSON.stringify(lineupDrawings[sourceCourtKey])).map(d => {
+                d.id = 'd_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+                return d;
+            });
+        }
+
+        // Deep copy extra players
+        if (lineupExtraPlayers[sourceCourtKey]) {
+            lineupExtraPlayers[newCourtKey] = JSON.parse(JSON.stringify(lineupExtraPlayers[sourceCourtKey])).map(p => {
+                p.id = 'p_ext_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+                return p;
+            });
+        }
+
+        // Deep copy opponents
+        if (lineupOpponents[sourceCourtKey]) {
+            lineupOpponents[newCourtKey] = JSON.parse(JSON.stringify(lineupOpponents[sourceCourtKey])).map(o => {
+                o.id = 'opp_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+                return o;
+            });
+        }
+
+        // Deep copy balls
+        if (lineupBalls[sourceCourtKey]) {
+            lineupBalls[newCourtKey] = JSON.parse(JSON.stringify(lineupBalls[sourceCourtKey])).map(b => {
+                b.id = 'ball_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+                return b;
+            });
+        }
+
+        // Deep copy cones
+        if (lineupCones[sourceCourtKey]) {
+            lineupCones[newCourtKey] = JSON.parse(JSON.stringify(lineupCones[sourceCourtKey])).map(c => {
+                c.id = 'cone_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+                return c;
+            });
+        }
+
+        // Deep copy custom court positions
+        if (lineupCourtPositions[sourceCourtKey]) {
+            lineupCourtPositions[newCourtKey] = JSON.parse(JSON.stringify(lineupCourtPositions[sourceCourtKey]));
+        }
+
+        // Copy grid paper setting
+        if (lineupGridPaper[sourceCourtKey] !== undefined) {
+            lineupGridPaper[newCourtKey] = lineupGridPaper[sourceCourtKey];
+        }
+
+        saveState();
+        renderCourtBoards();
+
+        requestAnimationFrame(() => {
+            const addedCard = document.querySelector(`.court-board-card[data-court-id="${newCourtId}"]`);
+            if (addedCard && addedCard.scrollIntoView) {
+                addedCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        });
+
+        showToast(`Kuvio kopioitu suoraan alapuolelle! 📋✨`);
+    }
+
     function deleteCourtFromActivePage(courtId) {
         const page = getCurrentPage();
         if (!page.courts || page.courts.length <= 1) {
@@ -1276,6 +1373,7 @@
                         <button class="btn-xs btn-outline" data-action="rename-court" data-court-id="${courtId}">✏️ Nimeä</button>
                     </div>
                     <div class="court-header-actions">
+                        <button class="btn-xs btn-outline" data-action="duplicate-court" data-court-id="${courtId}" title="Monista tämä kuvio suoraan alapuolelle">📋 Kopioi kuvio</button>
                         <button class="btn-xs btn-outline" data-action="clear-court-drawings" data-court-id="${courtId}">🧹 Tyhjennä</button>
                         ${courts.length > 1 ? `<button class="btn-xs btn-outline danger-text" data-action="delete-court" data-court-id="${courtId}">🗑️ Poista kuvio</button>` : ''}
                     </div>
@@ -3408,6 +3506,20 @@
             if (addCourtBtn) {
                 e.preventDefault();
                 addCourtToActivePage();
+                return;
+            }
+
+            const duplicateLastBtn = e.target.closest('#btn-duplicate-court-board, [data-action="duplicate-last-court"]');
+            if (duplicateLastBtn) {
+                e.preventDefault();
+                duplicateLastCourtToActivePage();
+                return;
+            }
+
+            const duplicateCourtBtn = e.target.closest('[data-action="duplicate-court"]');
+            if (duplicateCourtBtn) {
+                e.preventDefault();
+                duplicateCourtBoard(duplicateCourtBtn.dataset.courtId);
                 return;
             }
 

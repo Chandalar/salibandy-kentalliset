@@ -10,8 +10,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 
-    <!-- CSS Stylesheet (Cache Busted v31.0) -->
-    <link rel="stylesheet" href="styles.css?v=31.0">
+    <!-- CSS Stylesheet (Cache Busted v32.0) -->
+    <link rel="stylesheet" href="styles.css?v=32.0">
 
     <!-- OCR Tesseract.js (Optinen tekstintunnistus valokuvista) -->
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4.1.1/dist/tesseract.min.js"></script>
@@ -150,10 +150,13 @@
                 <!-- Dynamic Court Cards Stacked Vertically -->
             </div>
 
-            <!-- ADD COURT BOARD BUTTON -->
+            <!-- ADD COURT BOARD BUTTONS -->
             <div class="add-court-bottom-bar" id="add-court-bottom-bar">
-                <button class="btn btn-primary btn-block" id="btn-add-court-board" data-action="add-court-board">
-                    ➕ Lisää uusi kuvio / piirtoalusta alapuolelle
+                <button class="btn btn-primary" id="btn-add-court-board" data-action="add-court-board">
+                    ➕ Lisää uusi tyhjä kuvio
+                </button>
+                <button class="btn btn-duplicate-court" id="btn-duplicate-court-board" data-action="duplicate-last-court" title="Kopioi yläpuolella oleva kuvio ja kaikki sen piirrokset suoraan alapuolelle">
+                    📋 Kopioi ylempi piirros alapuolelle
                 </button>
             </div>
 
@@ -594,9 +597,9 @@
     <!-- TOAST NOTIFICATION CONTAINER -->
     <div id="toast" class="toast-notification"></div>
 
-    <!-- Firebase Config & App Engine (Cache Busted v31.0) -->
-    <script src="firebase-config.js?v=31.0"></script>
-    <script src="app.js?v=31.0"></script>
+    <!-- Firebase Config & App Engine (Cache Busted v32.0) -->
+    <script src="firebase-config.js?v=32.0"></script>
+    <script src="app.js?v=32.0"></script>
 
 </body>
 </html>
