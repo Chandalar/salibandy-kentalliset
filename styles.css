@@ -2368,5 +2368,196 @@ body {
 .line-endpoint-handle.pass-endpoint { border-color: #eab308; }
 .line-endpoint-handle.shot-endpoint { border-color: #ec4899; }
 
+/* ==========================================================================
+   THEME STYLES (LIGHT THEME & COURT SURFACE COLOR PALETTES)
+   ========================================================================== */
+[data-theme="light"] {
+    --bg-main: #f1f5f9;
+    --bg-card: #ffffff;
+    --bg-card-hover: #f8fafc;
+    --bg-card-light: #f8fafc;
+    --border-color: rgba(0, 0, 0, 0.1);
+    --border-highlight: rgba(0, 0, 0, 0.2);
+    --text-primary: #0f172a;
+    --text-secondary: #475569;
+    --text-muted: #64748b;
+    --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.08);
+    --shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.12);
+}
+
+[data-theme="light"] .pitch-panel {
+    background: #e2e8f0;
+}
+
+[data-theme="light"] .modal-overlay {
+    background: rgba(15, 23, 42, 0.6);
+}
+
+/* Court Surface Custom Palettes */
+body[data-court-color="blue"] .pitch-container,
+[data-court-color="blue"] .pitch-container {
+    --court-bg: linear-gradient(135deg, #1e3a8a 0%, #172554 100%) !important;
+    --court-lines: rgba(255, 255, 255, 0.7) !important;
+}
+
+body[data-court-color="graphite"] .pitch-container,
+[data-court-color="graphite"] .pitch-container {
+    --court-bg: linear-gradient(135deg, #1e293b 0%, #0f172a 100%) !important;
+    --court-lines: rgba(255, 255, 255, 0.6) !important;
+}
+
+body[data-court-color="wood"] .pitch-container,
+[data-court-color="wood"] .pitch-container {
+    --court-bg: linear-gradient(135deg, #9a3412 0%, #7c2d12 50%, #451a03 100%) !important;
+    --court-lines: rgba(255, 255, 255, 0.85) !important;
+}
+
+body[data-court-color="green"] .pitch-container,
+[data-court-color="green"] .pitch-container {
+    --court-bg: linear-gradient(135deg, #065f46 0%, #064e3b 100%) !important;
+    --court-lines: rgba(255, 255, 255, 0.7) !important;
+}
+
+body[data-court-color="terracotta"] .pitch-container,
+[data-court-color="terracotta"] .pitch-container {
+    --court-bg: linear-gradient(135deg, #9f1239 0%, #881337 100%) !important;
+    --court-lines: rgba(255, 255, 255, 0.75) !important;
+}
+
+/* SHARE MODAL STYLES */
+.share-link-box {
+    background: var(--bg-card-light);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 0.8rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.share-link-header {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+}
+
+.share-link-badge {
+    font-size: 0.78rem;
+    font-weight: 800;
+    font-family: var(--font-heading);
+}
+
+.share-link-badge.edit-badge {
+    color: #93c5fd;
+}
+
+.share-link-badge.view-badge {
+    color: #6ee7b7;
+}
+
+.share-link-header small {
+    font-size: 0.70rem;
+    color: var(--text-secondary);
+}
+
+.share-input-group {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.share-url-input {
+    flex: 1;
+    font-size: 0.74rem;
+    background: var(--bg-main);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    padding: 0.35rem 0.5rem;
+    border-radius: var(--radius-sm);
+}
+
+.btn-whatsapp {
+    background: #25d366 !important;
+    color: #ffffff !important;
+    border-color: #25d366 !important;
+    font-weight: 700;
+}
+
+.btn-whatsapp:hover {
+    background: #128c7e !important;
+}
+
+/* SETTINGS MODAL STYLES */
+.settings-content {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+}
+
+.settings-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.settings-label {
+    font-size: 0.82rem;
+    font-weight: 800;
+    color: var(--text-primary);
+}
+
+.settings-options-row {
+    display: flex;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+}
+
+.theme-opt-btn.active, .label-opt-btn.active {
+    background: var(--accent-field);
+    border-color: var(--accent-field);
+    color: #ffffff;
+}
+
+.court-color-swatches {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+}
+
+.color-swatch-btn {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    border: 3px solid transparent;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+}
+
+.color-swatch-btn:hover {
+    transform: scale(1.12);
+}
+
+.color-swatch-btn.active {
+    border-color: #ffffff;
+    box-shadow: 0 0 0 2px var(--accent-field), 0 4px 10px rgba(0,0,0,0.5);
+    transform: scale(1.15);
+}
+
+/* VIEWER READ-ONLY MODE BANNER */
+.viewer-mode-banner {
+    background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%);
+    color: #ffffff;
+    text-align: center;
+    padding: 0.45rem 1rem;
+    font-size: 0.80rem;
+    font-weight: 700;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+
 
 

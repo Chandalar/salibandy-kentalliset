@@ -10,8 +10,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 
-    <!-- CSS Stylesheet (Cache Busted v26.0) -->
-    <link rel="stylesheet" href="styles.css?v=26.0">
+    <!-- CSS Stylesheet (Cache Busted v27.0) -->
+    <link rel="stylesheet" href="styles.css?v=27.0">
 
     <!-- OCR Tesseract.js (Optinen tekstintunnistus valokuvista) -->
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4.1.1/dist/tesseract.min.js"></script>
@@ -64,6 +64,12 @@
                 </button>
             </div>
 
+            <button class="btn btn-secondary" id="btn-open-share-modal" title="Jaa joukkue linkillä">
+                🔗 Jaa
+            </button>
+            <button class="btn btn-outline" id="btn-open-settings-modal" title="Yleiset asetukset">
+                ⚙️ Asetukset
+            </button>
             <button class="btn btn-photo" id="btn-import-photo">
                 📷 Lue kuvasta
             </button>
@@ -474,12 +480,121 @@
         </div>
     </div>
 
+    <!-- SHARE TEAM (REAL-TIME EDIT / VIEW-ONLY LINKS) MODAL -->
+    <div class="modal-overlay" id="share-modal">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3 id="share-modal-title">🔗 Jaa joukkue: <span id="share-team-name-label"></span></h3>
+                <button class="close-btn" id="btn-close-share-modal">&times;</button>
+            </div>
+
+            <p class="panel-hint" style="padding: 0 0 0.8rem 0;">
+                Jaa joukkueen kokoonpanot ja taktiikat suoralla linkillä. Muutokset synkronoituvat laitteiden välillä reaaliaikaisesti!
+            </p>
+
+            <!-- Coach / Editor Link -->
+            <div class="share-link-box">
+                <div class="share-link-header">
+                    <span class="share-link-badge edit-badge">✏️ Valmentajalinki (Muokkausoikeus)</span>
+                    <small>Sallii kentällisten ja taktiikoiden muokkaamisen</small>
+                </div>
+                <div class="share-input-group">
+                    <input type="text" id="share-link-coach" class="form-input share-url-input" readonly>
+                    <button class="btn btn-sm btn-primary" id="btn-copy-coach-link" title="Kopioi leikepöydälle">📋 Kopioi</button>
+                    <button class="btn btn-sm btn-whatsapp" id="btn-wa-coach-link" title="Jaa WhatsAppissa">💬 WA</button>
+                </div>
+            </div>
+
+            <!-- Viewer / Read-Only Link -->
+            <div class="share-link-box" style="margin-top: 1rem;">
+                <div class="share-link-header">
+                    <span class="share-link-badge view-badge">👁️ Katselulinkki (Vain luku)</span>
+                    <small>Pelaajille ja vanhemmille – näkevät aina tuoreimman tilanteen</small>
+                </div>
+                <div class="share-input-group">
+                    <input type="text" id="share-link-viewer" class="form-input share-url-input" readonly>
+                    <button class="btn btn-sm btn-outline" id="btn-copy-viewer-link" title="Kopioi leikepöydälle">📋 Kopioi</button>
+                    <button class="btn btn-sm btn-whatsapp" id="btn-wa-viewer-link" title="Jaa WhatsAppissa">💬 WA</button>
+                </div>
+            </div>
+
+            <div class="modal-actions" style="margin-top: 1.2rem; justify-content: space-between;">
+                <button type="button" class="btn-xs btn-outline danger-text" id="btn-regenerate-share-link" title="Luo uusi tunniste jos vanha linkki halutaan mitätöidä">
+                    🔄 Luo uusi jakotunniste
+                </button>
+                <button type="button" class="btn btn-outline" id="btn-close-share-modal-bottom">Sulje</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- GENERAL SETTINGS MODAL -->
+    <div class="modal-overlay" id="settings-modal">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3>⚙️ Yleiset Asetukset</h3>
+                <button class="close-btn" id="btn-close-settings-modal">&times;</button>
+            </div>
+
+            <div class="settings-content">
+                <!-- Theme Option -->
+                <div class="settings-group">
+                    <label class="settings-label">🎨 Ulkoasuteema</label>
+                    <div class="settings-options-row">
+                        <button class="btn btn-sm btn-outline theme-opt-btn active" data-theme="dark">🌙 Tumma</button>
+                        <button class="btn btn-sm btn-outline theme-opt-btn" data-theme="light">☀️ Vaalea</button>
+                        <button class="btn btn-sm btn-outline theme-opt-btn" data-theme="system">💻 Automaatti</button>
+                    </div>
+                </div>
+
+                <!-- Court Surface Color -->
+                <div class="settings-group" style="margin-top: 1rem;">
+                    <label class="settings-label">🏟️ Pelialustan väri</label>
+                    <div class="court-color-swatches" id="court-color-swatches">
+                        <button class="color-swatch-btn active" data-court-color="blue" style="background:#1e3a8a;" title="Klassinen sininen"></button>
+                        <button class="color-swatch-btn" data-court-color="graphite" style="background:#1e293b;" title="Moderni grafiitti"></button>
+                        <button class="color-swatch-btn" data-court-color="wood" style="background:#78350f;" title="Parketti / Puu"></button>
+                        <button class="color-swatch-btn" data-court-color="green" style="background:#064e3b;" title="Klassinen vihreä"></button>
+                        <button class="color-swatch-btn" data-court-color="terracotta" style="background:#881337;" title="Terrakotta / Punaruskea"></button>
+                    </div>
+                </div>
+
+                <!-- Label Mode -->
+                <div class="settings-group" style="margin-top: 1rem;">
+                    <label class="settings-label">🏷️ Pelaajatunniste kentällä</label>
+                    <div class="settings-options-row">
+                        <button class="btn btn-sm btn-outline label-opt-btn active" data-label="full">Nimi & #</button>
+                        <button class="btn btn-sm btn-outline label-opt-btn" data-label="num"># Vain</button>
+                        <button class="btn btn-sm btn-outline label-opt-btn" data-label="name">Nimi vain</button>
+                    </div>
+                </div>
+
+                <!-- Backup & Restore -->
+                <div class="settings-group" style="margin-top: 1.2rem; border-top: 1px solid var(--border-color); padding-top: 1rem;">
+                    <label class="settings-label">💾 Varmuuskopiot (JSON)</label>
+                    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.4rem;">
+                        <button class="btn btn-sm btn-outline" id="btn-export-backup-json">
+                            📥 Lataa varmuuskopio
+                        </button>
+                        <button class="btn btn-sm btn-outline" id="btn-trigger-restore-json">
+                            📤 Palauta tiedostosta
+                        </button>
+                        <input type="file" id="backup-file-input" accept=".json" style="display:none;">
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-actions" style="margin-top: 1.2rem;">
+                <button type="button" class="btn btn-primary" id="btn-close-settings-done">Valmis 👍</button>
+            </div>
+        </div>
+    </div>
+
     <!-- TOAST NOTIFICATION CONTAINER -->
     <div id="toast" class="toast-notification"></div>
 
-    <!-- Firebase Config & App Engine (Cache Busted v26.0) -->
-    <script src="firebase-config.js?v=26.0"></script>
-    <script src="app.js?v=26.0"></script>
+    <!-- Firebase Config & App Engine (Cache Busted v27.0) -->
+    <script src="firebase-config.js?v=27.0"></script>
+    <script src="app.js?v=27.0"></script>
 
 </body>
 </html>

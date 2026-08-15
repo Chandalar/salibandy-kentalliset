@@ -125,9 +125,15 @@
     let activePageId = 'p1';
     let activeFilter = 'all';
     let searchQuery = '';
-    let labelMode = 'full';
+    let labelMode = loadFromStorage('salibandy_label_mode', 'full');
+    let appTheme = loadFromStorage('salibandy_theme', 'dark');
+    let courtColor = loadFromStorage('salibandy_court_color', 'blue');
     let orientationMode = (typeof window !== 'undefined' && window.innerWidth <= 600) ? 'vertical' : 'horizontal';
     let activeSelectedElementId = null;
+
+    let isViewerMode = false;
+    let currentSharedTeamId = null;
+    let unsubscribeSharedTeam = null;
 
     // Per-court state maps
     let courtDrawingTools = {};
@@ -142,10 +148,270 @@
         return `${activeLineupKey}_${activePageId}_${courtId}`;
     }
 
+    function applyThemeAndSettings() {
+        if (typeof document === 'undefined') return;
+
+        // Theme
+        if (appTheme === 'system') {
+            const prefersDark = (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+            document.documentElement.setAttribute('data-theme', prefersDark ? 'dark' : 'light');
+        } else {
+            document.documentElement.setAttribute('data-theme', appTheme);
+        }
+
+        // Court Color
+        document.body.setAttribute('data-court-color', courtColor);
+
+        // Update settings modal buttons
+        document.querySelectorAll('.theme-opt-btn').forEach(b => {
+            b.classList.toggle('active', b.dataset.theme === appTheme);
+        });
+        document.querySelectorAll('.color-swatch-btn').forEach(b => {
+            b.classList.toggle('active', b.dataset.courtColor === courtColor);
+        });
+        document.querySelectorAll('.label-opt-btn').forEach(b => {
+            b.classList.toggle('active', b.dataset.label === labelMode);
+        });
+    }
+
+    function openSettingsModal() {
+        applyThemeAndSettings();
+        document.getElementById('settings-modal')?.classList.add('active');
+    }
+
+    function exportBackupJson() {
+        const backupData = {
+            version: 'salibandy_v27.0',
+            exportDate: new Date().toISOString(),
+            teams: teams,
+            currentTeamId: currentTeamId,
+            theme: appTheme,
+            courtColor: courtColor,
+            labelMode: labelMode,
+            data: {}
+        };
+
+        teams.forEach(t => {
+            const tId = t.id;
+            backupData.data[tId] = {
+                roster: (tId === currentTeamId) ? roster : loadRosterForTeam(tId),
+                lineupConfigs: (tId === currentTeamId) ? lineupConfigs : loadLineupConfigs(tId),
+                lineups: (tId === currentTeamId) ? lineups : loadLineupsForTeam(tId, loadLineupConfigs(tId)),
+                drawings: (tId === currentTeamId) ? lineupDrawings : loadFromStorage(`salibandy_drawings_${tId}`, {}),
+                positions: (tId === currentTeamId) ? lineupCourtPositions : loadFromStorage(`salibandy_positions_${tId}`, {}),
+                balls: (tId === currentTeamId) ? lineupBalls : loadFromStorage(`salibandy_balls_${tId}`, {}),
+                cones: (tId === currentTeamId) ? lineupCones : loadFromStorage(`salibandy_cones_${tId}`, {}),
+                opponents: (tId === currentTeamId) ? lineupOpponents : loadFromStorage(`salibandy_opponents_${tId}`, {}),
+                pages: (tId === currentTeamId) ? lineupPages : loadFromStorage(`salibandy_pages_${tId}`, {})
+            };
+        });
+
+        const jsonStr = JSON.stringify(backupData, null, 2);
+        const blob = new Blob([jsonStr], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        const dStr = new Date().toISOString().slice(0, 10);
+        a.href = url;
+        a.download = `Salibandy_Kentalliset_Varmuuskopio_${dStr}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showToast('Varmuuskopio ladattu onnistuneesti! 💾');
+    }
+
+    function restoreBackupJson(file) {
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const data = JSON.parse(e.target.result);
+                if (!data.teams || !Array.isArray(data.teams)) {
+                    alert('Tiedosto ei ole kelvollinen Salibandyn Kentälliset -varmuuskopio.');
+                    return;
+                }
+
+                if (confirm(`Palautetaanko varmuuskopio (${data.teams.length} joukkuetta)? Nykyiset tiedot korvataan.`)) {
+                    teams = data.teams;
+                    currentTeamId = data.currentTeamId || teams[0].id;
+                    if (data.theme) appTheme = data.theme;
+                    if (data.courtColor) courtColor = data.courtColor;
+                    if (data.labelMode) labelMode = data.labelMode;
+
+                    localStorage.setItem('salibandy_teams_v1', JSON.stringify(teams));
+                    localStorage.setItem('salibandy_active_team_id', JSON.stringify(currentTeamId));
+                    localStorage.setItem('salibandy_theme', JSON.stringify(appTheme));
+                    localStorage.setItem('salibandy_court_color', JSON.stringify(courtColor));
+                    localStorage.setItem('salibandy_label_mode', JSON.stringify(labelMode));
+
+                    if (data.data) {
+                        Object.keys(data.data).forEach(tId => {
+                            const tObj = data.data[tId];
+                            if (tObj.roster) localStorage.setItem(`salibandy_roster_${tId}`, JSON.stringify(tObj.roster));
+                            if (tObj.lineupConfigs) localStorage.setItem(`salibandy_lineup_configs_${tId}`, JSON.stringify(tObj.lineupConfigs));
+                            if (tObj.lineups) localStorage.setItem(`salibandy_lineups_${tId}`, JSON.stringify(tObj.lineups));
+                            if (tObj.drawings) localStorage.setItem(`salibandy_drawings_${tId}`, JSON.stringify(tObj.drawings));
+                            if (tObj.positions) localStorage.setItem(`salibandy_positions_${tId}`, JSON.stringify(tObj.positions));
+                            if (tObj.balls) localStorage.setItem(`salibandy_balls_${tId}`, JSON.stringify(tObj.balls));
+                            if (tObj.cones) localStorage.setItem(`salibandy_cones_${tId}`, JSON.stringify(tObj.cones));
+                            if (tObj.opponents) localStorage.setItem(`salibandy_opponents_${tId}`, JSON.stringify(tObj.opponents));
+                            if (tObj.pages) localStorage.setItem(`salibandy_pages_${tId}`, JSON.stringify(tObj.pages));
+                        });
+                    }
+
+                    applyThemeAndSettings();
+                    switchTeam(currentTeamId);
+                    closeModal();
+                    showToast('Varmuuskopio palautettu onnistuneesti! 🎉');
+                }
+            } catch (err) {
+                console.error('Backup restore error:', err);
+                alert('Virhe varmuuskopion lukemisessa: ' + err.message);
+            }
+        };
+        reader.readAsText(file);
+    }
+
+    function getShareIdForCurrentTeam() {
+        let curTeam = teams.find(t => t.id === currentTeamId);
+        if (!curTeam) return 'team_share_' + currentTeamId;
+        if (!curTeam.shareId) {
+            curTeam.shareId = 'st_' + currentTeamId.replace(/[^a-zA-Z0-9]/g, '') + '_' + Math.random().toString(36).substr(2, 6);
+            saveStateLocalOnly();
+        }
+        return curTeam.shareId;
+    }
+
+    function openShareModal() {
+        const curTeam = teams.find(t => t.id === currentTeamId);
+        const teamName = curTeam ? curTeam.name : 'Joukkue';
+        const shareId = getShareIdForCurrentTeam();
+
+        const teamLabel = document.getElementById('share-team-name-label');
+        if (teamLabel) teamLabel.textContent = teamName;
+
+        const baseUrl = (typeof window !== 'undefined') ? `${window.location.origin}${window.location.pathname}` : 'https://kokoonpano.web.app/';
+        const coachUrl = `${baseUrl}?teamShare=${shareId}&role=coach`;
+        const viewerUrl = `${baseUrl}?teamShare=${shareId}&role=viewer`;
+
+        const coachInput = document.getElementById('share-link-coach');
+        const viewerInput = document.getElementById('share-link-viewer');
+        if (coachInput) coachInput.value = coachUrl;
+        if (viewerInput) viewerInput.value = viewerUrl;
+
+        pushSharedTeamToCloud(shareId, curTeam);
+
+        document.getElementById('share-modal')?.classList.add('active');
+    }
+
+    function pushSharedTeamToCloud(shareId, teamObj) {
+        if (typeof window !== 'undefined' && window.SalibandyFirebase && window.SalibandyFirebase.isReady()) {
+            const db = window.SalibandyFirebase.getDb();
+            const serverTs = (window.firebase && window.firebase.firestore && window.firebase.firestore.FieldValue) ? window.firebase.firestore.FieldValue.serverTimestamp() : new Date();
+            const payload = {
+                shareId: shareId,
+                teamId: currentTeamId,
+                teamName: teamObj ? teamObj.name : 'Joukkue',
+                updatedAt: serverTs,
+                roster: roster,
+                lineupConfigs: lineupConfigs,
+                lineups: lineups,
+                drawings: lineupDrawings,
+                positions: lineupCourtPositions,
+                balls: lineupBalls,
+                cones: lineupCones,
+                opponents: lineupOpponents,
+                pages: lineupPages
+            };
+            db.collection('shared_teams').doc(shareId).set(payload, { merge: true }).catch(err => {
+                console.warn('Share Firestore write warning:', err);
+            });
+        }
+    }
+
+    function checkUrlSharing() {
+        if (typeof window === 'undefined' || !window.location.search) return;
+        const params = new URLSearchParams(window.location.search);
+        const teamShareId = params.get('teamShare');
+        const role = params.get('role') || 'coach';
+
+        if (teamShareId) {
+            currentSharedTeamId = teamShareId;
+            isViewerMode = (role === 'viewer');
+
+            if (isViewerMode) {
+                const banner = document.getElementById('viewer-mode-banner');
+                if (banner) banner.style.display = 'block';
+                document.body.classList.add('viewer-mode');
+            }
+
+            listenToSharedTeamFirestore(teamShareId);
+        }
+    }
+
+    function listenToSharedTeamFirestore(shareId) {
+        if (!window.SalibandyFirebase || !window.SalibandyFirebase.isReady()) {
+            setTimeout(() => listenToSharedTeamFirestore(shareId), 500);
+            return;
+        }
+
+        const db = window.SalibandyFirebase.getDb();
+        if (unsubscribeSharedTeam) unsubscribeSharedTeam();
+
+        unsubscribeSharedTeam = db.collection('shared_teams').doc(shareId).onSnapshot(doc => {
+            if (!doc.exists) {
+                showToast('Jaettua joukkuetta ei löytynyt pilvestä.');
+                return;
+            }
+            const data = doc.data();
+            if (!data) return;
+
+            const sharedTeamName = data.teamName || 'Jaettu joukkue';
+            let foundTeam = teams.find(t => t.id === 'shared_' + shareId);
+            if (!foundTeam) {
+                foundTeam = { id: 'shared_' + shareId, name: '🤝 ' + sharedTeamName, shareId: shareId };
+                teams.push(foundTeam);
+            } else {
+                foundTeam.name = '🤝 ' + sharedTeamName;
+            }
+            currentTeamId = foundTeam.id;
+
+            if (data.roster) roster = data.roster;
+            if (data.lineupConfigs) lineupConfigs = data.lineupConfigs;
+            if (data.lineups) lineups = data.lineups;
+            if (data.drawings) lineupDrawings = sanitizeDrawings(data.drawings);
+            if (data.positions) lineupCourtPositions = data.positions;
+            if (data.balls) lineupBalls = data.balls;
+            if (data.cones) lineupCones = data.cones;
+            if (data.opponents) lineupOpponents = data.opponents;
+            if (data.pages) lineupPages = data.pages;
+
+            saveStateLocalOnly();
+
+            renderTeamDropdown();
+            renderTabs();
+            renderTacticalPageBadges();
+            updateRosterCounters();
+            renderRoster();
+            if (activeLineupKey === 'summary') {
+                renderSummaryView();
+            } else {
+                renderActiveLineupSlots();
+                renderCourtBoards();
+            }
+            updateCloudSyncBadge(true);
+            showToast(`Joukkue '${sharedTeamName}' synkronoitu reaaliajassa! ⚡`);
+        }, err => {
+            console.warn('Shared team listener error:', err);
+        });
+    }
+
     // ==========================================
     // INITIALIZATION & REAL-TIME FIREBASE SYNC SETUP
     // ==========================================
     function init() {
+        applyThemeAndSettings();
+
         if (currentTeamId === 'team_edustus' && (!roster || !Array.isArray(roster) || roster.length === 0)) {
             roster = JSON.parse(JSON.stringify(DEFAULT_ROSTER));
             lineups = JSON.parse(JSON.stringify(DEFAULT_LINEUPS));
@@ -157,6 +423,7 @@
         renderTacticalPageBadges();
         bindEvents();
         initFirebaseAuth();
+        checkUrlSharing();
         updateRosterCounters();
         renderRoster();
         renderActiveLineupSlots();
@@ -3347,6 +3614,114 @@
         document.getElementById('btn-export-text')?.addEventListener('click', exportLineupsToClipboard);
         document.getElementById('btn-copy-this-lineup')?.addEventListener('click', exportLineupsToClipboard);
         document.getElementById('btn-copy-all-summary')?.addEventListener('click', exportLineupsToClipboard);
+
+        // SHARE MODAL EVENTS
+        document.getElementById('btn-open-share-modal')?.addEventListener('click', openShareModal);
+        document.getElementById('btn-close-share-modal')?.addEventListener('click', () => {
+            document.getElementById('share-modal')?.classList.remove('active');
+        });
+        document.getElementById('btn-close-share-modal-bottom')?.addEventListener('click', () => {
+            document.getElementById('share-modal')?.classList.remove('active');
+        });
+
+        document.getElementById('btn-copy-coach-link')?.addEventListener('click', () => {
+            const input = document.getElementById('share-link-coach');
+            if (input && input.value) {
+                navigator.clipboard.writeText(input.value);
+                showToast('Valmentajalinki kopioitu leikepöydälle! 📋');
+            }
+        });
+
+        document.getElementById('btn-copy-viewer-link')?.addEventListener('click', () => {
+            const input = document.getElementById('share-link-viewer');
+            if (input && input.value) {
+                navigator.clipboard.writeText(input.value);
+                showToast('Katselulinkki kopioitu leikepöydälle! 📋');
+            }
+        });
+
+        document.getElementById('btn-wa-coach-link')?.addEventListener('click', () => {
+            const input = document.getElementById('share-link-coach');
+            const curTeam = teams.find(t => t.id === currentTeamId);
+            const tName = curTeam ? curTeam.name : 'Joukkue';
+            if (input && input.value) {
+                const text = encodeURIComponent(`Tässä ${tName} -valmentajalinki (muokkausoikeus): ${input.value}`);
+                window.open(`https://api.whatsapp.com/send?text=${text}`, '_blank');
+            }
+        });
+
+        document.getElementById('btn-wa-viewer-link')?.addEventListener('click', () => {
+            const input = document.getElementById('share-link-viewer');
+            const curTeam = teams.find(t => t.id === currentTeamId);
+            const tName = curTeam ? curTeam.name : 'Joukkue';
+            if (input && input.value) {
+                const text = encodeURIComponent(`Tässä ${tName} -kentälliset ja taktiikat (katselulinkki): ${input.value}`);
+                window.open(`https://api.whatsapp.com/send?text=${text}`, '_blank');
+            }
+        });
+
+        document.getElementById('btn-regenerate-share-link')?.addEventListener('click', () => {
+            const curTeam = teams.find(t => t.id === currentTeamId);
+            if (curTeam && confirm('Luodaanko uusi jakotunniste? Vanhat jakolinkit lakkaavat toimimasta.')) {
+                curTeam.shareId = 'st_' + currentTeamId.replace(/[^a-zA-Z0-9]/g, '') + '_' + Math.random().toString(36).substr(2, 6);
+                saveState();
+                openShareModal();
+                showToast('Uusi jakotunniste luotu! 🔄');
+            }
+        });
+
+        // SETTINGS MODAL EVENTS
+        document.getElementById('btn-open-settings-modal')?.addEventListener('click', openSettingsModal);
+        document.getElementById('btn-close-settings-modal')?.addEventListener('click', () => {
+            document.getElementById('settings-modal')?.classList.remove('active');
+        });
+        document.getElementById('btn-close-settings-done')?.addEventListener('click', () => {
+            document.getElementById('settings-modal')?.classList.remove('active');
+        });
+
+        // Theme selector buttons
+        document.querySelectorAll('.theme-opt-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                appTheme = btn.dataset.theme;
+                localStorage.setItem('salibandy_theme', appTheme);
+                applyThemeAndSettings();
+                showToast(`Teema asetettu: ${appTheme === 'dark' ? 'Tumma 🌙' : appTheme === 'light' ? 'Vaalea ☀️' : 'Automaatti 💻'}`);
+            });
+        });
+
+        // Court color swatches
+        document.querySelectorAll('.color-swatch-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                courtColor = btn.dataset.courtColor;
+                localStorage.setItem('salibandy_court_color', courtColor);
+                applyThemeAndSettings();
+                showToast(`Pelialustan väri asetettu! 🏟️`);
+            });
+        });
+
+        // Label mode buttons
+        document.querySelectorAll('.label-opt-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                labelMode = btn.dataset.label;
+                localStorage.setItem('salibandy_label_mode', labelMode);
+                applyThemeAndSettings();
+                renderCourtBoards();
+                showToast(`Pelaajatunnisteen esitys päivitetty: ${labelMode}`);
+            });
+        });
+
+        // Backup and Restore
+        document.getElementById('btn-export-backup-json')?.addEventListener('click', exportBackupJson);
+        document.getElementById('btn-trigger-restore-json')?.addEventListener('click', () => {
+            document.getElementById('backup-file-input')?.click();
+        });
+        document.getElementById('backup-file-input')?.addEventListener('change', (e) => {
+            const file = e.target.files?.[0];
+            if (file) {
+                restoreBackupJson(file);
+                e.target.value = '';
+            }
+        });
 
         if (typeof window !== 'undefined') {
             window.addEventListener('resize', () => {
