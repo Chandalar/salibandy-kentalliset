@@ -119,6 +119,7 @@
     let lineupBalls = loadFromStorage(`salibandy_balls_${currentTeamId}`, { '1_p1_c1': [{ id: 'ball_default', x: 55, y: 50 }] });
     let lineupCones = loadFromStorage(`salibandy_cones_${currentTeamId}`, {});
     let lineupOpponents = loadFromStorage(`salibandy_opponents_${currentTeamId}`, {});
+    let lineupExtraPlayers = loadFromStorage(`salibandy_extra_players_${currentTeamId}`, {});
     let lineupPages = loadFromStorage(`salibandy_pages_${currentTeamId}`, {});
 
     let activeLineupKey = '1';
@@ -202,6 +203,7 @@
                 balls: (tId === currentTeamId) ? lineupBalls : loadFromStorage(`salibandy_balls_${tId}`, {}),
                 cones: (tId === currentTeamId) ? lineupCones : loadFromStorage(`salibandy_cones_${tId}`, {}),
                 opponents: (tId === currentTeamId) ? lineupOpponents : loadFromStorage(`salibandy_opponents_${tId}`, {}),
+                extraPlayers: (tId === currentTeamId) ? lineupExtraPlayers : loadFromStorage(`salibandy_extra_players_${tId}`, {}),
                 pages: (tId === currentTeamId) ? lineupPages : loadFromStorage(`salibandy_pages_${tId}`, {})
             };
         });
@@ -255,6 +257,7 @@
                             if (tObj.balls) localStorage.setItem(`salibandy_balls_${tId}`, JSON.stringify(tObj.balls));
                             if (tObj.cones) localStorage.setItem(`salibandy_cones_${tId}`, JSON.stringify(tObj.cones));
                             if (tObj.opponents) localStorage.setItem(`salibandy_opponents_${tId}`, JSON.stringify(tObj.opponents));
+                            if (tObj.extraPlayers) localStorage.setItem(`salibandy_extra_players_${tId}`, JSON.stringify(tObj.extraPlayers));
                             if (tObj.pages) localStorage.setItem(`salibandy_pages_${tId}`, JSON.stringify(tObj.pages));
                         });
                     }
@@ -321,6 +324,7 @@
                 balls: lineupBalls,
                 cones: lineupCones,
                 opponents: lineupOpponents,
+                extraPlayers: lineupExtraPlayers,
                 pages: lineupPages
             };
             db.collection('shared_teams').doc(shareId).set(payload, { merge: true }).catch(err => {
@@ -384,6 +388,7 @@
             if (data.balls) lineupBalls = data.balls;
             if (data.cones) lineupCones = data.cones;
             if (data.opponents) lineupOpponents = data.opponents;
+            if (data.extraPlayers) lineupExtraPlayers = data.extraPlayers;
             if (data.pages) lineupPages = data.pages;
 
             saveStateLocalOnly();
@@ -551,6 +556,7 @@
         const ballsMap = {};
         const conesMap = {};
         const opponentsMap = {};
+        const extraPlayersMap = {};
         const pagesMap = {};
 
         teams.forEach(t => {
@@ -563,6 +569,7 @@
             ballsMap[tId] = (tId === currentTeamId) ? lineupBalls : loadFromStorage(`salibandy_balls_${tId}`, {});
             conesMap[tId] = (tId === currentTeamId) ? lineupCones : loadFromStorage(`salibandy_cones_${tId}`, {});
             opponentsMap[tId] = (tId === currentTeamId) ? lineupOpponents : loadFromStorage(`salibandy_opponents_${tId}`, {});
+            extraPlayersMap[tId] = (tId === currentTeamId) ? lineupExtraPlayers : loadFromStorage(`salibandy_extra_players_${tId}`, {});
             pagesMap[tId] = (tId === currentTeamId) ? lineupPages : loadFromStorage(`salibandy_pages_${tId}`, {});
         });
 
@@ -582,6 +589,7 @@
             balls: ballsMap,
             cones: conesMap,
             opponents: opponentsMap,
+            extraPlayers: extraPlayersMap,
             pages: pagesMap
         };
     }
@@ -723,6 +731,11 @@
                     localStorage.setItem(`salibandy_opponents_${tId}`, JSON.stringify(cloudData.opponents[tId]));
                 });
             }
+            if (cloudData.extraPlayers) {
+                Object.keys(cloudData.extraPlayers).forEach(tId => {
+                    localStorage.setItem(`salibandy_extra_players_${tId}`, JSON.stringify(cloudData.extraPlayers[tId]));
+                });
+            }
             if (cloudData.pages) {
                 Object.keys(cloudData.pages).forEach(tId => {
                     localStorage.setItem(`salibandy_pages_${tId}`, JSON.stringify(cloudData.pages[tId]));
@@ -738,6 +751,7 @@
             lineupBalls = loadFromStorage(`salibandy_balls_${currentTeamId}`, {});
             lineupCones = loadFromStorage(`salibandy_cones_${currentTeamId}`, {});
             lineupOpponents = loadFromStorage(`salibandy_opponents_${currentTeamId}`, {});
+            lineupExtraPlayers = loadFromStorage(`salibandy_extra_players_${currentTeamId}`, {});
             lineupPages = loadFromStorage(`salibandy_pages_${currentTeamId}`, {});
 
             saveStateLocalOnly();
@@ -856,6 +870,7 @@
             localStorage.setItem(`salibandy_balls_${currentTeamId}`, JSON.stringify(lineupBalls));
             localStorage.setItem(`salibandy_cones_${currentTeamId}`, JSON.stringify(lineupCones));
             localStorage.setItem(`salibandy_opponents_${currentTeamId}`, JSON.stringify(lineupOpponents));
+            localStorage.setItem(`salibandy_extra_players_${currentTeamId}`, JSON.stringify(lineupExtraPlayers));
             localStorage.setItem(`salibandy_pages_${currentTeamId}`, JSON.stringify(lineupPages));
         } catch (e) {
             console.error('LocalStorage save error', e);
@@ -918,6 +933,7 @@
         lineupBalls = loadFromStorage(`salibandy_balls_${currentTeamId}`, {});
         lineupCones = loadFromStorage(`salibandy_cones_${currentTeamId}`, {});
         lineupOpponents = loadFromStorage(`salibandy_opponents_${currentTeamId}`, {});
+        lineupExtraPlayers = loadFromStorage(`salibandy_extra_players_${currentTeamId}`, {});
         lineupPages = loadFromStorage(`salibandy_pages_${currentTeamId}`, {});
 
         activePageId = 'p1';
@@ -962,6 +978,7 @@
             localStorage.removeItem(`salibandy_balls_${deleteId}`);
             localStorage.removeItem(`salibandy_cones_${deleteId}`);
             localStorage.removeItem(`salibandy_opponents_${deleteId}`);
+            localStorage.removeItem(`salibandy_extra_players_${deleteId}`);
             localStorage.removeItem(`salibandy_pages_${deleteId}`);
 
             const nextTeamId = teams[0].id;
@@ -1290,6 +1307,9 @@
                         <button class="tool-btn highlight-cone" data-action="add-cone" data-court-id="${courtId}" title="Lisää harjoitustötterö kentälle">
                             🔶 + Tötterö
                         </button>
+                        <button class="tool-btn highlight-extra-player" data-action="add-extra-player" data-court-id="${courtId}" title="Lisää oma pelaaja kentälle">
+                            🔵 + Oma pelaaja
+                        </button>
                         <button class="tool-btn highlight-opponent" data-action="add-opponent" data-court-id="${courtId}" title="Lisää vastustaja kentälle">
                             🔴 + Vastustaja
                         </button>
@@ -1370,6 +1390,7 @@
     function renderCourtNodesForInstance(courtId, layersEl) {
         layersEl.innerHTML = '';
         renderLineupPlayerNodesForInstance(courtId, layersEl);
+        renderCourtExtraPlayersForInstance(courtId, layersEl);
         renderCourtBallsForInstance(courtId, layersEl);
         renderCourtConesForInstance(courtId, layersEl);
         renderCourtOpponentsForInstance(courtId, layersEl);
@@ -1482,6 +1503,28 @@
 
             setupOpponentTouchDragging(oppNode, opp, courtId);
             layersEl.appendChild(oppNode);
+        });
+    }
+
+    function renderCourtExtraPlayersForInstance(courtId, layersEl) {
+        const courtKey = getCourtKey(courtId);
+        const extraPlayers = lineupExtraPlayers[courtKey] || lineupExtraPlayers[activeLineupKey] || [];
+        extraPlayers.forEach(extraP => {
+            const isSelected = activeSelectedElementId === extraP.id;
+            const extraNode = document.createElement('div');
+            extraNode.className = `court-extra-player-node ${isSelected ? 'is-selected' : ''}`;
+            extraNode.style.left = extraP.x + '%';
+            extraNode.style.top = extraP.y + '%';
+
+            extraNode.innerHTML = `
+                <div class="extra-player-circle" title="Oma pelaaja (kaksoisklikkaa/täppää nimetäksesi)">
+                    ${escapeHtml(extraP.label || 'P')}
+                    <button class="extra-player-remove-btn" data-action="remove-extra-player" data-extra-id="${extraP.id}" data-court-id="${courtId}">✕</button>
+                </div>
+            `;
+
+            setupExtraPlayerTouchDragging(extraNode, extraP, courtId);
+            layersEl.appendChild(extraNode);
         });
     }
 
@@ -2135,6 +2178,87 @@
         };
 
         oppNode.addEventListener('pointerdown', onPointerDown);
+    }
+
+    function setupExtraPlayerTouchDragging(extraNode, extraObj, courtId) {
+        let isDragging = false;
+        let rafId = null;
+
+        const onPointerDown = (e) => {
+            const tool = courtDrawingTools[courtId] || 'select';
+            if (tool !== 'select') return;
+            selectCourtElement(extraObj.id, extraNode);
+            if (e.target.classList.contains('extra-player-remove-btn')) return;
+
+            isDragging = true;
+            extraNode.setPointerCapture(e.pointerId);
+
+            extraNode.addEventListener('pointermove', onPointerMove);
+            extraNode.addEventListener('pointerup', onPointerUp);
+            extraNode.addEventListener('pointercancel', onPointerUp);
+        };
+
+        const onPointerMove = (e) => {
+            if (!isDragging) return;
+            e.preventDefault();
+
+            const courtContainer = document.getElementById(`floorball-court-${courtId}`);
+            if (!courtContainer) return;
+
+            const rect = courtContainer.getBoundingClientRect();
+            let newX = ((e.clientX - rect.left) / rect.width) * 100;
+            let newY = ((e.clientY - rect.top) / rect.height) * 100;
+
+            newX = Math.max(3, Math.min(97, newX));
+            newY = Math.max(3, Math.min(97, newY));
+
+            extraObj.x = Math.round(newX * 10) / 10;
+            extraObj.y = Math.round(newY * 10) / 10;
+
+            if (rafId) cancelAnimationFrame(rafId);
+            rafId = requestAnimationFrame(() => {
+                extraNode.style.left = extraObj.x + '%';
+                extraNode.style.top = extraObj.y + '%';
+            });
+        };
+
+        const onPointerUp = (e) => {
+            if (!isDragging) return;
+            isDragging = false;
+            if (rafId) cancelAnimationFrame(rafId);
+            extraNode.removeEventListener('pointermove', onPointerMove);
+            extraNode.removeEventListener('pointerup', onPointerUp);
+            extraNode.removeEventListener('pointercancel', onPointerUp);
+            saveState();
+        };
+
+        extraNode.addEventListener('pointerdown', onPointerDown);
+
+        extraNode.addEventListener('dblclick', (e) => {
+            e.stopPropagation();
+            const newLabel = prompt('Syötä pelaajan numero tai tunnus (esim. 19, P1, OP):', extraObj.label || 'P');
+            if (newLabel !== null && newLabel.trim() !== '') {
+                extraObj.label = newLabel.trim();
+                saveState();
+                renderCourtBoards();
+            }
+        });
+    }
+
+    function addExtraPlayerToCourt(courtId) {
+        const courtKey = getCourtKey(courtId);
+        if (!lineupExtraPlayers[courtKey]) lineupExtraPlayers[courtKey] = [];
+        const nextNum = lineupExtraPlayers[courtKey].length + 1;
+        const newExtraPlayer = {
+            id: 'p_extra_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+            label: 'P' + nextNum,
+            x: 45,
+            y: 50
+        };
+        lineupExtraPlayers[courtKey].push(newExtraPlayer);
+        saveState();
+        renderCourtBoards();
+        showToast('Oma pelaaja lisätty kentälle! 🔵');
     }
 
     function setupRectTouchDragging(rectNode, rectObj, courtId) {
@@ -3136,6 +3260,7 @@
                 lineupBalls[courtKey] = [];
                 lineupCones[courtKey] = [];
                 lineupOpponents[courtKey] = [];
+                lineupExtraPlayers[courtKey] = [];
                 saveState();
                 renderCourtBoards();
                 showToast('Piirtoalusta tyhjennetty.');
@@ -3168,6 +3293,13 @@
             if (addConeBtn) {
                 e.preventDefault();
                 addConeToCourt(addConeBtn.dataset.courtId);
+                return;
+            }
+
+            const addExtraPlayerBtn = e.target.closest('[data-action="add-extra-player"]');
+            if (addExtraPlayerBtn) {
+                e.preventDefault();
+                addExtraPlayerToCourt(addExtraPlayerBtn.dataset.courtId);
                 return;
             }
 
@@ -3231,6 +3363,21 @@
                     saveState();
                     renderCourtBoards();
                     showToast('Tötterö poistettu.');
+                }
+                return;
+            }
+
+            const removeExtraPlayerBtn = e.target.closest('[data-action="remove-extra-player"]');
+            if (removeExtraPlayerBtn) {
+                e.preventDefault();
+                const extraId = removeExtraPlayerBtn.dataset.extraId;
+                const courtId = removeExtraPlayerBtn.dataset.courtId;
+                const courtKey = getCourtKey(courtId);
+                if (lineupExtraPlayers[courtKey]) {
+                    lineupExtraPlayers[courtKey] = lineupExtraPlayers[courtKey].filter(p => p.id !== extraId);
+                    saveState();
+                    renderCourtBoards();
+                    showToast('Oma pelaaja poistettu.');
                 }
                 return;
             }
@@ -3580,7 +3727,7 @@
         });
 
         document.addEventListener('pointerdown', (e) => {
-            if (!e.target.closest('.court-player-node, .court-ball-node, .court-cone-node, .court-opponent-node, .court-rect-node, .court-line-node, .line-endpoint-handle, button')) {
+            if (!e.target.closest('.court-player-node, .court-extra-player-node, .court-ball-node, .court-cone-node, .court-opponent-node, .court-rect-node, .court-line-node, .line-endpoint-handle, button')) {
                 selectCourtElement(null);
             }
         });
