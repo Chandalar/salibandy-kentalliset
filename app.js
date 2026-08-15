@@ -417,12 +417,6 @@
     function init() {
         applyThemeAndSettings();
 
-        if (currentTeamId === 'team_edustus' && (!roster || !Array.isArray(roster) || roster.length === 0)) {
-            roster = JSON.parse(JSON.stringify(DEFAULT_ROSTER));
-            lineups = JSON.parse(JSON.stringify(DEFAULT_LINEUPS));
-            saveStateLocalOnly();
-        }
-
         renderTeamDropdown();
         renderTabs();
         renderTacticalPageBadges();
@@ -675,11 +669,6 @@
                 Object.keys(cloudData.rosters).forEach(tId => {
                     let cloudRoster = cloudData.rosters[tId] || [];
                     let localRoster = loadFromStorage(`salibandy_roster_${tId}`, []);
-                    
-                    if (tId === 'team_edustus' && cloudRoster.length === 0 && localRoster.length === 0) {
-                        cloudRoster = JSON.parse(JSON.stringify(DEFAULT_ROSTER));
-                        needCloudUpdateBack = true;
-                    }
 
                     const mergedRosterMap = {};
                     cloudRoster.forEach(p => { mergedRosterMap[p.id] = p; });
@@ -814,13 +803,7 @@
 
     function loadRosterForTeam(teamId) {
         const stored = loadFromStorage(`salibandy_roster_${teamId}`, null);
-        if (teamId === 'team_edustus') {
-            if (!stored || !Array.isArray(stored) || stored.length === 0) {
-                return JSON.parse(JSON.stringify(DEFAULT_ROSTER));
-            }
-            return stored;
-        }
-        return stored || [];
+        return (stored && Array.isArray(stored)) ? stored : [];
     }
 
     function createEmptyLineupSlots() {
@@ -837,8 +820,6 @@
             }
             return stored;
         }
-
-        if (teamId === 'team_edustus') return JSON.parse(JSON.stringify(DEFAULT_LINEUPS));
 
         const emptyLineups = {};
         if (configs && Array.isArray(configs)) {
@@ -2891,7 +2872,19 @@
         const assignOptionsGrid = document.getElementById('assign-options-grid');
 
         if (assignModalTitle) assignModalTitle.textContent = 'Sijoita kentälliseen';
-        if (assignModalPlayerInfo) assignModalPlayerInfo.innerHTML = `Valitse paikka pelaajalle <strong>#${player.number} ${escapeHtml(player.name)}</strong>:`;
+        if (assignModalPlayerInfo) {
+            assignModalPlayerInfo.innerHTML = `
+                <div class="assign-player-header-card">
+                    <span class="assign-player-badge ${player.position === 'MV' ? 'badge-mv' : 'badge-field'}">#${player.number} ${escapeHtml(player.name)}</span>
+                    <span class="assign-player-pos-hint">(${player.position})</span>
+                </div>
+                <div class="assign-legend-bar">
+                    <span class="legend-item legend-active"><span class="legend-dot active-dot"></span> <strong>Sijoitettu tähän (valaistu)</strong></span>
+                    <span class="legend-item legend-empty"><span class="legend-dot empty-dot"></span> Vapaa paikka</span>
+                    <span class="legend-item legend-occ"><span class="legend-dot occ-dot"></span> Toinen pelaaja</span>
+                </div>
+            `;
+        }
 
         const slotTypes = ['MV', 'VP', 'OP', 'VH', 'KH', 'OH'];
         if (assignOptionsGrid) {
@@ -2901,23 +2894,61 @@
                 const lName = cConfig.name;
                 const curL = lineups[lKey] || {};
 
+                // Check if this player is in this lineup
+                let currentAssignedPosInThisLineup = null;
+                slotTypes.forEach(pos => {
+                    if (curL[pos] === player.id) {
+                        currentAssignedPosInThisLineup = pos;
+                    }
+                });
+
                 const section = document.createElement('div');
-                section.className = 'assign-lineup-group';
-                section.innerHTML = `<div class="assign-lineup-title">${escapeHtml(lName)}</div>`;
+                section.className = `assign-lineup-group ${currentAssignedPosInThisLineup ? 'has-assigned-player' : ''}`;
+                
+                section.innerHTML = `
+                    <div class="assign-lineup-header">
+                        <span class="assign-lineup-title">${escapeHtml(lName)}</span>
+                        ${currentAssignedPosInThisLineup ? `<span class="assigned-in-lineup-pill">🟢 Kentässä: <strong>${currentAssignedPosInThisLineup}</strong></span>` : '<span class="not-in-lineup-pill">Ei sijoitettu</span>'}
+                    </div>
+                `;
 
                 const btnGrid = document.createElement('div');
                 btnGrid.className = 'assign-slots-row';
 
                 slotTypes.forEach(pos => {
-                    const btn = document.createElement('button');
+                    const isMv = pos === 'MV';
                     const isSelectedHere = curL[pos] === player.id;
-                    btn.className = `assign-slot-btn ${isSelectedHere ? 'is-active' : ''}`;
-                    btn.innerHTML = `<strong>${pos}</strong>`;
+                    const occupantId = curL[pos];
+                    const occupant = (occupantId && occupantId !== player.id) ? roster.find(p => p.id === occupantId) : null;
+                    const isOccupiedOther = Boolean(occupant);
+
+                    const btn = document.createElement('button');
+                    btn.className = `assign-slot-btn ${isMv ? 'is-mv-slot' : 'is-field-slot'} ${isSelectedHere ? 'is-assigned-current' : ''} ${isOccupiedOther ? 'is-occupied-other' : ''} ${!isSelectedHere && !isOccupiedOther ? 'is-empty-slot' : ''}`;
+                    
+                    if (isSelectedHere) {
+                        btn.innerHTML = `
+                            <span class="slot-pos-main">${pos}</span>
+                            <span class="slot-status-glow">✓ Sijoitettu</span>
+                        `;
+                        btn.title = `${lName} - ${pos}: Sijoitettu pelaajalle #${player.number} ${player.name}. Klikkaa poistaaksesi sijoitus.`;
+                    } else if (occupant) {
+                        btn.innerHTML = `
+                            <span class="slot-pos-main">${pos}</span>
+                            <span class="slot-occupant-badge">#${occupant.number} ${escapeHtml(occupant.name.split(' ')[0])}</span>
+                        `;
+                        btn.title = `${lName} - ${pos}: Paikalla on #${occupant.number} ${occupant.name}. Klikkaa korvataksesi hänet.`;
+                    } else {
+                        btn.innerHTML = `
+                            <span class="slot-pos-main">${pos}</span>
+                            <span class="slot-empty-label">+ Valitse</span>
+                        `;
+                        btn.title = `${lName} - ${pos}: Vapaa paikka. Klikkaa sijoittaaksesi tähän.`;
+                    }
 
                     btn.addEventListener('click', () => {
                         if (isSelectedHere) {
                             lineups[lKey][pos] = '';
-                            showToast(`Poistettu: ${lName} - ${pos}`);
+                            showToast(`Poistettu paikasta: ${lName} - ${pos} ✕`);
                         } else {
                             assignPlayerToLineupSlot(lKey, pos, player.id);
                         }
