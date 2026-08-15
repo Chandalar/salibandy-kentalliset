@@ -54,7 +54,8 @@
         { id: 'yv', name: '⚡ Ylivoima (YV)', type: 'preset' },
         { id: 'av', name: '🛡️ Alivoima (AV)', type: 'preset' },
         { id: '6v5', name: '🔥 6v5 (Ilman MV)', type: 'preset' },
-        { id: 'custom', name: '📐 Taktiikka', type: 'preset' }
+        { id: 'custom', name: '📐 Taktiikka', type: 'preset' },
+        { id: 'freeform', name: '🎨 Vapaapiirto', type: 'preset' }
     ];
 
     const DEFAULT_LINEUPS = {
@@ -64,7 +65,8 @@
         'yv': { MV: 'p_mv23', VP: 'p_19', OP: 'p_42', VH: 'p_64', KH: 'p_55', OH: 'p_88' },
         'av': { MV: 'p_mv23', VP: 'p_20', OP: 'p_71', VH: '', KH: 'p_42', OH: '' },
         '6v5': { MV: '', VP: 'p_19', OP: 'p_20', VH: 'p_64', KH: 'p_42', OH: 'p_88' },
-        'custom': { MV: '', VP: '', OP: '', VH: '', KH: '', OH: '' }
+        'custom': { MV: '', VP: '', OP: '', VH: '', KH: '', OH: '' },
+        'freeform': { MV: '', VP: '', OP: '', VH: '', KH: '', OH: '' }
     };
 
     const DEFAULT_POS_COORDS = {
@@ -120,6 +122,7 @@
     let lineupCones = loadFromStorage(`salibandy_cones_${currentTeamId}`, {});
     let lineupOpponents = loadFromStorage(`salibandy_opponents_${currentTeamId}`, {});
     let lineupExtraPlayers = loadFromStorage(`salibandy_extra_players_${currentTeamId}`, {});
+    let lineupGridPaper = loadFromStorage(`salibandy_grid_paper_${currentTeamId}`, {});
     let lineupPages = loadFromStorage(`salibandy_pages_${currentTeamId}`, {});
 
     let activeLineupKey = '1';
@@ -551,6 +554,7 @@
         const conesMap = {};
         const opponentsMap = {};
         const extraPlayersMap = {};
+        const gridPaperMap = {};
         const pagesMap = {};
 
         teams.forEach(t => {
@@ -564,6 +568,7 @@
             conesMap[tId] = (tId === currentTeamId) ? lineupCones : loadFromStorage(`salibandy_cones_${tId}`, {});
             opponentsMap[tId] = (tId === currentTeamId) ? lineupOpponents : loadFromStorage(`salibandy_opponents_${tId}`, {});
             extraPlayersMap[tId] = (tId === currentTeamId) ? lineupExtraPlayers : loadFromStorage(`salibandy_extra_players_${tId}`, {});
+            gridPaperMap[tId] = (tId === currentTeamId) ? lineupGridPaper : loadFromStorage(`salibandy_grid_paper_${tId}`, {});
             pagesMap[tId] = (tId === currentTeamId) ? lineupPages : loadFromStorage(`salibandy_pages_${tId}`, {});
         });
 
@@ -584,6 +589,7 @@
             cones: conesMap,
             opponents: opponentsMap,
             extraPlayers: extraPlayersMap,
+            gridPaper: gridPaperMap,
             pages: pagesMap
         };
     }
@@ -835,6 +841,12 @@
         if (!configs || !Array.isArray(configs)) {
             configs = JSON.parse(JSON.stringify(DEFAULT_LINEUP_CONFIGS));
             localStorage.setItem(`salibandy_lineup_configs_${teamId}`, JSON.stringify(configs));
+        } else {
+            // Ensure preset tab freeform exists
+            if (!configs.some(c => c.id === 'freeform')) {
+                configs.push({ id: 'freeform', name: '🎨 Vapaapiirto', type: 'preset' });
+                localStorage.setItem(`salibandy_lineup_configs_${teamId}`, JSON.stringify(configs));
+            }
         }
         return configs;
     }
@@ -852,6 +864,7 @@
             localStorage.setItem(`salibandy_cones_${currentTeamId}`, JSON.stringify(lineupCones));
             localStorage.setItem(`salibandy_opponents_${currentTeamId}`, JSON.stringify(lineupOpponents));
             localStorage.setItem(`salibandy_extra_players_${currentTeamId}`, JSON.stringify(lineupExtraPlayers));
+            localStorage.setItem(`salibandy_grid_paper_${currentTeamId}`, JSON.stringify(lineupGridPaper));
             localStorage.setItem(`salibandy_pages_${currentTeamId}`, JSON.stringify(lineupPages));
         } catch (e) {
             console.error('LocalStorage save error', e);
@@ -915,6 +928,7 @@
         lineupCones = loadFromStorage(`salibandy_cones_${currentTeamId}`, {});
         lineupOpponents = loadFromStorage(`salibandy_opponents_${currentTeamId}`, {});
         lineupExtraPlayers = loadFromStorage(`salibandy_extra_players_${currentTeamId}`, {});
+        lineupGridPaper = loadFromStorage(`salibandy_grid_paper_${currentTeamId}`, {});
         lineupPages = loadFromStorage(`salibandy_pages_${currentTeamId}`, {});
 
         activePageId = 'p1';
@@ -960,6 +974,7 @@
             localStorage.removeItem(`salibandy_cones_${deleteId}`);
             localStorage.removeItem(`salibandy_opponents_${deleteId}`);
             localStorage.removeItem(`salibandy_extra_players_${deleteId}`);
+            localStorage.removeItem(`salibandy_grid_paper_${deleteId}`);
             localStorage.removeItem(`salibandy_pages_${deleteId}`);
 
             const nextTeamId = teams[0].id;
@@ -984,6 +999,7 @@
             if (config.id === 'yv') btn.classList.add('highlight-yv');
             if (config.id === 'av') btn.classList.add('highlight-av');
             if (config.id === '6v5') btn.classList.add('highlight-6v5');
+            if (config.id === 'freeform') btn.classList.add('highlight-freeform');
 
             btn.dataset.lineup = config.id;
             btn.innerHTML = `<span>${escapeHtml(config.name)}</span>`;
@@ -1245,6 +1261,9 @@
             const courtId = court.id;
             const courtKey = getCourtKey(courtId);
             const activeTool = courtDrawingTools[courtId] || 'select';
+            const isGridPaper = (lineupGridPaper[courtKey] !== undefined) 
+                ? !!lineupGridPaper[courtKey] 
+                : (activeLineupKey === 'freeform');
 
             const card = document.createElement('div');
             card.className = 'court-board-card';
@@ -1282,17 +1301,23 @@
                     </div>
 
                     <div class="toolbar-group">
-                        <button class="tool-btn highlight-ball" data-action="add-ball" data-court-id="${courtId}" title="Lisää pallo kentälle">
-                            <img src="ball.png?v=22.0" width="18" height="18" alt="Pallo" style="vertical-align: middle; display: inline-block;"> + Pallo
-                        </button>
-                        <button class="tool-btn highlight-cone" data-action="add-cone" data-court-id="${courtId}" title="Lisää harjoitustötterö kentälle">
-                            🔶 + Tötterö
+                        <button class="tool-btn highlight-all-players" data-action="populate-all-players" data-court-id="${courtId}" title="Tuo kaikki pelaajaringin pelaajat kentälle">
+                            👥 + Kaikki pelaajat
                         </button>
                         <button class="tool-btn highlight-extra-player" data-action="add-extra-player" data-court-id="${courtId}" title="Lisää oma pelaaja kentälle">
                             🔵 + Oma pelaaja
                         </button>
                         <button class="tool-btn highlight-opponent" data-action="add-opponent" data-court-id="${courtId}" title="Lisää vastustaja kentälle">
                             🔴 + Vastustaja
+                        </button>
+                        <button class="tool-btn highlight-ball" data-action="add-ball" data-court-id="${courtId}" title="Lisää pallo kentälle">
+                            <img src="ball.png?v=22.0" width="18" height="18" alt="Pallo" style="vertical-align: middle; display: inline-block;"> + Pallo
+                        </button>
+                        <button class="tool-btn highlight-cone" data-action="add-cone" data-court-id="${courtId}" title="Lisää harjoitustötterö kentälle">
+                            🔶 + Tötterö
+                        </button>
+                        <button class="tool-btn highlight-grid-paper ${isGridPaper ? 'active' : ''}" data-action="toggle-grid-paper" data-court-id="${courtId}" title="Vaihda ruutupaperipohja / normaali kenttä">
+                            📐 Ruutupaperi
                         </button>
                         <button class="tool-btn" data-action="undo-drawing" data-court-id="${courtId}" title="Kumoa piirros">
                             ↩️ Kumoa
@@ -1304,7 +1329,7 @@
                 </div>
 
                 <div class="pitch-outer-wrapper">
-                    <div class="pitch-container ${orientationMode === 'vertical' ? 'mode-vertical' : 'mode-horizontal'}" id="floorball-court-${courtId}">
+                    <div class="pitch-container ${orientationMode === 'vertical' ? 'mode-vertical' : 'mode-horizontal'} ${isGridPaper ? 'mode-grid-paper' : ''}" id="floorball-court-${courtId}">
                         <div class="court-surface"></div>
                         <div class="court-center-line"></div>
                         <div class="center-spot-pink"></div>
@@ -1492,16 +1517,23 @@
         const extraPlayers = lineupExtraPlayers[courtKey] || lineupExtraPlayers[activeLineupKey] || [];
         extraPlayers.forEach(extraP => {
             const isSelected = activeSelectedElementId === extraP.id;
+            const isMv = extraP.isMv || (extraP.position === 'MV');
             const extraNode = document.createElement('div');
-            extraNode.className = `court-extra-player-node ${isSelected ? 'is-selected' : ''}`;
+            extraNode.className = `court-extra-player-node ${isMv ? 'is-mv' : 'is-field'} ${isSelected ? 'is-selected' : ''}`;
             extraNode.style.left = extraP.x + '%';
             extraNode.style.top = extraP.y + '%';
 
+            let displayName = '';
+            if (extraP.fullName && labelMode !== 'num') {
+                displayName = `<span class="extra-player-subname">${escapeHtml(extraP.fullName)}</span>`;
+            }
+
             extraNode.innerHTML = `
-                <div class="extra-player-circle" title="Oma pelaaja (kaksoisklikkaa/täppää nimetäksesi)">
+                <div class="extra-player-circle ${isMv ? 'is-mv-circle' : ''}" title="${extraP.fullName ? `${escapeHtml(extraP.fullName)} (${extraP.label})` : 'Oma pelaaja'} - Kaksoisklikkaa muokataksesi">
                     ${escapeHtml(extraP.label || 'P')}
                     <button class="extra-player-remove-btn" data-action="remove-extra-player" data-extra-id="${extraP.id}" data-court-id="${courtId}">✕</button>
                 </div>
+                ${displayName}
             `;
 
             setupExtraPlayerTouchDragging(extraNode, extraP, courtId);
@@ -2240,6 +2272,68 @@
         saveState();
         renderCourtBoards();
         showToast('Oma pelaaja lisätty kentälle! 🔵');
+    }
+
+    function populateAllPlayersToCourt(courtId) {
+        if (!roster || roster.length === 0) {
+            showToast('Pelaajaringissä ei ole pelaajia. Lisää ensin pelaajia vasemmalta!');
+            return;
+        }
+
+        const courtKey = getCourtKey(courtId);
+        if (!lineupExtraPlayers[courtKey]) lineupExtraPlayers[courtKey] = [];
+
+        lineupExtraPlayers[courtKey] = [];
+
+        const isVert = orientationMode === 'vertical';
+
+        roster.forEach((player, idx) => {
+            const isMv = player.position === 'MV';
+            let x, y;
+
+            if (isVert) {
+                // Vertical layout spacing: 4 columns
+                const cols = 4;
+                const colIdx = idx % cols;
+                const rowIdx = Math.floor(idx / cols);
+                x = 16 + (colIdx * 23);
+                y = 12 + (rowIdx * 12);
+            } else {
+                // Horizontal layout spacing: 5 columns
+                const cols = 5;
+                const colIdx = idx % cols;
+                const rowIdx = Math.floor(idx / cols);
+                x = 12 + (colIdx * 19);
+                y = 16 + (rowIdx * 18);
+            }
+
+            x = Math.max(6, Math.min(94, x));
+            y = Math.max(6, Math.min(94, y));
+
+            lineupExtraPlayers[courtKey].push({
+                id: 'p_ext_' + player.id + '_' + Date.now() + '_' + idx,
+                playerId: player.id,
+                label: '#' + player.number,
+                fullName: player.name,
+                position: player.position,
+                isMv: isMv,
+                x: Math.round(x * 10) / 10,
+                y: Math.round(y * 10) / 10
+            });
+        });
+
+        saveState();
+        renderCourtBoards();
+        showToast(`🎉 Kaikki ${roster.length} pelaajaa tuotu kentälle! Voit siirtää kaikkia vapaasti.`);
+    }
+
+    function toggleGridPaperForCourt(courtId) {
+        const courtKey = getCourtKey(courtId);
+        const currentVal = (lineupGridPaper[courtKey] !== undefined) ? lineupGridPaper[courtKey] : (activeLineupKey === 'freeform');
+        lineupGridPaper[courtKey] = !currentVal;
+        saveState();
+        renderCourtBoards();
+        showToast(lineupGridPaper[courtKey] ? '📐 Ruutupaperipohja aktivoitu!' : '🏟️ Vakiokenttäpohja aktivoitu!');
     }
 
     function setupRectTouchDragging(rectNode, rectObj, courtId) {
@@ -3360,6 +3454,20 @@
                 const courtId = toolBtn.dataset.courtId;
                 const tool = toolBtn.dataset.tool;
                 setCourtDrawingTool(courtId, tool);
+                return;
+            }
+
+            const populateAllBtn = e.target.closest('[data-action="populate-all-players"]');
+            if (populateAllBtn) {
+                e.preventDefault();
+                populateAllPlayersToCourt(populateAllBtn.dataset.courtId);
+                return;
+            }
+
+            const toggleGridPaperBtn = e.target.closest('[data-action="toggle-grid-paper"]');
+            if (toggleGridPaperBtn) {
+                e.preventDefault();
+                toggleGridPaperForCourt(toggleGridPaperBtn.dataset.courtId);
                 return;
             }
 
