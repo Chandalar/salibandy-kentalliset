@@ -186,6 +186,18 @@
     function initFirebaseAuth() {
         if (typeof window !== 'undefined' && window.SalibandyFirebase && window.SalibandyFirebase.isReady()) {
             const auth = window.SalibandyFirebase.getAuth();
+            
+            auth.getRedirectResult().then((result) => {
+                if (result && result.user) {
+                    currentUser = result.user;
+                    updateAuthUI();
+                    showToast(`Kirjauduttu sisään Google-tilillä: ${result.user.email} 🎉`);
+                    listenToCloudFirestore(result.user);
+                }
+            }).catch((error) => {
+                console.warn('Redirect auth result error:', error);
+            });
+
             auth.onAuthStateChanged((user) => {
                 currentUser = user;
                 updateAuthUI();
@@ -769,12 +781,12 @@
         if (!lineupPages || typeof lineupPages !== 'object') lineupPages = {};
         if (!lineupPages[activeLineupKey] || !Array.isArray(lineupPages[activeLineupKey]) || lineupPages[activeLineupKey].length === 0) {
             lineupPages[activeLineupKey] = [
-                { id: 'p1', name: 'Sivu 1', courts: [{ id: 'c1', title: 'Kenttä 1' }] }
+                { id: 'p1', name: 'Sivu 1', courts: [{ id: 'c1', title: 'Kuvio 1' }] }
             ];
         }
         lineupPages[activeLineupKey].forEach((p, idx) => {
             if (!p.courts || !Array.isArray(p.courts) || p.courts.length === 0) {
-                p.courts = [{ id: 'c1', title: 'Kenttä 1' }];
+                p.courts = [{ id: 'c1', title: 'Kuvio 1' }];
             }
         });
         return lineupPages[activeLineupKey];
@@ -784,11 +796,11 @@
         const pages = getPagesForActiveLineup();
         let page = pages.find(p => p.id === activePageId);
         if (!page) {
-            page = pages[0] || { id: 'p1', name: 'Sivu 1', courts: [{ id: 'c1', title: 'Kenttä 1' }] };
+            page = pages[0] || { id: 'p1', name: 'Sivu 1', courts: [{ id: 'c1', title: 'Kuvio 1' }] };
             activePageId = page.id;
         }
         if (!page.courts || !Array.isArray(page.courts) || page.courts.length === 0) {
-            page.courts = [{ id: 'c1', title: 'Kenttä 1' }];
+            page.courts = [{ id: 'c1', title: 'Kuvio 1' }];
         }
         return page;
     }
@@ -854,7 +866,7 @@
         pages.push({
             id: newPageId,
             name: `Sivu ${nextNum}`,
-            courts: [{ id: 'c1', title: 'Kenttä 1' }]
+            courts: [{ id: 'c1', title: 'Kuvio 1' }]
         });
 
         activePageId = newPageId;
@@ -886,19 +898,19 @@
     }
 
     // ==========================================
-    // VERTICALLY STACKED COURTS ENGINE (`renderCourtBoards`)
+    // VERTICALLY STACKED COURTS / PATTERNS ENGINE (`renderCourtBoards`)
     // ==========================================
     function addCourtToActivePage() {
         const page = getCurrentPage();
         if (!page.courts || !Array.isArray(page.courts)) {
-            page.courts = [{ id: 'c1', title: 'Kenttä 1' }];
+            page.courts = [{ id: 'c1', title: 'Kuvio 1' }];
         }
         const nextNum = page.courts.length + 1;
         const newCourtId = 'c_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4);
 
         page.courts.push({
             id: newCourtId,
-            title: `Kenttä ${nextNum}`
+            title: `Kuvio ${nextNum}`
         });
 
         saveState();
@@ -911,20 +923,20 @@
             }
         });
 
-        showToast(`Uusi piirtoalusta / kenttä lisätty alapuolelle! 🏒`);
+        showToast(`Uusi kuvio lisätty alapuolelle! 🏒`);
     }
 
     function deleteCourtFromActivePage(courtId) {
         const page = getCurrentPage();
         if (!page.courts || page.courts.length <= 1) {
-            showToast('Et voi poistaa ainoaa piirtoalustaa sivulta.');
+            showToast('Et voi poistaa ainoaa kuviota sivulta.');
             return;
         }
 
         const courtObj = page.courts.find(c => c.id === courtId);
-        const cTitle = courtObj ? courtObj.title : 'kenttä';
+        const cTitle = courtObj ? courtObj.title : 'kuvio';
 
-        if (confirm(`Poistetaanko piirtoalusta '${cTitle}'?`)) {
+        if (confirm(`Poistetaanko kuvio '${cTitle}'?`)) {
             const courtKey = getCourtKey(courtId);
             delete lineupDrawings[courtKey];
             delete lineupBalls[courtKey];
@@ -936,7 +948,7 @@
 
             saveState();
             renderCourtBoards();
-            showToast(`Piirtoalusta '${cTitle}' poistettu.`);
+            showToast(`Kuvio '${cTitle}' poistettu.`);
         }
     }
 
@@ -945,12 +957,12 @@
         const courtObj = page.courts.find(c => c.id === courtId);
         if (!courtObj) return;
 
-        const newTitle = prompt('Syötä kentän / vaiheen otsikko (esim. Vaihe 1: Avaus):', courtObj.title || '');
+        const newTitle = prompt('Syötä kuvion / vaiheen otsikko (esim. Kuvio 1: Karvaus 2-2-1):', courtObj.title || '');
         if (newTitle !== null && newTitle.trim() !== '') {
             courtObj.title = newTitle.trim();
             saveState();
             renderCourtBoards();
-            showToast(`Kentän otsikko päivitetty: '${courtObj.title}' ✏️`);
+            showToast(`Kuvion otsikko päivitetty: '${courtObj.title}' ✏️`);
         }
     }
 
@@ -976,12 +988,12 @@
             card.innerHTML = `
                 <div class="court-board-header">
                     <div class="court-board-title">
-                        <span>🏒 ${courts.length > 1 ? '#' + (idx + 1) + ' ' : ''}${escapeHtml(court.title || ('Kenttä ' + (idx + 1)))}</span>
+                        <span>🏒 ${courts.length > 1 ? '#' + (idx + 1) + ' ' : ''}${escapeHtml(court.title || ('Kuvio ' + (idx + 1)))}</span>
                         <button class="btn-xs btn-outline" data-action="rename-court" data-court-id="${courtId}">✏️ Nimeä</button>
                     </div>
                     <div class="court-header-actions">
                         <button class="btn-xs btn-outline" data-action="clear-court-drawings" data-court-id="${courtId}">🧹 Tyhjennä</button>
-                        ${courts.length > 1 ? `<button class="btn-xs btn-outline danger-text" data-action="delete-court" data-court-id="${courtId}">🗑️ Poista kenttä</button>` : ''}
+                        ${courts.length > 1 ? `<button class="btn-xs btn-outline danger-text" data-action="delete-court" data-court-id="${courtId}">🗑️ Poista kuvio</button>` : ''}
                     </div>
                 </div>
 
@@ -2713,7 +2725,112 @@
     function bindEvents() {
         document.getElementById('team-select')?.addEventListener('change', (e) => switchTeam(e.target.value));
         document.getElementById('btn-delete-team')?.addEventListener('click', deleteActiveTeam);
+        document.getElementById('cloud-sync-badge')?.addEventListener('click', forceCloudSync);
         document.getElementById('cloudSyncBadge')?.addEventListener('click', forceCloudSync);
+
+        // Firebase Auth Modal & Google Sign-In
+        document.getElementById('btn-google-login')?.addEventListener('click', () => {
+            if (!window.SalibandyFirebase || !window.SalibandyFirebase.isReady()) {
+                showToast('Pilvipalvelua alustetaan... Yritä hetken kuluttua.');
+                return;
+            }
+            const auth = window.SalibandyFirebase.getAuth();
+            const provider = new firebase.auth.GoogleAuthProvider();
+            provider.addScope('profile');
+            provider.addScope('email');
+
+            auth.signInWithPopup(provider)
+                .then((result) => {
+                    currentUser = result.user;
+                    updateAuthUI();
+                    document.getElementById('auth-modal')?.classList.remove('active');
+                    showToast(`Kirjauduttu sisään Google-tilillä: ${result.user.email} 🎉`);
+                    listenToCloudFirestore(result.user);
+                })
+                .catch((error) => {
+                    console.warn('Google Popup sign-in error, trying redirect:', error);
+                    if (error.code === 'auth/popup-blocked' || error.code === 'auth/cancelled-popup-request' || error.code === 'auth/popup-closed-by-user') {
+                        auth.signInWithRedirect(provider).catch(e => {
+                            showToast('Kirjautumisvirhe: ' + e.message);
+                        });
+                    } else {
+                        showToast('Google-kirjautumisvirhe: ' + error.message);
+                    }
+                });
+        });
+
+        // Email Login
+        document.getElementById('login-form')?.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const email = document.getElementById('login-email')?.value.trim();
+            const password = document.getElementById('login-password')?.value;
+            if (!email || !password) return;
+
+            if (!window.SalibandyFirebase || !window.SalibandyFirebase.isReady()) {
+                showToast('Pilvipalvelu ei ole valmis.');
+                return;
+            }
+            const auth = window.SalibandyFirebase.getAuth();
+            auth.signInWithEmailAndPassword(email, password)
+                .then((result) => {
+                    currentUser = result.user;
+                    updateAuthUI();
+                    document.getElementById('auth-modal')?.classList.remove('active');
+                    showToast(`Kirjauduttu sisään: ${result.user.email} 👍`);
+                    listenToCloudFirestore(result.user);
+                })
+                .catch((err) => {
+                    showToast('Kirjautuminen epäonnistui: ' + err.message);
+                });
+        });
+
+        // Email Register
+        document.getElementById('register-form')?.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const email = document.getElementById('reg-email')?.value.trim();
+            const password = document.getElementById('reg-password')?.value;
+            if (!email || !password) return;
+
+            if (!window.SalibandyFirebase || !window.SalibandyFirebase.isReady()) {
+                showToast('Pilvipalvelu ei ole valmis.');
+                return;
+            }
+            const auth = window.SalibandyFirebase.getAuth();
+            auth.createUserWithEmailAndPassword(email, password)
+                .then((result) => {
+                    currentUser = result.user;
+                    updateAuthUI();
+                    document.getElementById('auth-modal')?.classList.remove('active');
+                    showToast(`Tili luotu onnistuneesti: ${result.user.email} 🎉`);
+                    listenToCloudFirestore(result.user);
+                })
+                .catch((err) => {
+                    showToast('Tilin luonti epäonnistui: ' + err.message);
+                });
+        });
+
+        // Auth Tabs
+        document.getElementById('auth-tab-login')?.addEventListener('click', () => {
+            document.getElementById('auth-tab-login')?.classList.add('active');
+            document.getElementById('auth-tab-register')?.classList.remove('active');
+            const lForm = document.getElementById('login-form');
+            const rForm = document.getElementById('register-form');
+            if (lForm) lForm.style.display = 'block';
+            if (rForm) rForm.style.display = 'none';
+        });
+
+        document.getElementById('auth-tab-register')?.addEventListener('click', () => {
+            document.getElementById('auth-tab-register')?.classList.add('active');
+            document.getElementById('auth-tab-login')?.classList.remove('active');
+            const lForm = document.getElementById('login-form');
+            const rForm = document.getElementById('register-form');
+            if (lForm) lForm.style.display = 'none';
+            if (rForm) rForm.style.display = 'block';
+        });
+
+        document.getElementById('btn-close-auth-modal')?.addEventListener('click', () => {
+            document.getElementById('auth-modal')?.classList.remove('active');
+        });
 
         // Tactical Pages & Multi-court buttons
         document.getElementById('btn-add-tactic-page')?.addEventListener('click', addTacticalPage);
