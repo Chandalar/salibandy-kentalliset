@@ -115,6 +115,7 @@
     let roster = loadRosterForTeam(currentTeamId);
     let lineupConfigs = loadLineupConfigs(currentTeamId);
     let lineups = loadLineupsForTeam(currentTeamId, lineupConfigs);
+    let lineupReserves = loadFromStorage(`salibandy_reserves_${currentTeamId}`, {});
     
     let lineupDrawings = loadFromStorage(`salibandy_drawings_${currentTeamId}`, {});
     lineupDrawings = sanitizeDrawings(lineupDrawings);
@@ -550,6 +551,7 @@
         const rostersMap = {};
         const configsMap = {};
         const lineupsMap = {};
+        const reservesMap = {};
         const drawingsMap = {};
         const positionsMap = {};
         const ballsMap = {};
@@ -564,6 +566,7 @@
             rostersMap[tId] = (tId === currentTeamId) ? roster : loadRosterForTeam(tId);
             configsMap[tId] = (tId === currentTeamId) ? lineupConfigs : loadLineupConfigs(tId);
             lineupsMap[tId] = (tId === currentTeamId) ? lineups : loadLineupsForTeam(tId, configsMap[tId]);
+            reservesMap[tId] = (tId === currentTeamId) ? lineupReserves : loadFromStorage(`salibandy_reserves_${tId}`, {});
             drawingsMap[tId] = (tId === currentTeamId) ? lineupDrawings : loadFromStorage(`salibandy_drawings_${tId}`, {});
             positionsMap[tId] = (tId === currentTeamId) ? lineupCourtPositions : loadFromStorage(`salibandy_positions_${tId}`, {});
             ballsMap[tId] = (tId === currentTeamId) ? lineupBalls : loadFromStorage(`salibandy_balls_${tId}`, {});
@@ -585,6 +588,7 @@
             rosters: rostersMap,
             lineupConfigs: configsMap,
             lineups: lineupsMap,
+            reserves: reservesMap,
             drawings: drawingsMap,
             positions: positionsMap,
             balls: ballsMap,
@@ -702,6 +706,11 @@
                     localStorage.setItem(`salibandy_lineups_${tId}`, JSON.stringify(cloudData.lineups[tId]));
                 });
             }
+            if (cloudData.reserves) {
+                Object.keys(cloudData.reserves).forEach(tId => {
+                    localStorage.setItem(`salibandy_reserves_${tId}`, JSON.stringify(cloudData.reserves[tId]));
+                });
+            }
             if (cloudData.drawings) {
                 Object.keys(cloudData.drawings).forEach(tId => {
                     const sanitized = sanitizeDrawings({ [tId]: cloudData.drawings[tId] });
@@ -742,6 +751,7 @@
             roster = loadRosterForTeam(currentTeamId);
             lineupConfigs = loadLineupConfigs(currentTeamId);
             lineups = loadLineupsForTeam(currentTeamId, lineupConfigs);
+            lineupReserves = loadFromStorage(`salibandy_reserves_${currentTeamId}`, {});
             lineupDrawings = loadFromStorage(`salibandy_drawings_${currentTeamId}`, {});
             lineupDrawings = sanitizeDrawings(lineupDrawings);
             lineupCourtPositions = loadFromStorage(`salibandy_positions_${currentTeamId}`, {});
@@ -864,6 +874,7 @@
             localStorage.setItem(`salibandy_roster_${currentTeamId}`, JSON.stringify(roster));
             localStorage.setItem(`salibandy_lineup_configs_${currentTeamId}`, JSON.stringify(lineupConfigs));
             localStorage.setItem(`salibandy_lineups_${currentTeamId}`, JSON.stringify(lineups));
+            localStorage.setItem(`salibandy_reserves_${currentTeamId}`, JSON.stringify(lineupReserves));
             localStorage.setItem(`salibandy_drawings_${currentTeamId}`, JSON.stringify(lineupDrawings));
             localStorage.setItem(`salibandy_positions_${currentTeamId}`, JSON.stringify(lineupCourtPositions));
             localStorage.setItem(`salibandy_balls_${currentTeamId}`, JSON.stringify(lineupBalls));
@@ -874,6 +885,56 @@
             localStorage.setItem(`salibandy_pages_${currentTeamId}`, JSON.stringify(lineupPages));
         } catch (e) {
             console.error('LocalStorage save error', e);
+        }
+    }
+
+    function getPosReserves(lineupKey, pos) {
+        if (!lineupReserves) lineupReserves = {};
+        if (!lineupReserves[lineupKey]) lineupReserves[lineupKey] = {};
+        if (!Array.isArray(lineupReserves[lineupKey][pos])) lineupReserves[lineupKey][pos] = [];
+        return lineupReserves[lineupKey][pos];
+    }
+
+    function addPosReserve(lineupKey, pos, playerId) {
+        if (!playerId) return;
+        const list = getPosReserves(lineupKey, pos);
+        if (!list.includes(playerId)) {
+            list.push(playerId);
+            saveState();
+        }
+    }
+
+    function removePosReserve(lineupKey, pos, playerId) {
+        const list = getPosReserves(lineupKey, pos);
+        const idx = list.indexOf(playerId);
+        if (idx >= 0) {
+            list.splice(idx, 1);
+            saveState();
+        }
+    }
+
+    function getGeneralReserves(lineupKey) {
+        if (!lineupReserves) lineupReserves = {};
+        if (!lineupReserves[lineupKey]) lineupReserves[lineupKey] = {};
+        if (!Array.isArray(lineupReserves[lineupKey].general)) lineupReserves[lineupKey].general = [];
+        return lineupReserves[lineupKey].general;
+    }
+
+    function addGeneralReserve(lineupKey, playerId) {
+        if (!playerId) return;
+        const list = getGeneralReserves(lineupKey);
+        if (!list.includes(playerId)) {
+            list.push(playerId);
+            saveState();
+        }
+    }
+
+    function removeGeneralReserve(lineupKey, playerId) {
+        const list = getGeneralReserves(lineupKey);
+        const idx = list.indexOf(playerId);
+        if (idx >= 0) {
+            list.splice(idx, 1);
+            saveState();
         }
     }
 
@@ -927,6 +988,7 @@
         roster = loadRosterForTeam(currentTeamId);
         lineupConfigs = loadLineupConfigs(currentTeamId);
         lineups = loadLineupsForTeam(currentTeamId, lineupConfigs);
+        lineupReserves = loadFromStorage(`salibandy_reserves_${currentTeamId}`, {});
         lineupDrawings = loadFromStorage(`salibandy_drawings_${currentTeamId}`, {});
         lineupDrawings = sanitizeDrawings(lineupDrawings);
         lineupCourtPositions = loadFromStorage(`salibandy_positions_${currentTeamId}`, {});
@@ -2846,7 +2908,7 @@
         if (!activeLineupTitle || !lineupSlotsContainer) return;
         activeLineupTitle.textContent = getLineupName(activeLineupKey);
         const currentLineup = lineups[activeLineupKey] || {};
-        const posKeys = ['MV', 'VP', 'OP', 'VH', 'KH', 'OH', 'VM'];
+        const posKeys = ['MV', 'VP', 'OP', 'VH', 'KH', 'OH'];
 
         lineupSlotsContainer.innerHTML = '';
 
@@ -2854,9 +2916,10 @@
             const playerId = currentLineup[pos];
             const player = roster.find(p => p.id === playerId);
             const isMv = pos === 'MV';
-            const isVm = pos === 'VM';
-            const posClass = isMv ? 'slot-mv' : (isVm ? 'slot-vm' : 'slot-field');
-            const posDisplay = isVm ? 'VARAMIES' : pos;
+            const posClass = isMv ? 'slot-mv' : 'slot-field';
+
+            const group = document.createElement('div');
+            group.className = 'lineup-slot-item-group';
 
             const slot = document.createElement('div');
             slot.className = `lineup-slot ${posClass} ${player ? 'is-filled' : 'is-empty'}`;
@@ -2864,23 +2927,90 @@
 
             if (player) {
                 slot.innerHTML = `
-                    <div class="slot-pos-tag">${posDisplay}</div>
+                    <div class="slot-pos-tag">${pos}</div>
                     <div class="slot-player-info">
                         <span class="slot-player-num">#${player.number}</span>
                         <span class="slot-player-name">${escapeHtml(player.name)}</span>
                         ${player.isLoan ? '<span class="loan-pill-tiny">⭐</span>' : ''}
                     </div>
+                    <button class="slot-add-reserve-btn" data-action="open-add-reserve" data-pos="${pos}" title="Lisää varamies tälle paikalle">+ 🪑 Varamies</button>
                     <button class="slot-remove-btn" data-action="remove-slot" data-pos="${pos}" title="Poista paikalta">✕</button>
                 `;
             } else {
                 slot.innerHTML = `
-                    <div class="slot-pos-tag">${posDisplay}</div>
-                    <div class="slot-empty-prompt">+ Valitse ${isVm ? 'varamies' : 'pelaaja'}</div>
+                    <div class="slot-pos-tag">${pos}</div>
+                    <div class="slot-empty-prompt">+ Valitse pelaaja</div>
+                    <button class="slot-add-reserve-btn" data-action="open-add-reserve" data-pos="${pos}" title="Lisää varamies tälle paikalle">+ 🪑 Varamies</button>
                 `;
             }
 
-            lineupSlotsContainer.appendChild(slot);
+            group.appendChild(slot);
+
+            // Indented reserves for this position
+            const posReserves = getPosReserves(activeLineupKey, pos);
+            if (posReserves && posReserves.length > 0) {
+                const resListEl = document.createElement('div');
+                resListEl.className = 'pos-reserve-list';
+
+                posReserves.forEach(rId => {
+                    const rPlayer = roster.find(p => p.id === rId);
+                    if (!rPlayer) return;
+
+                    const resRow = document.createElement('div');
+                    resRow.className = 'pos-reserve-row';
+                    resRow.innerHTML = `
+                        <div class="reserve-info-left">
+                            <span class="reserve-indent-icon">↳</span>
+                            <span class="reserve-tag-pill">VARAMIES</span>
+                            <span class="reserve-player-num">#${rPlayer.number}</span>
+                            <span class="reserve-player-name">${escapeHtml(rPlayer.name)}</span>
+                            ${rPlayer.isLoan ? '<span class="loan-pill-tiny">⭐</span>' : ''}
+                        </div>
+                        <button class="reserve-remove-btn" data-action="remove-reserve" data-pos="${pos}" data-reserve-id="${rPlayer.id}" title="Poista varamies">✕</button>
+                    `;
+                    resListEl.appendChild(resRow);
+                });
+
+                group.appendChild(resListEl);
+            }
+
+            lineupSlotsContainer.appendChild(group);
         });
+
+        // General reserves / Extra Bench Section
+        const generalReserves = getGeneralReserves(activeLineupKey);
+        const genSection = document.createElement('div');
+        genSection.className = 'general-reserves-section';
+
+        let genRowsHtml = '';
+        if (generalReserves && generalReserves.length > 0) {
+            generalReserves.forEach(rId => {
+                const rPlayer = roster.find(p => p.id === rId);
+                if (!rPlayer) return;
+                genRowsHtml += `
+                    <div class="pos-reserve-row" style="margin-bottom: 0.22rem;">
+                        <div class="reserve-info-left">
+                            <span class="reserve-tag-pill">VARAMIES</span>
+                            <span class="reserve-player-num">#${rPlayer.number}</span>
+                            <span class="reserve-player-name">${escapeHtml(rPlayer.name)}</span>
+                            ${rPlayer.isLoan ? '<span class="loan-pill-tiny">⭐</span>' : ''}
+                        </div>
+                        <button class="reserve-remove-btn" data-action="remove-reserve" data-pos="general" data-reserve-id="${rPlayer.id}" title="Poista varamies">✕</button>
+                    </div>
+                `;
+            });
+        }
+
+        genSection.innerHTML = `
+            <div class="general-reserves-title">
+                <span>🪑 Vaihtopenkki / Varamiehet</span>
+                <span style="font-size:0.68rem; color:var(--text-muted);">${generalReserves.length} kpl</span>
+            </div>
+            ${genRowsHtml}
+            <button class="btn-add-general-reserve" data-action="open-add-general-reserve">+ Lisää varamies kentälliseen</button>
+        `;
+
+        lineupSlotsContainer.appendChild(genSection);
     }
 
     // ==========================================
@@ -2891,7 +3021,7 @@
         if (!summaryGridContainer) return;
         summaryGridContainer.innerHTML = '';
 
-        const posKeys = ['MV', 'VP', 'OP', 'VH', 'KH', 'OH', 'VM'];
+        const posKeys = ['MV', 'VP', 'OP', 'VH', 'KH', 'OH'];
 
         lineupConfigs.forEach(cConfig => {
             const lKey = cConfig.id;
@@ -2906,29 +3036,61 @@
                 const pid = curLineup[pos];
                 const player = roster.find(p => p.id === pid);
                 const isMv = pos === 'MV';
-                const isVm = pos === 'VM';
-                const rowClass = isMv ? 'is-mv' : (isVm ? 'is-vm' : 'is-field');
-                const posDisplay = isVm ? 'VM' : pos;
+                const rowClass = isMv ? 'is-mv' : 'is-field';
 
                 if (player) {
                     slotsHtml += `
                         <div class="summary-slot-row ${rowClass}" data-lineup="${lKey}" data-pos="${pos}">
-                            <span class="summary-pos-tag">${posDisplay}</span>
+                            <span class="summary-pos-tag">${pos}</span>
                             <span class="summary-p-num">#${player.number}</span>
                             <span class="summary-p-name">${escapeHtml(player.name)}</span>
                             ${player.isLoan ? '<span class="loan-pill-tiny">⭐</span>' : ''}
-                            <button class="summary-remove-slot" data-action="summary-remove-slot" data-lineup="${lKey}" data-pos="${pos}">✕</button>
+                            <button class="summary-remove-slot" data-action="summary-remove-slot" data-lineup="${lKey}" data-pos="${pos}" title="Poista paikalta">✕</button>
                         </div>
                     `;
                 } else {
                     slotsHtml += `
                         <div class="summary-slot-row is-empty" data-lineup="${lKey}" data-pos="${pos}">
-                            <span class="summary-pos-tag">${posDisplay}</span>
-                            <span class="summary-empty-text">+ Valitse ${isVm ? 'varamies' : pos}</span>
+                            <span class="summary-pos-tag">${pos}</span>
+                            <span class="summary-empty-text">+ Valitse ${pos}</span>
                         </div>
                     `;
                 }
+
+                // Indented reserves for this position in summary
+                const posReserves = getPosReserves(lKey, pos);
+                if (posReserves && posReserves.length > 0) {
+                    posReserves.forEach(rId => {
+                        const rPlayer = roster.find(p => p.id === rId);
+                        if (!rPlayer) return;
+                        slotsHtml += `
+                            <div class="summary-slot-row summary-reserve-row" data-lineup="${lKey}" data-pos="${pos}">
+                                <span class="summary-pos-tag">↳ VM</span>
+                                <span class="summary-p-num">#${rPlayer.number}</span>
+                                <span class="summary-p-name">${escapeHtml(rPlayer.name)}</span>
+                                <button class="summary-remove-slot" data-action="summary-remove-reserve" data-lineup="${lKey}" data-pos="${pos}" data-reserve-id="${rPlayer.id}" title="Poista varamies">✕</button>
+                            </div>
+                        `;
+                    });
+                }
             });
+
+            // General reserves in summary
+            const genReserves = getGeneralReserves(lKey);
+            if (genReserves && genReserves.length > 0) {
+                genReserves.forEach(rId => {
+                    const rPlayer = roster.find(p => p.id === rId);
+                    if (!rPlayer) return;
+                    slotsHtml += `
+                        <div class="summary-slot-row summary-reserve-row" data-lineup="${lKey}" data-pos="general">
+                            <span class="summary-pos-tag">🪑 VM</span>
+                            <span class="summary-p-num">#${rPlayer.number}</span>
+                            <span class="summary-p-name">${escapeHtml(rPlayer.name)}</span>
+                            <button class="summary-remove-slot" data-action="summary-remove-reserve" data-lineup="${lKey}" data-pos="general" data-reserve-id="${rPlayer.id}" title="Poista varamies">✕</button>
+                        </div>
+                    `;
+                });
+            }
 
             col.innerHTML = `
                 <div class="summary-card-header">
@@ -2961,9 +3123,22 @@
                     renderSummaryView();
                     return;
                 }
+                if (e.target.dataset.action === 'summary-remove-reserve') {
+                    const lk = e.target.dataset.lineup;
+                    const pos = e.target.dataset.pos;
+                    const rId = e.target.dataset.reserveId;
+                    if (pos === 'general') {
+                        removeGeneralReserve(lk, rId);
+                    } else {
+                        removePosReserve(lk, pos, rId);
+                    }
+                    saveState();
+                    renderSummaryView();
+                    return;
+                }
                 const lk = row.dataset.lineup;
                 const pos = row.dataset.pos;
-                if (lk && pos) openSlotPickerModal(lk, pos);
+                if (lk && pos && pos !== 'general') openSlotPickerModal(lk, pos);
             });
         });
     }
@@ -3109,21 +3284,23 @@
         }
     }
 
-    function openSlotPickerModal(lineupKey, pos) {
-        selectedSlotTarget = { lineupKey, pos };
+    function openSlotPickerModal(lineupKey, pos, isReserve = false) {
+        selectedSlotTarget = { lineupKey, pos, isReserve };
         const isMv = pos === 'MV';
-        const isVm = pos === 'VM';
-        const posTitle = isVm ? 'Varamies' : pos;
         const lineupName = getLineupName(lineupKey);
+        const posTitle = (pos === 'general') ? 'Yleinen varamies' : (isReserve ? `Varamies (${pos})` : pos);
 
         const slotPickerTitle = document.getElementById('slot-picker-title');
         const slotPickerInfo = document.getElementById('slot-picker-info');
         const slotPickerPlayerList = document.getElementById('slot-picker-player-list');
 
-        if (slotPickerTitle) slotPickerTitle.textContent = `Valitse pelaaja: ${lineupName} - ${posTitle}`;
-        if (slotPickerInfo) slotPickerInfo.textContent = `Valitse pelaaja ringistä paikkaan ${posTitle}:`;
+        if (slotPickerTitle) slotPickerTitle.textContent = isReserve 
+            ? `Valitse varamies: ${lineupName} - ${posTitle}` 
+            : `Valitse pelaaja: ${lineupName} - ${posTitle}`;
+        if (slotPickerInfo) slotPickerInfo.textContent = `Valitse pelaaja ringistä:`;
 
-        const currentOccupantId = (lineups[lineupKey] || {})[pos];
+        const currentOccupantId = isReserve ? null : (lineups[lineupKey] || {})[pos];
+        const currentReserves = isReserve ? (pos === 'general' ? getGeneralReserves(lineupKey) : getPosReserves(lineupKey, pos)) : [];
 
         const sortedRoster = [...roster].sort((a, b) => {
             if (isMv) {
@@ -3137,7 +3314,7 @@
             slotPickerPlayerList.innerHTML = '';
             sortedRoster.forEach(player => {
                 const item = document.createElement('div');
-                const isAssignedToThis = player.id === currentOccupantId;
+                const isAssignedToThis = isReserve ? currentReserves.includes(player.id) : (player.id === currentOccupantId);
                 item.className = `slot-picker-item ${player.position === 'MV' ? 'is-mv' : 'is-field'} ${isAssignedToThis ? 'is-current' : ''}`;
 
                 item.innerHTML = `
@@ -3151,7 +3328,19 @@
                 `;
 
                 item.addEventListener('click', () => {
-                    assignPlayerToLineupSlot(lineupKey, pos, player.id);
+                    if (isReserve) {
+                        if (pos === 'general') {
+                            addGeneralReserve(lineupKey, player.id);
+                        } else {
+                            addPosReserve(lineupKey, pos, player.id);
+                        }
+                        showToast(`Pelaaja #${player.number} ${player.name} lisätty varamieheksi (${posTitle})! 🪑`);
+                    } else {
+                        assignPlayerToLineupSlot(lineupKey, pos, player.id);
+                    }
+                    saveState();
+                    renderActiveLineupSlots();
+                    if (activeLineupKey === 'summary') renderSummaryView();
                     closeModal();
                 });
 
@@ -3183,7 +3372,7 @@
             `;
         }
 
-        const slotTypes = ['MV', 'VP', 'OP', 'VH', 'KH', 'OH', 'VM'];
+        const slotTypes = ['MV', 'VP', 'OP', 'VH', 'KH', 'OH'];
         if (assignOptionsGrid) {
             assignOptionsGrid.innerHTML = '';
             lineupConfigs.forEach(cConfig => {
@@ -3191,13 +3380,25 @@
                 const lName = cConfig.name;
                 const curL = lineups[lKey] || {};
 
-                // Check if this player is in this lineup
+                // Check if this player is in this lineup as starter or reserve
                 let currentAssignedPosInThisLineup = null;
                 slotTypes.forEach(pos => {
                     if (curL[pos] === player.id) {
                         currentAssignedPosInThisLineup = pos;
                     }
                 });
+                if (!currentAssignedPosInThisLineup) {
+                    slotTypes.forEach(pos => {
+                        if (getPosReserves(lKey, pos).includes(player.id)) {
+                            currentAssignedPosInThisLineup = `Varamies (${pos})`;
+                        }
+                    });
+                    if (!currentAssignedPosInThisLineup && getGeneralReserves(lKey).includes(player.id)) {
+                        currentAssignedPosInThisLineup = `Varamies`;
+                    }
+                }
+
+                const isGeneralReserve = getGeneralReserves(lKey).includes(player.id);
 
                 const section = document.createElement('div');
                 section.className = `assign-lineup-group ${currentAssignedPosInThisLineup ? 'has-assigned-player' : ''}`;
@@ -3214,14 +3415,13 @@
 
                 slotTypes.forEach(pos => {
                     const isMv = pos === 'MV';
-                    const isVm = pos === 'VM';
                     const isSelectedHere = curL[pos] === player.id;
                     const occupantId = curL[pos];
                     const occupant = (occupantId && occupantId !== player.id) ? roster.find(p => p.id === occupantId) : null;
                     const isOccupiedOther = Boolean(occupant);
 
                     const btn = document.createElement('button');
-                    btn.className = `assign-slot-btn ${isMv ? 'is-mv-slot' : (isVm ? 'is-vm-slot' : 'is-field-slot')} ${isSelectedHere ? 'is-assigned-current' : ''} ${isOccupiedOther ? 'is-occupied-other' : ''} ${!isSelectedHere && !isOccupiedOther ? 'is-empty-slot' : ''}`;
+                    btn.className = `assign-slot-btn ${isMv ? 'is-mv-slot' : 'is-field-slot'} ${isSelectedHere ? 'is-assigned-current' : ''} ${isOccupiedOther ? 'is-occupied-other' : ''} ${!isSelectedHere && !isOccupiedOther ? 'is-empty-slot' : ''}`;
                     
                     if (isSelectedHere) {
                         btn.innerHTML = `
@@ -3264,6 +3464,41 @@
                     btnGrid.appendChild(btn);
                 });
 
+                // Extra button for general reserve in lineup
+                const vmBtn = document.createElement('button');
+                vmBtn.className = `assign-slot-btn is-vm-slot ${isGeneralReserve ? 'is-assigned-current' : 'is-empty-slot'}`;
+                if (isGeneralReserve) {
+                    vmBtn.innerHTML = `
+                        <span class="slot-pos-main">🪑 VM</span>
+                        <span class="slot-status-glow">✓ Varamies</span>
+                    `;
+                } else {
+                    vmBtn.innerHTML = `
+                        <span class="slot-pos-main">🪑 VM</span>
+                        <span class="slot-empty-label">+ Varamies</span>
+                    `;
+                }
+
+                vmBtn.addEventListener('click', () => {
+                    if (isGeneralReserve) {
+                        removeGeneralReserve(lKey, player.id);
+                        showToast(`Poistettu varamiehistä: ${lName} ✕`);
+                    } else {
+                        addGeneralReserve(lKey, player.id);
+                        showToast(`Lisätty varamieheksi kentälliseen: ${lName}! 🪑`);
+                    }
+                    saveState();
+                    renderRoster();
+                    if (activeLineupKey === 'summary') {
+                        renderSummaryView();
+                    } else {
+                        renderActiveLineupSlots();
+                        renderCourtBoards();
+                    }
+                    closeModal();
+                });
+
+                btnGrid.appendChild(vmBtn);
                 section.appendChild(btnGrid);
                 assignOptionsGrid.appendChild(section);
             });
@@ -3352,18 +3587,35 @@
 
             if (hasPlayers) {
                 text += `📌 ${name.toUpperCase()}:\n`;
-                const posOrder = ['MV', 'VP', 'OP', 'VH', 'KH', 'OH', 'VM'];
+                const posOrder = ['MV', 'VP', 'OP', 'VH', 'KH', 'OH'];
                 posOrder.forEach(pos => {
                     const pid = lineup[pos];
                     const player = roster.find(p => p.id === pid);
-                    const isMv = pos === 'MV';
-                    const isVm = pos === 'VM';
-                    const icon = isMv ? '🟢' : (isVm ? '🪑' : '🔵');
-                    const posLabel = isVm ? 'VARAMIES' : pos;
+                    const icon = pos === 'MV' ? '🟢' : '🔵';
                     if (player) {
-                        text += `  ${icon} ${posLabel}: #${player.number} ${player.name}${player.isLoan ? ' (LAINA)' : ''}\n`;
+                        text += `  ${icon} ${pos}: #${player.number} ${player.name}${player.isLoan ? ' (LAINA)' : ''}\n`;
+                    }
+                    const posRes = getPosReserves(key, pos);
+                    if (posRes && posRes.length > 0) {
+                        posRes.forEach(rId => {
+                            const rPlayer = roster.find(p => p.id === rId);
+                            if (rPlayer) {
+                                text += `     ↳ 🪑 Varamies: #${rPlayer.number} ${rPlayer.name}${rPlayer.isLoan ? ' (LAINA)' : ''}\n`;
+                            }
+                        });
                     }
                 });
+
+                const genRes = getGeneralReserves(key);
+                if (genRes && genRes.length > 0) {
+                    text += `  🪑 VAIHTOPENKKI / VARAMIEHET:\n`;
+                    genRes.forEach(rId => {
+                        const rPlayer = roster.find(p => p.id === rId);
+                        if (rPlayer) {
+                            text += `     • #${rPlayer.number} ${rPlayer.name}${rPlayer.isLoan ? ' (LAINA)' : ''}\n`;
+                        }
+                    });
+                }
                 text += `\n`;
             }
         });
@@ -4207,10 +4459,41 @@
                 return;
             }
 
+            const removeReserveBtn = e.target.closest('[data-action="remove-reserve"]');
+            if (removeReserveBtn) {
+                e.stopPropagation();
+                const pos = removeReserveBtn.dataset.pos;
+                const rId = removeReserveBtn.dataset.reserveId;
+                if (pos === 'general') {
+                    removeGeneralReserve(activeLineupKey, rId);
+                } else {
+                    removePosReserve(activeLineupKey, pos, rId);
+                }
+                saveState();
+                renderActiveLineupSlots();
+                showToast('Varamies poistettu.');
+                return;
+            }
+
+            const addPosReserveBtn = e.target.closest('[data-action="open-add-reserve"]');
+            if (addPosReserveBtn) {
+                e.stopPropagation();
+                const pos = addPosReserveBtn.dataset.pos;
+                openSlotPickerModal(activeLineupKey, pos, true);
+                return;
+            }
+
+            const addGenReserveBtn = e.target.closest('[data-action="open-add-general-reserve"]');
+            if (addGenReserveBtn) {
+                e.stopPropagation();
+                openSlotPickerModal(activeLineupKey, 'general', true);
+                return;
+            }
+
             const slotEl = e.target.closest('.lineup-slot');
             if (slotEl) {
                 const pos = slotEl.dataset.position;
-                if (pos) openSlotPickerModal(activeLineupKey, pos);
+                if (pos) openSlotPickerModal(activeLineupKey, pos, false);
             }
         });
 
