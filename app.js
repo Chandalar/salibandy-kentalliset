@@ -2320,6 +2320,10 @@
                     renderCourtBoards();
                     showToast('Taktinen alue luotu! Työkalu pysyy aktiivisena 🔲');
                 } else {
+                    let color = '#38bdf8';
+                    if (tool === 'pass') color = '#eab308';
+                    if (tool === 'shot') color = '#ec4899';
+
                     const existingLines = (lineupDrawings[courtKey] || []).filter(d => d.type === 'pass' || d.type === 'shot' || d.type === 'run');
                     const nextStepNum = existingLines.length + 1;
 
