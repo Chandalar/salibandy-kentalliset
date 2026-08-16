@@ -10,8 +10,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 
-    <!-- CSS Stylesheet (Cache Busted v32.0) -->
-    <link rel="stylesheet" href="styles.css?v=32.0">
+    <!-- CSS Stylesheet (Cache Busted v33.0) -->
+    <link rel="stylesheet" href="styles.css?v=33.0">
 
     <!-- OCR Tesseract.js (Optinen tekstintunnistus valokuvista) -->
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4.1.1/dist/tesseract.min.js"></script>
@@ -116,11 +116,17 @@
 
             <div class="roster-filters">
                 <input type="text" id="roster-search" class="search-input" placeholder="Hae nimellä tai numerolla...">
-                <div class="filter-pills">
+                <div class="filter-pills" id="roster-filter-pills">
                     <button class="pill-btn active" data-filter="all">Kaikki</button>
-                    <button class="pill-btn pill-mv" data-filter="mv">MV</button>
-                    <button class="pill-btn pill-field" data-filter="field">Kenttä</button>
-                    <button class="pill-btn pill-loan" data-filter="loan">Lainat</button>
+                    <button class="pill-btn pill-mv" data-filter="mv">🟢 MV</button>
+                    <button class="pill-btn pill-vp" data-filter="vp">VP</button>
+                    <button class="pill-btn pill-op" data-filter="op">OP</button>
+                    <button class="pill-btn pill-p" data-filter="p">P (Pakit)</button>
+                    <button class="pill-btn pill-vh" data-filter="vh">VH</button>
+                    <button class="pill-btn pill-kh" data-filter="kh">KH (Sentterit)</button>
+                    <button class="pill-btn pill-oh" data-filter="oh">OH</button>
+                    <button class="pill-btn pill-h" data-filter="h">H (Hyökkääjät)</button>
+                    <button class="pill-btn pill-loan" data-filter="loan">⭐ Lainat</button>
                 </div>
             </div>
 
@@ -397,9 +403,13 @@
                     <div class="form-group">
                         <label for="form-position">Pelipaikka *</label>
                         <select id="form-position" class="form-input">
+                            <option value="VP">Vasen puolustaja (VP)</option>
+                            <option value="OP">Oikea puolustaja (OP)</option>
+                            <option value="P">Puolustaja / Pakki (P)</option>
+                            <option value="VH">Vasen hyökkääjä (VH)</option>
+                            <option value="KH">Keskushyökkääjä / Sentteri (KH)</option>
+                            <option value="OH">Oikea hyökkääjä (OH)</option>
                             <option value="H">Hyökkääjä (H)</option>
-                            <option value="KH">Sentteri / KH</option>
-                            <option value="P">Puolustaja (P)</option>
                             <option value="MV">Maalivahti (MV)</option>
                         </select>
                     </div>
@@ -597,9 +607,9 @@
     <!-- TOAST NOTIFICATION CONTAINER -->
     <div id="toast" class="toast-notification"></div>
 
-    <!-- Firebase Config & App Engine (Cache Busted v32.0) -->
-    <script src="firebase-config.js?v=32.0"></script>
-    <script src="app.js?v=32.0"></script>
+    <!-- Firebase Config & App Engine (Cache Busted v33.0) -->
+    <script src="firebase-config.js?v=33.0"></script>
+    <script src="app.js?v=33.0"></script>
 
 </body>
 </html>

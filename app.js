@@ -22,24 +22,24 @@
         { id: 'p_mv3', name: 'Mika A', number: 3, position: 'MV', isLoan: false, notes: '?' },
 
         // 🔵 Kenttäpelaajat (Siniset laput - In 👍)
-        { id: 'p_19', name: 'Aaltonen', number: 19, position: 'P', isLoan: false, notes: 'In 👍' },
-        { id: 'p_20', name: 'Veikka', number: 20, position: 'P', isLoan: false, notes: 'In 👍' },
+        { id: 'p_19', name: 'Aaltonen', number: 19, position: 'VP', isLoan: false, notes: 'In 👍' },
+        { id: 'p_20', name: 'Veikka', number: 20, position: 'OP', isLoan: false, notes: 'In 👍' },
         { id: 'p_42', name: 'Henri K', number: 42, position: 'KH', isLoan: false, notes: 'In 👍' },
-        { id: 'p_64', name: 'Onni V', number: 64, position: 'H', isLoan: false, notes: 'In 👍' },
-        { id: 'p_71', name: 'Masto', number: 71, position: 'P', isLoan: false, notes: 'In 👍' },
-        { id: 'p_4', name: 'Joona R', number: 4, position: 'P', isLoan: false, notes: 'In 👍' },
-        { id: 'p_55', name: 'Vesa H', number: 55, position: 'P', isLoan: false, notes: 'In 👍' },
-        { id: 'p_11', name: 'Juki', number: 11, position: 'H', isLoan: false, notes: 'In 👍' },
-        { id: 'p_2', name: 'Nikou', number: 2, position: 'P', isLoan: false, notes: 'In 👍' },
-        { id: 'p_88', name: 'Jerker B', number: 88, position: 'H', isLoan: false, notes: 'In 👍' },
+        { id: 'p_64', name: 'Onni V', number: 64, position: 'VH', isLoan: false, notes: 'In 👍' },
+        { id: 'p_71', name: 'Masto', number: 71, position: 'VP', isLoan: false, notes: 'In 👍' },
+        { id: 'p_4', name: 'Joona R', number: 4, position: 'OP', isLoan: false, notes: 'In 👍' },
+        { id: 'p_55', name: 'Vesa H', number: 55, position: 'KH', isLoan: false, notes: 'In 👍' },
+        { id: 'p_11', name: 'Juki', number: 11, position: 'VH', isLoan: false, notes: 'In 👍' },
+        { id: 'p_2', name: 'Nikou', number: 2, position: 'OH', isLoan: false, notes: 'In 👍' },
+        { id: 'p_88', name: 'Jerker B', number: 88, position: 'OH', isLoan: false, notes: 'In 👍' },
 
         // 🔵 Kenttäpelaajat (Siniset laput - Out 👎)
-        { id: 'p_21', name: 'Niko A', number: 21, position: 'H', isLoan: false, notes: 'Out 👎' },
-        { id: 'p_13', name: 'Joni V', number: 13, position: 'H', isLoan: false, notes: 'Out 👎' },
+        { id: 'p_21', name: 'Niko A', number: 21, position: 'VH', isLoan: false, notes: 'Out 👎' },
+        { id: 'p_13', name: 'Joni V', number: 13, position: 'OH', isLoan: false, notes: 'Out 👎' },
         { id: 'p_10', name: 'Eino A', number: 10, position: 'KH', isLoan: false, notes: 'Out 👎' },
-        { id: 'p_15', name: 'Akseli', number: 15, position: 'H', isLoan: false, notes: 'Out 👎' },
-        { id: 'p_22', name: 'Petri V', number: 22, position: 'P', isLoan: false, notes: 'Out 👎' },
-        { id: 'p_87', name: 'Heikki H', number: 87, position: 'H', isLoan: false, notes: 'Out 👎' },
+        { id: 'p_15', name: 'Akseli', number: 15, position: 'VH', isLoan: false, notes: 'Out 👎' },
+        { id: 'p_22', name: 'Petri V', number: 22, position: 'VP', isLoan: false, notes: 'Out 👎' },
+        { id: 'p_87', name: 'Heikki H', number: 87, position: 'OH', isLoan: false, notes: 'Out 👎' },
 
         // 🔵 Kenttäpelaajat (Siniset laput - ?)
         { id: 'p_44', name: 'Jesse', number: 44, position: 'H', isLoan: false, notes: '?' },
@@ -59,14 +59,14 @@
     ];
 
     const DEFAULT_LINEUPS = {
-        '1': { MV: 'p_mv23', VP: 'p_19', OP: 'p_20', VH: 'p_64', KH: 'p_42', OH: 'p_88' },
-        '2': { MV: 'p_mv45', VP: 'p_71', OP: 'p_4', VH: 'p_11', KH: 'p_55', OH: 'p_2' },
-        '3': { MV: '', VP: '', OP: '', VH: '', KH: '', OH: '' },
-        'yv': { MV: 'p_mv23', VP: 'p_19', OP: 'p_42', VH: 'p_64', KH: 'p_55', OH: 'p_88' },
-        'av': { MV: 'p_mv23', VP: 'p_20', OP: 'p_71', VH: '', KH: 'p_42', OH: '' },
-        '6v5': { MV: '', VP: 'p_19', OP: 'p_20', VH: 'p_64', KH: 'p_42', OH: 'p_88' },
-        'custom': { MV: '', VP: '', OP: '', VH: '', KH: '', OH: '' },
-        'freeform': { MV: '', VP: '', OP: '', VH: '', KH: '', OH: '' }
+        '1': { MV: 'p_mv23', VP: 'p_19', OP: 'p_20', VH: 'p_64', KH: 'p_42', OH: 'p_88', VM: '' },
+        '2': { MV: 'p_mv45', VP: 'p_71', OP: 'p_4', VH: 'p_11', KH: 'p_55', OH: 'p_2', VM: '' },
+        '3': { MV: '', VP: '', OP: '', VH: '', KH: '', OH: '', VM: '' },
+        'yv': { MV: 'p_mv23', VP: 'p_19', OP: 'p_42', VH: 'p_64', KH: 'p_55', OH: 'p_88', VM: '' },
+        'av': { MV: 'p_mv23', VP: 'p_20', OP: 'p_71', VH: '', KH: 'p_42', OH: '', VM: '' },
+        '6v5': { MV: '', VP: 'p_19', OP: 'p_20', VH: 'p_64', KH: 'p_42', OH: 'p_88', VM: '' },
+        'custom': { MV: '', VP: '', OP: '', VH: '', KH: '', OH: '', VM: '' },
+        'freeform': { MV: '', VP: '', OP: '', VH: '', KH: '', OH: '', VM: '' }
     };
 
     const DEFAULT_POS_COORDS = {
@@ -76,7 +76,8 @@
             OP: { x: 28, y: 70 },
             VH: { x: 65, y: 25 },
             KH: { x: 60, y: 50 },
-            OH: { x: 65, y: 75 }
+            OH: { x: 65, y: 75 },
+            VM: { x: 50, y: 92 }
         },
         vertical: {
             MV: { x: 50, y: 88 },
@@ -84,7 +85,8 @@
             OP: { x: 70, y: 72 },
             VH: { x: 25, y: 35 },
             KH: { x: 50, y: 40 },
-            OH: { x: 75, y: 35 }
+            OH: { x: 75, y: 35 },
+            VM: { x: 90, y: 50 }
         }
     };
 
@@ -813,7 +815,7 @@
     }
 
     function createEmptyLineupSlots() {
-        return { MV: '', VP: '', OP: '', VH: '', KH: '', OH: '' };
+        return { MV: '', VP: '', OP: '', VH: '', KH: '', OH: '', VM: '' };
     }
 
     function loadLineupsForTeam(teamId, configs) {
@@ -821,7 +823,11 @@
         if (stored && typeof stored === 'object' && Object.keys(stored).length > 0) {
             if (configs && Array.isArray(configs)) {
                 configs.forEach(c => {
-                    if (!stored[c.id]) stored[c.id] = createEmptyLineupSlots();
+                    if (!stored[c.id]) {
+                        stored[c.id] = createEmptyLineupSlots();
+                    } else if (stored[c.id].VM === undefined) {
+                        stored[c.id].VM = '';
+                    }
                 });
             }
             return stored;
@@ -1038,19 +1044,31 @@
         const pitchPanelSection = document.getElementById('pitch-panel-section');
         const lineupPanelSection = document.getElementById('lineup-panel-section');
         const summaryViewPanel = document.getElementById('summary-view-panel');
+        const mainWorkspace = document.querySelector('.main-workspace');
+
+        const isDrawingOnlyTab = (activeLineupKey === 'custom' || activeLineupKey === 'freeform');
 
         if (activeLineupKey === 'summary') {
             if (rosterPanelSection) rosterPanelSection.style.display = 'none';
             if (pitchPanelSection) pitchPanelSection.style.display = 'none';
             if (lineupPanelSection) lineupPanelSection.style.display = 'none';
             if (summaryViewPanel) summaryViewPanel.style.display = 'flex';
+            if (mainWorkspace) mainWorkspace.classList.remove('no-right-panel');
             renderSummaryView();
         } else {
             if (rosterPanelSection) rosterPanelSection.style.display = 'flex';
             if (pitchPanelSection) pitchPanelSection.style.display = 'flex';
-            if (lineupPanelSection) lineupPanelSection.style.display = 'flex';
             if (summaryViewPanel) summaryViewPanel.style.display = 'none';
-            renderActiveLineupSlots();
+
+            if (isDrawingOnlyTab) {
+                if (lineupPanelSection) lineupPanelSection.style.display = 'none';
+                if (mainWorkspace) mainWorkspace.classList.add('no-right-panel');
+            } else {
+                if (lineupPanelSection) lineupPanelSection.style.display = 'flex';
+                if (mainWorkspace) mainWorkspace.classList.remove('no-right-panel');
+                renderActiveLineupSlots();
+            }
+
             renderCourtBoards();
         }
     }
@@ -1362,6 +1380,8 @@
                 ? !!lineupGridPaper[courtKey] 
                 : (activeLineupKey === 'freeform');
 
+            const isFreeform = (activeLineupKey === 'freeform');
+
             const card = document.createElement('div');
             card.className = 'court-board-card';
             card.dataset.courtId = courtId;
@@ -1427,7 +1447,7 @@
                 </div>
 
                 <div class="pitch-outer-wrapper">
-                    <div class="pitch-container ${orientationMode === 'vertical' ? 'mode-vertical' : 'mode-horizontal'} ${isGridPaper ? 'mode-grid-paper' : ''}" id="floorball-court-${courtId}">
+                    <div class="pitch-container ${orientationMode === 'vertical' ? 'mode-vertical' : 'mode-horizontal'} ${isGridPaper ? 'mode-grid-paper' : ''} ${isFreeform ? 'mode-pure-canvas' : ''}" id="floorball-court-${courtId}">
                         <div class="court-surface"></div>
                         <div class="court-center-line"></div>
                         <div class="center-spot-pink"></div>
@@ -1489,6 +1509,58 @@
         drawCanvasLinesForInstance(courtId, canvasEl, ctxEl);
 
         setupCourtCanvasDrawing(courtId, courtContainer, canvasEl, ctxEl);
+
+        // Drag & drop receiver from left roster panel
+        courtContainer.ondragover = (e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'copy';
+            courtContainer.classList.add('drag-hover-active');
+        };
+
+        courtContainer.ondragleave = (e) => {
+            if (!courtContainer.contains(e.relatedTarget)) {
+                courtContainer.classList.remove('drag-hover-active');
+            }
+        };
+
+        courtContainer.ondrop = (e) => {
+            e.preventDefault();
+            courtContainer.classList.remove('drag-hover-active');
+
+            let playerId = e.dataTransfer ? e.dataTransfer.getData('text/plain') : null;
+            if (!playerId) return;
+
+            const player = roster.find(p => p.id === playerId);
+            if (!player) return;
+
+            const rect = courtContainer.getBoundingClientRect();
+            if (rect.width === 0 || rect.height === 0) return;
+
+            let dropPctX = ((e.clientX - rect.left) / rect.width) * 100;
+            let dropPctY = ((e.clientY - rect.top) / rect.height) * 100;
+
+            dropPctX = Math.max(4, Math.min(96, Math.round(dropPctX * 10) / 10));
+            dropPctY = Math.max(4, Math.min(96, Math.round(dropPctY * 10) / 10));
+
+            const courtKey = getCourtKey(courtId);
+            if (!lineupExtraPlayers[courtKey]) lineupExtraPlayers[courtKey] = [];
+
+            const isMv = player.position === 'MV';
+            lineupExtraPlayers[courtKey].push({
+                id: 'p_ext_' + player.id + '_' + Date.now(),
+                playerId: player.id,
+                label: '#' + player.number,
+                fullName: player.name,
+                position: player.position,
+                isMv: isMv,
+                x: dropPctX,
+                y: dropPctY
+            });
+
+            saveState();
+            renderCourtBoards();
+            showToast(`Pelaaja #${player.number} ${player.name} asetettu kentälle! 🏑`);
+        };
     }
 
     function renderCourtNodesForInstance(courtId, layersEl) {
@@ -1504,7 +1576,7 @@
 
     function renderLineupPlayerNodesForInstance(courtId, layersEl) {
         const currentLineup = lineups[activeLineupKey] || {};
-        const posKeys = ['MV', 'VP', 'OP', 'VH', 'KH', 'OH'];
+        const posKeys = ['MV', 'VP', 'OP', 'VH', 'KH', 'OH', 'VM'];
         const courtKey = getCourtKey(courtId);
 
         posKeys.forEach(pos => {
@@ -1520,14 +1592,16 @@
             let coords = lineupCourtPositions[posKeyStore] || lineupCourtPositions[fallbackKeyStore] || defaultCoords;
 
             const isMv = player.position === 'MV';
+            const isVm = pos === 'VM';
             const node = document.createElement('div');
-            node.className = `court-player-node ${isMv ? 'is-mv' : 'is-field'} ${activeSelectedElementId === posKeyStore ? 'is-selected' : ''}`;
+            node.className = `court-player-node ${isMv ? 'is-mv' : (isVm ? 'is-vm pos-node-vm' : 'is-field')} ${activeSelectedElementId === posKeyStore ? 'is-selected' : ''}`;
             node.style.left = coords.x + '%';
             node.style.top = coords.y + '%';
 
             let labelText = `#${player.number} ${player.name}`;
             if (labelMode === 'num') labelText = `#${player.number}`;
             if (labelMode === 'name') labelText = player.name;
+            if (isVm) labelText = `🪑 ${labelText}`;
 
             node.innerHTML = `
                 <div class="node-circle">
@@ -2643,11 +2717,12 @@
             MV: '🟢 MV',
             VP: '🔵 VP',
             OP: '🔵 OP',
+            P: '🔵 Pakki',
             VH: '🔵 VH',
             KH: '🔵 KH',
             OH: '🔵 OH',
-            H: '🔵 Kenttä',
-            P: '🔵 Pakki'
+            H: '🔵 Hyökkääjä',
+            VM: '🪑 Varamies'
         };
         return labels[pos] || pos;
     }
@@ -2683,8 +2758,16 @@
                                   player.number.toString().includes(searchQuery);
 
             if (!matchesSearch) return false;
-            if (activeFilter === 'mv') return player.position === 'MV';
-            if (activeFilter === 'field') return player.position !== 'MV';
+            const pPos = (player.position || '').toUpperCase();
+            if (activeFilter === 'mv') return pPos === 'MV';
+            if (activeFilter === 'vp') return pPos === 'VP';
+            if (activeFilter === 'op') return pPos === 'OP';
+            if (activeFilter === 'p') return pPos === 'P' || pPos === 'VP' || pPos === 'OP';
+            if (activeFilter === 'vh') return pPos === 'VH';
+            if (activeFilter === 'kh') return pPos === 'KH';
+            if (activeFilter === 'oh') return pPos === 'OH';
+            if (activeFilter === 'h') return pPos === 'H' || pPos === 'VH' || pPos === 'KH' || pPos === 'OH';
+            if (activeFilter === 'field') return pPos !== 'MV';
             if (activeFilter === 'loan') return player.isLoan;
             return true;
         });
@@ -2701,6 +2784,20 @@
             const isMv = player.position === 'MV';
             card.className = `player-card ${isMv ? 'is-mv' : 'is-field'}`;
             card.dataset.id = player.id;
+            card.setAttribute('draggable', 'true');
+
+            card.addEventListener('dragstart', (e) => {
+                if (e.dataTransfer) {
+                    e.dataTransfer.setData('text/plain', player.id);
+                    e.dataTransfer.setData('application/json', JSON.stringify(player));
+                    e.dataTransfer.effectAllowed = 'copy';
+                }
+                card.classList.add('is-dragging-from-roster');
+            });
+
+            card.addEventListener('dragend', () => {
+                card.classList.remove('is-dragging-from-roster');
+            });
 
             let assignedInfo = '';
             const assignments = [];
@@ -2749,7 +2846,7 @@
         if (!activeLineupTitle || !lineupSlotsContainer) return;
         activeLineupTitle.textContent = getLineupName(activeLineupKey);
         const currentLineup = lineups[activeLineupKey] || {};
-        const posKeys = ['MV', 'VP', 'OP', 'VH', 'KH', 'OH'];
+        const posKeys = ['MV', 'VP', 'OP', 'VH', 'KH', 'OH', 'VM'];
 
         lineupSlotsContainer.innerHTML = '';
 
@@ -2757,14 +2854,17 @@
             const playerId = currentLineup[pos];
             const player = roster.find(p => p.id === playerId);
             const isMv = pos === 'MV';
+            const isVm = pos === 'VM';
+            const posClass = isMv ? 'slot-mv' : (isVm ? 'slot-vm' : 'slot-field');
+            const posDisplay = isVm ? 'VARAMIES' : pos;
 
             const slot = document.createElement('div');
-            slot.className = `lineup-slot ${isMv ? 'slot-mv' : 'slot-field'} ${player ? 'is-filled' : 'is-empty'}`;
+            slot.className = `lineup-slot ${posClass} ${player ? 'is-filled' : 'is-empty'}`;
             slot.dataset.position = pos;
 
             if (player) {
                 slot.innerHTML = `
-                    <div class="slot-pos-tag">${pos}</div>
+                    <div class="slot-pos-tag">${posDisplay}</div>
                     <div class="slot-player-info">
                         <span class="slot-player-num">#${player.number}</span>
                         <span class="slot-player-name">${escapeHtml(player.name)}</span>
@@ -2774,8 +2874,8 @@
                 `;
             } else {
                 slot.innerHTML = `
-                    <div class="slot-pos-tag">${pos}</div>
-                    <div class="slot-empty-prompt">+ Valitse pelaaja</div>
+                    <div class="slot-pos-tag">${posDisplay}</div>
+                    <div class="slot-empty-prompt">+ Valitse ${isVm ? 'varamies' : 'pelaaja'}</div>
                 `;
             }
 
@@ -2791,7 +2891,7 @@
         if (!summaryGridContainer) return;
         summaryGridContainer.innerHTML = '';
 
-        const posKeys = ['MV', 'VP', 'OP', 'VH', 'KH', 'OH'];
+        const posKeys = ['MV', 'VP', 'OP', 'VH', 'KH', 'OH', 'VM'];
 
         lineupConfigs.forEach(cConfig => {
             const lKey = cConfig.id;
@@ -2806,11 +2906,14 @@
                 const pid = curLineup[pos];
                 const player = roster.find(p => p.id === pid);
                 const isMv = pos === 'MV';
+                const isVm = pos === 'VM';
+                const rowClass = isMv ? 'is-mv' : (isVm ? 'is-vm' : 'is-field');
+                const posDisplay = isVm ? 'VM' : pos;
 
                 if (player) {
                     slotsHtml += `
-                        <div class="summary-slot-row ${isMv ? 'is-mv' : 'is-field'}" data-lineup="${lKey}" data-pos="${pos}">
-                            <span class="summary-pos-tag">${pos}</span>
+                        <div class="summary-slot-row ${rowClass}" data-lineup="${lKey}" data-pos="${pos}">
+                            <span class="summary-pos-tag">${posDisplay}</span>
                             <span class="summary-p-num">#${player.number}</span>
                             <span class="summary-p-name">${escapeHtml(player.name)}</span>
                             ${player.isLoan ? '<span class="loan-pill-tiny">⭐</span>' : ''}
@@ -2820,8 +2923,8 @@
                 } else {
                     slotsHtml += `
                         <div class="summary-slot-row is-empty" data-lineup="${lKey}" data-pos="${pos}">
-                            <span class="summary-pos-tag">${pos}</span>
-                            <span class="summary-empty-text">+ Valitse ${pos}</span>
+                            <span class="summary-pos-tag">${posDisplay}</span>
+                            <span class="summary-empty-text">+ Valitse ${isVm ? 'varamies' : pos}</span>
                         </div>
                     `;
                 }
@@ -3009,14 +3112,16 @@
     function openSlotPickerModal(lineupKey, pos) {
         selectedSlotTarget = { lineupKey, pos };
         const isMv = pos === 'MV';
+        const isVm = pos === 'VM';
+        const posTitle = isVm ? 'Varamies' : pos;
         const lineupName = getLineupName(lineupKey);
 
         const slotPickerTitle = document.getElementById('slot-picker-title');
         const slotPickerInfo = document.getElementById('slot-picker-info');
         const slotPickerPlayerList = document.getElementById('slot-picker-player-list');
 
-        if (slotPickerTitle) slotPickerTitle.textContent = `Valitse pelaaja: ${lineupName} - ${pos}`;
-        if (slotPickerInfo) slotPickerInfo.textContent = `Valitse pelaaja ringistä paikkaan ${pos}:`;
+        if (slotPickerTitle) slotPickerTitle.textContent = `Valitse pelaaja: ${lineupName} - ${posTitle}`;
+        if (slotPickerInfo) slotPickerInfo.textContent = `Valitse pelaaja ringistä paikkaan ${posTitle}:`;
 
         const currentOccupantId = (lineups[lineupKey] || {})[pos];
 
@@ -3078,7 +3183,7 @@
             `;
         }
 
-        const slotTypes = ['MV', 'VP', 'OP', 'VH', 'KH', 'OH'];
+        const slotTypes = ['MV', 'VP', 'OP', 'VH', 'KH', 'OH', 'VM'];
         if (assignOptionsGrid) {
             assignOptionsGrid.innerHTML = '';
             lineupConfigs.forEach(cConfig => {
@@ -3109,13 +3214,14 @@
 
                 slotTypes.forEach(pos => {
                     const isMv = pos === 'MV';
+                    const isVm = pos === 'VM';
                     const isSelectedHere = curL[pos] === player.id;
                     const occupantId = curL[pos];
                     const occupant = (occupantId && occupantId !== player.id) ? roster.find(p => p.id === occupantId) : null;
                     const isOccupiedOther = Boolean(occupant);
 
                     const btn = document.createElement('button');
-                    btn.className = `assign-slot-btn ${isMv ? 'is-mv-slot' : 'is-field-slot'} ${isSelectedHere ? 'is-assigned-current' : ''} ${isOccupiedOther ? 'is-occupied-other' : ''} ${!isSelectedHere && !isOccupiedOther ? 'is-empty-slot' : ''}`;
+                    btn.className = `assign-slot-btn ${isMv ? 'is-mv-slot' : (isVm ? 'is-vm-slot' : 'is-field-slot')} ${isSelectedHere ? 'is-assigned-current' : ''} ${isOccupiedOther ? 'is-occupied-other' : ''} ${!isSelectedHere && !isOccupiedOther ? 'is-empty-slot' : ''}`;
                     
                     if (isSelectedHere) {
                         btn.innerHTML = `
@@ -3246,13 +3352,16 @@
 
             if (hasPlayers) {
                 text += `📌 ${name.toUpperCase()}:\n`;
-                const posOrder = ['MV', 'VP', 'OP', 'VH', 'KH', 'OH'];
+                const posOrder = ['MV', 'VP', 'OP', 'VH', 'KH', 'OH', 'VM'];
                 posOrder.forEach(pos => {
                     const pid = lineup[pos];
                     const player = roster.find(p => p.id === pid);
-                    const icon = pos === 'MV' ? '🟢' : '🔵';
+                    const isMv = pos === 'MV';
+                    const isVm = pos === 'VM';
+                    const icon = isMv ? '🟢' : (isVm ? '🪑' : '🔵');
+                    const posLabel = isVm ? 'VARAMIES' : pos;
                     if (player) {
-                        text += `  ${icon} ${pos}: #${player.number} ${player.name}${player.isLoan ? ' (LAINA)' : ''}\n`;
+                        text += `  ${icon} ${posLabel}: #${player.number} ${player.name}${player.isLoan ? ' (LAINA)' : ''}\n`;
                     }
                 });
                 text += `\n`;
