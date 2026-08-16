@@ -2082,15 +2082,21 @@
 
             const startPct = pts[0];
             const endPct = pts[pts.length - 1];
-            const midPct = {
-                x: (startPct.x + endPct.x) / 2,
-                y: (startPct.y + endPct.y) / 2
-            };
+            
+            let midPct;
+            if (lineObj.type === 'run' && pts.length > 2) {
+                const midIdx = Math.floor(pts.length / 2);
+                midPct = pts[midIdx];
+            } else {
+                midPct = {
+                    x: (startPct.x + endPct.x) / 2,
+                    y: (startPct.y + endPct.y) / 2
+                };
+            }
 
-            let icon = '↗️';
             let handleClass = 'pass-handle';
-            if (lineObj.type === 'shot') { icon = '💥'; handleClass = 'shot-handle'; }
-            if (lineObj.type === 'run') { icon = '🏃'; handleClass = 'run-handle'; }
+            if (lineObj.type === 'shot') { handleClass = 'shot-handle'; }
+            if (lineObj.type === 'run') { handleClass = 'run-handle'; }
 
             const isSelected = activeSelectedElementId === lineObj.id;
 
@@ -2100,10 +2106,8 @@
             lineNode.style.top = midPct.y + '%';
 
             lineNode.innerHTML = `
-                <div class="line-mid-handle ${handleClass}" title="Vaihe #${stepNum} - Kaksoisklikkaa muokataksesi numeroa. Siirrä vetämällä.">
-                    <span class="line-step-badge">${escapeHtml(stepNum)}</span>
-                    <span class="line-tool-icon">${icon}</span>
-                    <button class="line-edit-btn" data-action="edit-line-number" data-line-id="${lineObj.id}" data-court-id="${courtId}" title="Muokkaa numeroa">✏️</button>
+                <div class="line-number-handle ${handleClass}" title="Vaihe #${stepNum} - Kaksoisklikkaa muokataksesi numeroa. Siirrä vetämällä.">
+                    <span class="line-step-num">${escapeHtml(stepNum)}</span>
                     <button class="line-remove-btn" data-action="remove-line" data-line-id="${lineObj.id}" data-court-id="${courtId}" title="Poista viiva">✕</button>
                 </div>
             `;
@@ -2428,12 +2432,6 @@
             ctxEl.closePath();
             ctxEl.fill();
             ctxEl.restore();
-
-            if (drawObj.stepNum !== undefined && drawObj.stepNum !== null && drawObj.stepNum !== '') {
-                const midX = (start.x + end.x) / 2;
-                const midY = (start.y + end.y) / 2;
-                drawStepNumberBadgeOnCtx(ctxEl, midX, midY, String(drawObj.stepNum), color || '#eab308');
-            }
             return;
         }
 
@@ -2467,12 +2465,6 @@
             ctxEl.arc(end.x, end.y, 7, 0, 2 * Math.PI);
             ctxEl.stroke();
             ctxEl.restore();
-
-            if (drawObj.stepNum !== undefined && drawObj.stepNum !== null && drawObj.stepNum !== '') {
-                const midX = (start.x + end.x) / 2;
-                const midY = (start.y + end.y) / 2;
-                drawStepNumberBadgeOnCtx(ctxEl, midX, midY, String(drawObj.stepNum), color || '#ec4899');
-            }
             return;
         }
 
@@ -2501,31 +2493,6 @@
         ctxEl.lineTo(end.x - 16 * Math.cos(angle + Math.PI / 5), end.y - 16 * Math.sin(angle + Math.PI / 5));
         ctxEl.closePath();
         ctxEl.fill();
-        ctxEl.restore();
-
-        if (drawObj.stepNum !== undefined && drawObj.stepNum !== null && drawObj.stepNum !== '') {
-            const midIdx = Math.floor(points.length / 2);
-            const midX = points[midIdx].x;
-            const midY = points[midIdx].y;
-            drawStepNumberBadgeOnCtx(ctxEl, midX, midY, String(drawObj.stepNum), color || '#38bdf8');
-        }
-    }
-
-    function drawStepNumberBadgeOnCtx(ctxEl, x, y, text, borderColor) {
-        ctxEl.save();
-        ctxEl.beginPath();
-        ctxEl.arc(x, y, 11, 0, Math.PI * 2);
-        ctxEl.fillStyle = '#0f172a';
-        ctxEl.fill();
-        ctxEl.strokeStyle = borderColor || '#ffffff';
-        ctxEl.lineWidth = 2.5;
-        ctxEl.stroke();
-
-        ctxEl.fillStyle = '#ffffff';
-        ctxEl.font = 'bold 11px "Outfit", sans-serif';
-        ctxEl.textAlign = 'center';
-        ctxEl.textBaseline = 'middle';
-        ctxEl.fillText(text, x, y);
         ctxEl.restore();
     }
 
@@ -2571,8 +2538,15 @@
 
             const startPct = lineObj.pointsPct[0];
             const endPct = lineObj.pointsPct[lineObj.pointsPct.length - 1];
-            const midX = (startPct.x + endPct.x) / 2;
-            const midY = (startPct.y + endPct.y) / 2;
+            let midX, midY;
+            if (lineObj.type === 'run' && lineObj.pointsPct.length > 2) {
+                const midIdx = Math.floor(lineObj.pointsPct.length / 2);
+                midX = lineObj.pointsPct[midIdx].x;
+                midY = lineObj.pointsPct[midIdx].y;
+            } else {
+                midX = (startPct.x + endPct.x) / 2;
+                midY = (startPct.y + endPct.y) / 2;
+            }
 
             if (rafId) cancelAnimationFrame(rafId);
             rafId = requestAnimationFrame(() => {
