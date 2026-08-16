@@ -10,8 +10,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 
-    <!-- CSS Stylesheet (Cache Busted v37.9) -->
-    <link rel="stylesheet" href="styles.css?v=37.9">
+    <!-- CSS Stylesheet (Cache Busted v38.0) -->
+    <link rel="stylesheet" href="styles.css?v=38.0">
 
     <!-- OCR Tesseract.js (Optinen tekstintunnistus valokuvista) -->
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4.1.1/dist/tesseract.min.js"></script>
@@ -617,10 +617,11 @@
                 <!-- Label Mode -->
                 <div class="settings-group" style="margin-top: 1rem;">
                     <label class="settings-label">🏷️ Pelaajatunniste kentällä</label>
-                    <div class="settings-options-row">
-                        <button class="btn btn-sm btn-outline label-opt-btn active" data-label="full">Nimi & #</button>
-                        <button class="btn btn-sm btn-outline label-opt-btn" data-label="num"># Vain</button>
-                        <button class="btn btn-sm btn-outline label-opt-btn" data-label="name">Nimi vain</button>
+                    <div class="settings-options-row" style="flex-wrap: wrap; gap: 0.35rem;">
+                        <button class="btn btn-sm btn-outline label-opt-btn" data-label="photo">📷 Kuva (jos on)</button>
+                        <button class="btn btn-sm btn-outline label-opt-btn active" data-label="full">🔢+👤 Nimi & #</button>
+                        <button class="btn btn-sm btn-outline label-opt-btn" data-label="num">🔢 # Vain</button>
+                        <button class="btn btn-sm btn-outline label-opt-btn" data-label="name">👤 Nimi vain</button>
                     </div>
                 </div>
 
@@ -914,9 +915,9 @@
     <!-- TOAST NOTIFICATION CONTAINER -->
     <div id="toast" class="toast-notification"></div>
 
-    <!-- Firebase Config & App Engine (Cache Busted v37.9) -->
-    <script src="firebase-config.js?v=37.9"></script>
-    <script src="app.js?v=37.9"></script>
+    <!-- Firebase Config & App Engine (Cache Busted v38.0) -->
+    <script src="firebase-config.js?v=38.0"></script>
+    <script src="app.js?v=38.0"></script>
 
 </body>
 </html>

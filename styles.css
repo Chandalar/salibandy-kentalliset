@@ -1386,7 +1386,62 @@ body {
     left: 0;
     right: 0;
     bottom: 0;
-    background: radial-gradient(circle at center, #1e2e42 0%, #0d1624 100%);
+    background: radial-gradient(circle at center, #1e3a8a 0%, #0d1624 100%);
+    transition: background 0.25s ease;
+}
+
+/* COURT COLOR THEMES (v38.0) */
+/* 1. Classic Blue (Default / Klassinen sininen Taraflex) */
+body[data-court-color="blue"] .court-surface,
+.pitch-container[data-court-color="blue"] .court-surface {
+    background: radial-gradient(circle at center, #1e3a8a 0%, #0d1624 100%) !important;
+}
+
+/* 2. Modern Graphite (Moderni grafiitti) */
+body[data-court-color="graphite"] .court-surface,
+.pitch-container[data-court-color="graphite"] .court-surface {
+    background: radial-gradient(circle at center, #334155 0%, #090d16 100%) !important;
+}
+
+/* 3. Wood / Parquet (Parketti / Puulattia) */
+body[data-court-color="wood"] .court-surface,
+.pitch-container[data-court-color="wood"] .court-surface {
+    background: radial-gradient(circle at center, #854d0e 0%, #3a1a03 100%) !important;
+}
+
+/* 4. Classic Green (Klassinen vihreä salibandymatto) */
+body[data-court-color="green"] .court-surface,
+.pitch-container[data-court-color="green"] .court-surface {
+    background: radial-gradient(circle at center, #065f46 0%, #022c22 100%) !important;
+}
+
+/* 5. Terracotta (Terrakotta / Punaruskea) */
+body[data-court-color="terracotta"] .court-surface,
+.pitch-container[data-court-color="terracotta"] .court-surface {
+    background: radial-gradient(circle at center, #9f1239 0%, #4c0519 100%) !important;
+}
+
+/* 6. Ruutupaperi / Grid tactic paper */
+body[data-court-color="grid"] .court-surface,
+.pitch-container[data-court-color="grid"] .court-surface {
+    background-color: #f1f5f9 !important;
+    background-image: linear-gradient(to right, rgba(100, 116, 139, 0.28) 1px, transparent 1px),
+                      linear-gradient(to bottom, rgba(100, 116, 139, 0.28) 1px, transparent 1px) !important;
+    background-size: 20px 20px !important;
+}
+
+body[data-court-color="grid"] .pitch-container {
+    border-color: #94a3b8 !important;
+}
+
+body[data-court-color="grid"] .court-center-line,
+body[data-court-color="grid"] .center-line-tick {
+    background: #475569 !important;
+}
+
+body[data-court-color="grid"] .faceoff-dot {
+    background: rgba(71, 85, 105, 0.5) !important;
+    border-color: #334155 !important;
 }
 
 /* VERTICAL ORIENTATION (20m x 40m) */

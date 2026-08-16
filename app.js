@@ -213,6 +213,21 @@
 
         // Court Color
         document.body.setAttribute('data-court-color', courtColor);
+        document.querySelectorAll('.pitch-container').forEach(c => {
+            c.setAttribute('data-court-color', courtColor);
+        });
+
+        // Label mode toolbar button text
+        const labelModeText = document.getElementById('label-mode-text');
+        if (labelModeText) {
+            const labelsMap = {
+                photo: 'Kuva 📷',
+                full: 'Nimi & #',
+                num: '# Vain',
+                name: 'Nimi vain'
+            };
+            labelModeText.textContent = labelsMap[labelMode] || 'Nimi & #';
+        }
 
         const curTeam = teams.find(t => t.id === currentTeamId) || {};
 
@@ -1801,12 +1816,14 @@
             node.style.top = coords.y + '%';
 
             let labelText = `#${player.number} ${player.name}`;
-            if (labelMode === 'num') labelText = `#${player.number}`;
-            if (labelMode === 'name') labelText = player.name;
-            if (isVm) labelText = `🪑 ${labelText}`;
+            if (labelMode === 'num') labelText = '';
+            if (labelMode === 'name' || labelMode === 'photo') labelText = player.name;
+            if (isVm && labelText) labelText = `🪑 ${labelText}`;
+
+            const showPhoto = (labelMode !== 'num') && !!player.photo;
 
             let circleInnerHtml = '';
-            if (player.photo) {
+            if (showPhoto) {
                 circleInnerHtml = `
                     <div class="node-circle has-player-photo" style="background-image: url('${player.photo}');" title="${escapeHtml(player.name)} - Kaksoisklikkaa muokataksesi">
                         <span class="node-num-tag">#${player.number}</span>
@@ -1824,9 +1841,7 @@
 
             node.innerHTML = `
                 ${circleInnerHtml}
-                <div class="node-label">
-                    ${player.isLoan ? '⭐' : ''} ${escapeHtml(labelText)}
-                </div>
+                ${labelText ? `<div class="node-label">${player.isLoan ? '⭐' : ''} ${escapeHtml(labelText)}</div>` : ''}
             `;
 
             node.addEventListener('dblclick', (e) => {
@@ -1937,7 +1952,8 @@
                 displayName = `<span class="extra-player-subname">${escapeHtml(fullName)}</span>`;
             }
 
-            const photoUrl = (player && player.photo) || extraP.photo || '';
+            const showPhoto = (labelMode !== 'num') && ((player && player.photo) || extraP.photo);
+            const photoUrl = showPhoto ? ((player && player.photo) || extraP.photo) : '';
             let circleInnerHtml = '';
             if (photoUrl) {
                 circleInnerHtml = `
@@ -6124,17 +6140,17 @@
         });
 
         document.getElementById('btn-toggle-labels')?.addEventListener('click', () => {
-            const labelModeText = document.getElementById('label-mode-text');
-            if (labelMode === 'full') {
+            if (labelMode === 'photo') {
+                labelMode = 'full';
+            } else if (labelMode === 'full') {
                 labelMode = 'num';
-                if (labelModeText) labelModeText.textContent = '# Vain';
             } else if (labelMode === 'num') {
                 labelMode = 'name';
-                if (labelModeText) labelModeText.textContent = 'Nimi vain';
             } else {
-                labelMode = 'full';
-                if (labelModeText) labelModeText.textContent = 'Nimi & #';
+                labelMode = 'photo';
             }
+            localStorage.setItem('salibandy_label_mode', labelMode);
+            applyThemeAndSettings();
             renderCourtBoards();
         });
 
