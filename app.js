@@ -125,6 +125,7 @@
     let lineupCones = loadFromStorage(`salibandy_cones_${currentTeamId}`, {});
     let lineupOpponents = loadFromStorage(`salibandy_opponents_${currentTeamId}`, {});
     let lineupExtraPlayers = loadFromStorage(`salibandy_extra_players_${currentTeamId}`, {});
+    let lineupTextNotes = loadFromStorage(`salibandy_text_notes_${currentTeamId}`, {});
     let lineupGridPaper = loadFromStorage(`salibandy_grid_paper_${currentTeamId}`, {});
     let lineupPages = loadFromStorage(`salibandy_pages_${currentTeamId}`, {});
 
@@ -204,12 +205,14 @@
                 roster: (tId === currentTeamId) ? roster : loadRosterForTeam(tId),
                 lineupConfigs: (tId === currentTeamId) ? lineupConfigs : loadLineupConfigs(tId),
                 lineups: (tId === currentTeamId) ? lineups : loadLineupsForTeam(tId, loadLineupConfigs(tId)),
+                reserves: (tId === currentTeamId) ? lineupReserves : loadFromStorage(`salibandy_reserves_${tId}`, {}),
                 drawings: (tId === currentTeamId) ? lineupDrawings : loadFromStorage(`salibandy_drawings_${tId}`, {}),
                 positions: (tId === currentTeamId) ? lineupCourtPositions : loadFromStorage(`salibandy_positions_${tId}`, {}),
                 balls: (tId === currentTeamId) ? lineupBalls : loadFromStorage(`salibandy_balls_${tId}`, {}),
                 cones: (tId === currentTeamId) ? lineupCones : loadFromStorage(`salibandy_cones_${tId}`, {}),
                 opponents: (tId === currentTeamId) ? lineupOpponents : loadFromStorage(`salibandy_opponents_${tId}`, {}),
                 extraPlayers: (tId === currentTeamId) ? lineupExtraPlayers : loadFromStorage(`salibandy_extra_players_${tId}`, {}),
+                textNotes: (tId === currentTeamId) ? lineupTextNotes : loadFromStorage(`salibandy_text_notes_${tId}`, {}),
                 pages: (tId === currentTeamId) ? lineupPages : loadFromStorage(`salibandy_pages_${tId}`, {})
             };
         });
@@ -258,12 +261,14 @@
                             if (tObj.roster) localStorage.setItem(`salibandy_roster_${tId}`, JSON.stringify(tObj.roster));
                             if (tObj.lineupConfigs) localStorage.setItem(`salibandy_lineup_configs_${tId}`, JSON.stringify(tObj.lineupConfigs));
                             if (tObj.lineups) localStorage.setItem(`salibandy_lineups_${tId}`, JSON.stringify(tObj.lineups));
+                            if (tObj.reserves) localStorage.setItem(`salibandy_reserves_${tId}`, JSON.stringify(tObj.reserves));
                             if (tObj.drawings) localStorage.setItem(`salibandy_drawings_${tId}`, JSON.stringify(tObj.drawings));
                             if (tObj.positions) localStorage.setItem(`salibandy_positions_${tId}`, JSON.stringify(tObj.positions));
                             if (tObj.balls) localStorage.setItem(`salibandy_balls_${tId}`, JSON.stringify(tObj.balls));
                             if (tObj.cones) localStorage.setItem(`salibandy_cones_${tId}`, JSON.stringify(tObj.cones));
                             if (tObj.opponents) localStorage.setItem(`salibandy_opponents_${tId}`, JSON.stringify(tObj.opponents));
                             if (tObj.extraPlayers) localStorage.setItem(`salibandy_extra_players_${tId}`, JSON.stringify(tObj.extraPlayers));
+                            if (tObj.textNotes) localStorage.setItem(`salibandy_text_notes_${tId}`, JSON.stringify(tObj.textNotes));
                             if (tObj.pages) localStorage.setItem(`salibandy_pages_${tId}`, JSON.stringify(tObj.pages));
                         });
                     }
@@ -558,6 +563,7 @@
         const conesMap = {};
         const opponentsMap = {};
         const extraPlayersMap = {};
+        const textNotesMap = {};
         const gridPaperMap = {};
         const pagesMap = {};
 
@@ -573,6 +579,7 @@
             conesMap[tId] = (tId === currentTeamId) ? lineupCones : loadFromStorage(`salibandy_cones_${tId}`, {});
             opponentsMap[tId] = (tId === currentTeamId) ? lineupOpponents : loadFromStorage(`salibandy_opponents_${tId}`, {});
             extraPlayersMap[tId] = (tId === currentTeamId) ? lineupExtraPlayers : loadFromStorage(`salibandy_extra_players_${tId}`, {});
+            textNotesMap[tId] = (tId === currentTeamId) ? lineupTextNotes : loadFromStorage(`salibandy_text_notes_${tId}`, {});
             gridPaperMap[tId] = (tId === currentTeamId) ? lineupGridPaper : loadFromStorage(`salibandy_grid_paper_${tId}`, {});
             pagesMap[tId] = (tId === currentTeamId) ? lineupPages : loadFromStorage(`salibandy_pages_${tId}`, {});
         });
@@ -595,6 +602,7 @@
             cones: conesMap,
             opponents: opponentsMap,
             extraPlayers: extraPlayersMap,
+            textNotes: textNotesMap,
             gridPaper: gridPaperMap,
             pages: pagesMap
         };
@@ -742,6 +750,11 @@
                     localStorage.setItem(`salibandy_extra_players_${tId}`, JSON.stringify(cloudData.extraPlayers[tId]));
                 });
             }
+            if (cloudData.textNotes) {
+                Object.keys(cloudData.textNotes).forEach(tId => {
+                    localStorage.setItem(`salibandy_text_notes_${tId}`, JSON.stringify(cloudData.textNotes[tId]));
+                });
+            }
             if (cloudData.pages) {
                 Object.keys(cloudData.pages).forEach(tId => {
                     localStorage.setItem(`salibandy_pages_${tId}`, JSON.stringify(cloudData.pages[tId]));
@@ -759,6 +772,7 @@
             lineupCones = loadFromStorage(`salibandy_cones_${currentTeamId}`, {});
             lineupOpponents = loadFromStorage(`salibandy_opponents_${currentTeamId}`, {});
             lineupExtraPlayers = loadFromStorage(`salibandy_extra_players_${currentTeamId}`, {});
+            lineupTextNotes = loadFromStorage(`salibandy_text_notes_${currentTeamId}`, {});
             lineupPages = loadFromStorage(`salibandy_pages_${currentTeamId}`, {});
 
             saveStateLocalOnly();
@@ -881,6 +895,7 @@
             localStorage.setItem(`salibandy_cones_${currentTeamId}`, JSON.stringify(lineupCones));
             localStorage.setItem(`salibandy_opponents_${currentTeamId}`, JSON.stringify(lineupOpponents));
             localStorage.setItem(`salibandy_extra_players_${currentTeamId}`, JSON.stringify(lineupExtraPlayers));
+            localStorage.setItem(`salibandy_text_notes_${currentTeamId}`, JSON.stringify(lineupTextNotes));
             localStorage.setItem(`salibandy_grid_paper_${currentTeamId}`, JSON.stringify(lineupGridPaper));
             localStorage.setItem(`salibandy_pages_${currentTeamId}`, JSON.stringify(lineupPages));
         } catch (e) {
@@ -996,6 +1011,7 @@
         lineupCones = loadFromStorage(`salibandy_cones_${currentTeamId}`, {});
         lineupOpponents = loadFromStorage(`salibandy_opponents_${currentTeamId}`, {});
         lineupExtraPlayers = loadFromStorage(`salibandy_extra_players_${currentTeamId}`, {});
+        lineupTextNotes = loadFromStorage(`salibandy_text_notes_${currentTeamId}`, {});
         lineupGridPaper = loadFromStorage(`salibandy_grid_paper_${currentTeamId}`, {});
         lineupPages = loadFromStorage(`salibandy_pages_${currentTeamId}`, {});
 
@@ -1036,12 +1052,14 @@
             localStorage.removeItem(`salibandy_roster_${deleteId}`);
             localStorage.removeItem(`salibandy_lineup_configs_${deleteId}`);
             localStorage.removeItem(`salibandy_lineups_${deleteId}`);
+            localStorage.removeItem(`salibandy_reserves_${deleteId}`);
             localStorage.removeItem(`salibandy_drawings_${deleteId}`);
             localStorage.removeItem(`salibandy_positions_${deleteId}`);
             localStorage.removeItem(`salibandy_balls_${deleteId}`);
             localStorage.removeItem(`salibandy_cones_${deleteId}`);
             localStorage.removeItem(`salibandy_opponents_${deleteId}`);
             localStorage.removeItem(`salibandy_extra_players_${deleteId}`);
+            localStorage.removeItem(`salibandy_text_notes_${deleteId}`);
             localStorage.removeItem(`salibandy_grid_paper_${deleteId}`);
             localStorage.removeItem(`salibandy_pages_${deleteId}`);
 
@@ -1318,7 +1336,8 @@
 
         page.courts.splice(sourceIndex + 1, 0, {
             id: newCourtId,
-            title: newTitle
+            title: newTitle,
+            description: sourceCourt.description || ''
         });
 
         // Deep copy drawings
@@ -1342,6 +1361,14 @@
             lineupOpponents[newCourtKey] = JSON.parse(JSON.stringify(lineupOpponents[sourceCourtKey])).map(o => {
                 o.id = 'opp_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
                 return o;
+            });
+        }
+
+        // Deep copy text notes
+        if (lineupTextNotes[sourceCourtKey]) {
+            lineupTextNotes[newCourtKey] = JSON.parse(JSON.stringify(lineupTextNotes[sourceCourtKey])).map(t => {
+                t.id = 'text_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+                return t;
             });
         }
 
@@ -1400,6 +1427,8 @@
             delete lineupBalls[courtKey];
             delete lineupCones[courtKey];
             delete lineupOpponents[courtKey];
+            delete lineupExtraPlayers[courtKey];
+            delete lineupTextNotes[courtKey];
             delete lineupCourtPositions[courtKey];
 
             page.courts = page.courts.filter(c => c.id !== courtId);
@@ -1478,6 +1507,9 @@
                         <button class="tool-btn tool-rect ${activeTool === 'rect' ? 'active' : ''}" data-tool="rect" data-court-id="${courtId}" title="Piirrä taktinen alue">
                             🔲 Alue
                         </button>
+                        <button class="tool-btn tool-text ${activeTool === 'text' ? 'active' : ''}" data-tool="text" data-court-id="${courtId}" title="Lisää vapaateksti tai taktinen ohje kentälle">
+                            📝 Teksti
+                        </button>
                     </div>
 
                     <div class="toolbar-group">
@@ -1535,6 +1567,14 @@
                         <canvas id="tactic-canvas-${courtId}"></canvas>
                         <div id="court-players-layer-${courtId}"></div>
                     </div>
+                </div>
+
+                <div class="court-notes-section">
+                    <div class="court-notes-header">
+                        <span class="court-notes-title">📝 Taktiset ohjeet / Kuvion selite:</span>
+                        <span class="court-notes-hint">Kirjoita mitä tässä kuviossa tapahtuu</span>
+                    </div>
+                    <textarea class="court-notes-textarea" data-action="court-description-input" data-court-id="${courtId}" placeholder="Kirjoita kuvion ohjeet, esim: 1. Sentteri hakee pallon maalin takaa... 2. Pakit levittävät laitoihin...">${escapeHtml(court.description || '')}</textarea>
                 </div>
             `;
 
@@ -1632,6 +1672,7 @@
         renderCourtBallsForInstance(courtId, layersEl);
         renderCourtConesForInstance(courtId, layersEl);
         renderCourtOpponentsForInstance(courtId, layersEl);
+        renderCourtTextNotesForInstance(courtId, layersEl);
         renderCourtRectanglesForInstance(courtId, layersEl);
         renderCourtLineNodesForInstance(courtId, layersEl);
     }
@@ -1775,6 +1816,115 @@
         });
     }
 
+    function renderCourtTextNotesForInstance(courtId, layersEl) {
+        const courtKey = getCourtKey(courtId);
+        const textNotes = lineupTextNotes[courtKey] || lineupTextNotes[activeLineupKey] || [];
+        textNotes.forEach(textObj => {
+            const isSelected = activeSelectedElementId === textObj.id;
+            const textNode = document.createElement('div');
+            textNode.className = `court-text-node ${isSelected ? 'is-selected' : ''}`;
+            textNode.style.left = textObj.x + '%';
+            textNode.style.top = textObj.y + '%';
+
+            textNode.innerHTML = `
+                <div class="court-text-box" title="Kaksoisklikkaa muokataksesi. Siirrä vetämällä.">
+                    <span class="court-text-content">${escapeHtml(textObj.text)}</span>
+                    <button class="text-edit-btn" data-action="edit-text" data-text-id="${textObj.id}" data-court-id="${courtId}" title="Muokkaa tekstiä">✏️</button>
+                    <button class="text-remove-btn" data-action="remove-text" data-text-id="${textObj.id}" data-court-id="${courtId}" title="Poista teksti">✕</button>
+                </div>
+            `;
+
+            setupTextTouchDragging(textNode, textObj, courtId);
+            layersEl.appendChild(textNode);
+        });
+    }
+
+    function setupTextTouchDragging(node, textObj, courtId) {
+        let isDragging = false;
+        let startX = 0, startY = 0;
+        let origPctX = textObj.x, origPctY = textObj.y;
+        let hasMoved = false;
+
+        const courtContainer = document.getElementById(`floorball-court-${courtId}`);
+
+        function onPointerDown(e) {
+            if (e.target.closest('button')) return;
+            isDragging = true;
+            hasMoved = false;
+            selectCourtElement(textObj.id, node);
+            node.setPointerCapture(e.pointerId);
+
+            startX = e.clientX;
+            startY = e.clientY;
+            origPctX = textObj.x;
+            origPctY = textObj.y;
+
+            node.addEventListener('pointermove', onPointerMove);
+            node.addEventListener('pointerup', onPointerUp);
+            node.addEventListener('pointercancel', onPointerUp);
+            e.stopPropagation();
+        }
+
+        function onPointerMove(e) {
+            if (!isDragging) return;
+            if (!courtContainer) return;
+            const courtRect = courtContainer.getBoundingClientRect();
+            if (courtRect.width === 0 || courtRect.height === 0) return;
+
+            const dx = e.clientX - startX;
+            const dy = e.clientY - startY;
+
+            if (Math.abs(dx) > 3 || Math.abs(dy) > 3) hasMoved = true;
+
+            const dxPct = (dx / courtRect.width) * 100;
+            const dyPct = (dy / courtRect.height) * 100;
+
+            let newX = origPctX + dxPct;
+            let newY = origPctY + dyPct;
+
+            newX = Math.max(2, Math.min(98, Math.round(newX * 10) / 10));
+            newY = Math.max(2, Math.min(98, Math.round(newY * 10) / 10));
+
+            node.style.left = newX + '%';
+            node.style.top = newY + '%';
+            textObj.x = newX;
+            textObj.y = newY;
+        }
+
+        function onPointerUp(e) {
+            if (!isDragging) return;
+            isDragging = false;
+            node.removeEventListener('pointermove', onPointerMove);
+            node.removeEventListener('pointerup', onPointerUp);
+            node.removeEventListener('pointercancel', onPointerUp);
+
+            if (hasMoved) {
+                saveState();
+            }
+        }
+
+        node.addEventListener('pointerdown', onPointerDown);
+        node.addEventListener('dblclick', (e) => {
+            e.stopPropagation();
+            editCourtTextNote(courtId, textObj.id);
+        });
+    }
+
+    function editCourtTextNote(courtId, textId) {
+        const courtKey = getCourtKey(courtId);
+        const list = lineupTextNotes[courtKey] || [];
+        const textObj = list.find(t => t.id === textId);
+        if (!textObj) return;
+
+        const newText = prompt('Muokkaa tekstiä:', textObj.text);
+        if (newText !== null && newText.trim() !== '') {
+            textObj.text = newText.trim();
+            saveState();
+            renderCourtBoards();
+            showToast('Teksti päivitetty! ✏️');
+        }
+    }
+
     function renderCourtRectanglesForInstance(courtId, layersEl) {
         const courtKey = getCourtKey(courtId);
         const drawings = lineupDrawings[courtKey] || lineupDrawings[activeLineupKey] || [];
@@ -1864,7 +2014,6 @@
             y: 50
         });
 
-        setCourtDrawingTool(courtId, 'select');
         saveState();
         renderCourtBoards();
         showToast('Salibandypallo lisätty kentälle! ⚪');
@@ -1883,7 +2032,6 @@
             y: 50
         });
 
-        setCourtDrawingTool(courtId, 'select');
         saveState();
         renderCourtBoards();
         showToast('Harjoitustötterö lisätty kentälle! 🔶');
@@ -1904,7 +2052,6 @@
             y: 35
         });
 
-        setCourtDrawingTool(courtId, 'select');
         saveState();
         renderCourtBoards();
         showToast('Vastustaja lisätty kentälle! 🔴');
@@ -1936,7 +2083,7 @@
 
     function selectCourtElement(elementId, elementNode = null) {
         activeSelectedElementId = elementId;
-        document.querySelectorAll('.court-player-node, .court-ball-node, .court-cone-node, .court-opponent-node, .court-rect-node, .court-line-node, .line-endpoint-handle')
+        document.querySelectorAll('.court-player-node, .court-ball-node, .court-cone-node, .court-opponent-node, .court-text-node, .court-rect-node, .court-line-node, .line-endpoint-handle')
             .forEach(el => el.classList.remove('is-selected'));
 
         if (elementNode) {
@@ -1948,6 +2095,29 @@
         canvasEl.addEventListener('pointerdown', (e) => {
             const tool = courtDrawingTools[courtId] || 'select';
             if (tool === 'select') return;
+
+            if (tool === 'text') {
+                e.preventDefault();
+                const courtRect = courtContainer.getBoundingClientRect();
+                let xPct = Math.max(4, Math.min(94, Math.round((((e.clientX - courtRect.left) / courtRect.width) * 100) * 10) / 10));
+                let yPct = Math.max(4, Math.min(94, Math.round((((e.clientY - courtRect.top) / courtRect.height) * 100) * 10) / 10));
+
+                const userText = prompt('Kirjoita teksti / ohje kentälle (esim. Karvaus 2-2-1, Apuheitto, Veto):', '');
+                if (userText !== null && userText.trim() !== '') {
+                    const courtKey = getCourtKey(courtId);
+                    if (!lineupTextNotes[courtKey]) lineupTextNotes[courtKey] = [];
+                    lineupTextNotes[courtKey].push({
+                        id: 'text_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+                        text: userText.trim(),
+                        x: xPct,
+                        y: yPct
+                    });
+                    saveState();
+                    renderCourtBoards();
+                    showToast('Teksti lisätty kentälle! 📝');
+                }
+                return;
+            }
 
             courtIsDrawingMap[courtId] = true;
             e.preventDefault();
@@ -2018,10 +2188,9 @@
                         h: Math.max(4, Math.round(hPct * 10) / 10)
                     });
 
-                    setCourtDrawingTool(courtId, 'select');
                     saveState();
                     renderCourtBoards();
-                    showToast('Taktinen alue luotu! Voit siirtää sitä sormella/hiirellä 🔲');
+                    showToast('Taktinen alue luotu! Työkalu pysyy aktiivisena 🔲');
                 } else {
                     let color = '#38bdf8';
                     if (tool === 'pass') color = '#eab308';
@@ -2034,10 +2203,9 @@
                         color: color
                     });
 
-                    setCourtDrawingTool(courtId, 'select');
                     saveState();
                     renderCourtBoards();
-                    showToast(`${tool === 'pass' ? 'Syöttöviiva' : (tool === 'shot' ? 'Vetoviiva' : 'Juoksuviiva')} piirretty! Voit siirtää sitä 👆`);
+                    showToast(`${tool === 'pass' ? 'Syöttöviiva' : (tool === 'shot' ? 'Vetoviiva' : 'Juoksuviiva')} piirretty! Työkalu pysyy aktiivisena 🏒`);
                 }
             }
             courtPathPctMap[courtId] = [];
@@ -3909,6 +4077,7 @@
                 lineupCones[courtKey] = [];
                 lineupOpponents[courtKey] = [];
                 lineupExtraPlayers[courtKey] = [];
+                lineupTextNotes[courtKey] = [];
                 saveState();
                 renderCourtBoards();
                 showToast('Piirtoalusta tyhjennetty.');
@@ -4087,6 +4256,47 @@
                     showToast('Viiva poistettu.');
                 }
                 return;
+            }
+
+            const removeTextBtn = e.target.closest('[data-action="remove-text"]');
+            if (removeTextBtn) {
+                e.preventDefault();
+                const textId = removeTextBtn.dataset.textId;
+                const courtId = removeTextBtn.dataset.courtId;
+                const courtKey = getCourtKey(courtId);
+                if (lineupTextNotes[courtKey]) {
+                    lineupTextNotes[courtKey] = lineupTextNotes[courtKey].filter(t => t.id !== textId);
+                    saveState();
+                    renderCourtBoards();
+                    showToast('Teksti poistettu.');
+                }
+                return;
+            }
+
+            const editTextBtn = e.target.closest('[data-action="edit-text"]');
+            if (editTextBtn) {
+                e.preventDefault();
+                const textId = editTextBtn.dataset.textId;
+                const courtId = editTextBtn.dataset.courtId;
+                editCourtTextNote(courtId, textId);
+                return;
+            }
+        });
+
+        let descDebounceTimer = null;
+        document.getElementById('courts-vertical-list')?.addEventListener('input', (e) => {
+            const descInput = e.target.closest('[data-action="court-description-input"]');
+            if (descInput) {
+                const courtId = descInput.dataset.courtId;
+                const page = getCurrentPage();
+                const courtObj = page.courts.find(c => c.id === courtId);
+                if (courtObj) {
+                    courtObj.description = descInput.value;
+                    if (descDebounceTimer) clearTimeout(descDebounceTimer);
+                    descDebounceTimer = setTimeout(() => {
+                        saveState();
+                    }, 500);
+                }
             }
         });
 
