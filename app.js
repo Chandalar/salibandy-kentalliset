@@ -2047,8 +2047,8 @@
         if (drawing.stepNum !== undefined && drawing.stepNum !== null && drawing.stepNum !== '') {
             return String(drawing.stepNum);
         }
-        let lineDrawings = (drawingsList || []).filter(d => d.type === 'pass' || d.type === 'shot' || d.type === 'run');
-        let idx = lineDrawings.indexOf(drawing);
+        let sameTypeDrawings = (drawingsList || []).filter(d => d.type === drawing.type);
+        let idx = sameTypeDrawings.indexOf(drawing);
         return String(idx >= 0 ? (idx + 1) : (drawingIndex + 1));
     }
 
@@ -2059,12 +2059,13 @@
         if (!lineObj) return;
 
         const currentNum = getDrawingStepNum(lineObj, 0, drawings);
-        const newNum = prompt('Muokkaa piirroksen järjestysnumeroa / vaihetta (esim. 1, 2, 3... tai jätä tyhjäksi):', currentNum);
+        const typeLabel = lineObj.type === 'pass' ? 'Syötön' : (lineObj.type === 'shot' ? 'Vedon' : 'Liikkeen');
+        const newNum = prompt(`Muokkaa ${typeLabel} numeroa (esim. 1, 2, 3... tai jätä tyhjäksi):`, currentNum);
         if (newNum !== null) {
             lineObj.stepNum = newNum.trim();
             saveState();
             renderCourtBoards();
-            showToast(`Piirroksen numero päivitetty: #${lineObj.stepNum || '-'} ✏️`);
+            showToast(`${typeLabel} numero päivitetty: #${lineObj.stepNum || '-'} ✏️`);
         }
     }
 
@@ -2077,7 +2078,7 @@
             const pts = lineObj.pointsPct;
             if (!pts || pts.length < 2) return;
 
-            const stepNum = getDrawingStepNum(lineObj, idx, lineDrawings);
+            const stepNum = getDrawingStepNum(lineObj, idx, drawings);
             if (!lineObj.stepNum) lineObj.stepNum = stepNum;
 
             const startPct = pts[0];
@@ -2328,8 +2329,8 @@
                     if (tool === 'pass') color = '#eab308';
                     if (tool === 'shot') color = '#ec4899';
 
-                    const existingLines = (lineupDrawings[courtKey] || []).filter(d => d.type === 'pass' || d.type === 'shot' || d.type === 'run');
-                    const nextStepNum = existingLines.length + 1;
+                    const sameTypeLines = (lineupDrawings[courtKey] || []).filter(d => d.type === tool);
+                    const nextStepNum = sameTypeLines.length + 1;
 
                     lineupDrawings[courtKey].push({
                         id: 'draw_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
@@ -2341,7 +2342,7 @@
 
                     saveState();
                     renderCourtBoards();
-                    showToast(`${tool === 'pass' ? 'Syöttö' : (tool === 'shot' ? 'Veto' : 'Juoksu')} #${nextStepNum} piirretty! Työkalu pysyy aktiivisena 🏒`);
+                    showToast(`${tool === 'pass' ? 'Syöttö' : (tool === 'shot' ? 'Veto' : 'Liike')} #${nextStepNum} piirretty! Työkalu pysyy aktiivisena 🏒`);
                 }
             }
             courtPathPctMap[courtId] = [];
