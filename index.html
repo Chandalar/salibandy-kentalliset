@@ -10,8 +10,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 
-    <!-- CSS Stylesheet (Cache Busted v37.6) -->
-    <link rel="stylesheet" href="styles.css?v=37.6">
+    <!-- CSS Stylesheet (Cache Busted v37.7) -->
+    <link rel="stylesheet" href="styles.css?v=37.7">
 
     <!-- OCR Tesseract.js (Optinen tekstintunnistus valokuvista) -->
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4.1.1/dist/tesseract.min.js"></script>
@@ -411,24 +411,27 @@
                     <input type="text" id="form-name" class="form-input" placeholder="esim. Teemu Teekkari" required>
                 </div>
 
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="form-number">Pelinumero *</label>
-                        <input type="number" id="form-number" class="form-input" min="1" max="99" placeholder="99" required>
+                <div class="form-group">
+                    <label for="form-number">Pelinumero *</label>
+                    <input type="number" id="form-number" class="form-input" min="1" max="99" placeholder="99" required>
+                </div>
+
+                <div class="form-group">
+                    <label style="display:flex; justify-content:space-between; align-items:center;">
+                        <span>Pelipaikka / Pelipaikat *</span>
+                        <span style="font-size:0.72rem; color:var(--text-muted); font-weight:normal;">(Voit valita useita)</span>
+                    </label>
+                    <div class="form-position-pills" id="form-position-pills">
+                        <button type="button" class="pos-select-pill is-mv-pill" data-pos="MV">🟢 MV (Maalivahti)</button>
+                        <button type="button" class="pos-select-pill" data-pos="VP">VP (Vasen pakki)</button>
+                        <button type="button" class="pos-select-pill" data-pos="OP">OP (Oikea pakki)</button>
+                        <button type="button" class="pos-select-pill" data-pos="P">P (Pakki)</button>
+                        <button type="button" class="pos-select-pill" data-pos="VH">VH (Vasen laita)</button>
+                        <button type="button" class="pos-select-pill" data-pos="KH">KH (Sentteri)</button>
+                        <button type="button" class="pos-select-pill" data-pos="OH">OH (Oikea laita)</button>
+                        <button type="button" class="pos-select-pill" data-pos="H">H (Hyökkääjä)</button>
                     </div>
-                    <div class="form-group">
-                        <label for="form-position">Pelipaikka *</label>
-                        <select id="form-position" class="form-input">
-                            <option value="VP">Vasen puolustaja (VP)</option>
-                            <option value="OP">Oikea puolustaja (OP)</option>
-                            <option value="P">Puolustaja / Pakki (P)</option>
-                            <option value="VH">Vasen hyökkääjä (VH)</option>
-                            <option value="KH">Keskushyökkääjä / Sentteri (KH)</option>
-                            <option value="OH">Oikea hyökkääjä (OH)</option>
-                            <option value="H">Hyökkääjä (H)</option>
-                            <option value="MV">Maalivahti (MV)</option>
-                        </select>
-                    </div>
+                    <input type="hidden" id="form-position" value="H">
                 </div>
 
                 <div class="form-group">
@@ -889,9 +892,9 @@
     <!-- TOAST NOTIFICATION CONTAINER -->
     <div id="toast" class="toast-notification"></div>
 
-    <!-- Firebase Config & App Engine (Cache Busted v37.6) -->
-    <script src="firebase-config.js?v=37.6"></script>
-    <script src="app.js?v=37.6"></script>
+    <!-- Firebase Config & App Engine (Cache Busted v37.7) -->
+    <script src="firebase-config.js?v=37.7"></script>
+    <script src="app.js?v=37.7"></script>
 
 </body>
 </html>

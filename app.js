@@ -166,6 +166,7 @@
 
     let activeLineupKey = '1';
     let activePageId = 'p1';
+    let activeFilters = new Set(['all']);
     let activeFilter = 'all';
     let searchQuery = '';
     let labelMode = loadFromStorage('salibandy_label_mode', 'full');
@@ -3197,8 +3198,8 @@
     // ==========================================
     function updateRosterCounters() {
         if (!roster || !Array.isArray(roster)) return;
-        const mvCount = roster.filter(p => p.position === 'MV').length;
-        const fieldCount = roster.filter(p => p.position !== 'MV').length;
+        const mvCount = roster.filter(p => isPlayerMv(p)).length;
+        const fieldCount = roster.filter(p => !isPlayerMv(p)).length;
         const loanCount = roster.filter(p => p.isLoan).length;
 
         const countMvEl = document.getElementById('count-mv');
@@ -3210,19 +3211,54 @@
         if (countLoanEl) countLoanEl.textContent = `${loanCount} LAINA`;
     }
 
-    function getPosLabel(pos) {
-        const labels = {
-            MV: '🟢 MV',
-            VP: '🔵 VP',
-            OP: '🔵 OP',
-            P: '🔵 Pakki',
-            VH: '🔵 VH',
-            KH: '🔵 KH',
-            OH: '🔵 OH',
-            H: '🔵 Hyökkääjä',
-            VM: '🪑 Varamies'
-        };
-        return labels[pos] || pos;
+    function getPlayerPositions(player) {
+        if (!player) return ['H'];
+        if (Array.isArray(player.positions) && player.positions.length > 0) {
+            return player.positions;
+        }
+        if (player.position) {
+            const parts = String(player.position).split(/[,/ ]+/).map(s => s.trim().toUpperCase()).filter(Boolean);
+            if (parts.length > 0) return parts;
+        }
+        return ['H'];
+    }
+
+    function isPlayerMv(player) {
+        const posList = getPlayerPositions(player);
+        return posList.includes('MV');
+    }
+
+    function getPosLabel(playerOrPos) {
+        if (!playerOrPos) return '🔵 Kenttä';
+        if (typeof playerOrPos === 'string') {
+            const pos = playerOrPos.toUpperCase().trim();
+            const labels = {
+                MV: '🟢 MV',
+                VP: '🔵 VP',
+                OP: '🔵 OP',
+                P: '🔵 Pakki',
+                VH: '🔵 VH',
+                KH: '🔵 KH',
+                OH: '🔵 OH',
+                H: '🔵 Hyökkääjä',
+                VM: '🪑 Varamies'
+            };
+            if (labels[pos]) return labels[pos];
+            const parts = pos.split(/[,/ ]+/).map(s => s.trim()).filter(Boolean);
+            if (parts.length > 1) {
+                const hasMv = parts.includes('MV');
+                return (hasMv ? '🟢 ' : '🔵 ') + parts.join(' • ');
+            }
+            return pos;
+        }
+
+        const player = playerOrPos;
+        const posList = getPlayerPositions(player);
+        if (posList.length === 1) {
+            return getPosLabel(posList[0]);
+        }
+        const hasMv = posList.includes('MV');
+        return (hasMv ? '🟢 ' : '🔵 ') + posList.join(' • ');
     }
 
     function renderRoster() {
@@ -3256,30 +3292,41 @@
                                   player.number.toString().includes(searchQuery);
 
             if (!matchesSearch) return false;
-            const pPos = (player.position || '').toUpperCase();
-            if (activeFilter === 'mv') return pPos === 'MV';
-            if (activeFilter === 'vp') return pPos === 'VP';
-            if (activeFilter === 'op') return pPos === 'OP';
-            if (activeFilter === 'p') return pPos === 'P' || pPos === 'VP' || pPos === 'OP';
-            if (activeFilter === 'vh') return pPos === 'VH';
-            if (activeFilter === 'kh') return pPos === 'KH';
-            if (activeFilter === 'oh') return pPos === 'OH';
-            if (activeFilter === 'h') return pPos === 'H' || pPos === 'VH' || pPos === 'KH' || pPos === 'OH';
-            if (activeFilter === 'field') return pPos !== 'MV';
-            if (activeFilter === 'loan') return player.isLoan;
-            return true;
+
+            if (!activeFilters || activeFilters.has('all') || activeFilters.size === 0) {
+                return true;
+            }
+
+            const pPositions = getPlayerPositions(player);
+
+            for (let filter of activeFilters) {
+                if (filter === 'loan' && player.isLoan) return true;
+                if (filter === 'mv' && pPositions.includes('MV')) return true;
+                if (filter === 'vp' && (pPositions.includes('VP') || pPositions.includes('P'))) return true;
+                if (filter === 'op' && (pPositions.includes('OP') || pPositions.includes('P'))) return true;
+                if (filter === 'p' && (pPositions.includes('P') || pPositions.includes('VP') || pPositions.includes('OP'))) return true;
+                if (filter === 'vh' && (pPositions.includes('VH') || pPositions.includes('H'))) return true;
+                if (filter === 'kh' && (pPositions.includes('KH') || pPositions.includes('H'))) return true;
+                if (filter === 'oh' && (pPositions.includes('OH') || pPositions.includes('H'))) return true;
+                if (filter === 'h' && (pPositions.includes('H') || pPositions.includes('VH') || pPositions.includes('KH') || pPositions.includes('OH'))) return true;
+                if (filter === 'field' && !pPositions.includes('MV')) return true;
+            }
+
+            return false;
         });
 
         // Sort: MV first, then number
         filtered.sort((a, b) => {
-            if (a.position === 'MV' && b.position !== 'MV') return -1;
-            if (a.position !== 'MV' && b.position === 'MV') return 1;
+            const aMv = isPlayerMv(a);
+            const bMv = isPlayerMv(b);
+            if (aMv && !bMv) return -1;
+            if (!aMv && bMv) return 1;
             return a.number - b.number;
         });
 
         filtered.forEach(player => {
             const card = document.createElement('div');
-            const isMv = player.position === 'MV';
+            const isMv = isPlayerMv(player);
             card.className = `player-card ${isMv ? 'is-mv' : 'is-field'}`;
             card.dataset.id = player.id;
             card.setAttribute('draggable', 'true');
@@ -3322,7 +3369,7 @@
                             ${player.isLoan ? '<span class="loan-pill">LAINA</span>' : ''}
                         </div>
                         <div class="player-meta-row">
-                            <span class="pos-badge">${getPosLabel(player.position)}</span>
+                            <span class="pos-badge">${getPosLabel(player)}</span>
                             ${player.notes ? `<span class="player-note-text">${escapeHtml(player.notes)}</span>` : ''}
                         </div>
                         ${assignedInfo}
@@ -3959,31 +4006,50 @@
         showToast(`Pelaaja sijoitettu: ${getLineupName(lineupKey)} - ${pos} 👍`);
     }
 
+    function updatePositionPillsSelection(posList) {
+        const container = document.getElementById('form-position-pills');
+        if (!container) return;
+        const normalized = (posList || []).map(p => String(p).trim().toUpperCase());
+        container.querySelectorAll('.pos-select-pill').forEach(btn => {
+            const p = (btn.dataset.pos || '').toUpperCase();
+            if (normalized.includes(p)) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        });
+        const hiddenPosInput = document.getElementById('form-position');
+        if (hiddenPosInput) hiddenPosInput.value = normalized.join(', ');
+    }
+
     function openModal(editPlayer = null) {
         const modalTitle = document.getElementById('modal-title');
         const formPlayerId = document.getElementById('form-player-id');
         const formName = document.getElementById('form-name');
         const formNumber = document.getElementById('form-number');
-        const formPosition = document.getElementById('form-position');
         const formIsLoan = document.getElementById('form-is-loan');
         const formNotes = document.getElementById('form-notes');
         const playerForm = document.getElementById('player-form');
+
+        let selectedPositions = ['H'];
 
         if (editPlayer) {
             if (modalTitle) modalTitle.textContent = 'Muokkaa pelaajaa';
             if (formPlayerId) formPlayerId.value = editPlayer.id;
             if (formName) formName.value = editPlayer.name;
             if (formNumber) formNumber.value = editPlayer.number;
-            if (formPosition) formPosition.value = editPlayer.position;
             if (formIsLoan) formIsLoan.checked = editPlayer.isLoan;
             if (formNotes) formNotes.value = editPlayer.notes || '';
+            selectedPositions = getPlayerPositions(editPlayer);
         } else {
             if (modalTitle) modalTitle.textContent = 'Lisää uusi pelaaja / Laina';
             playerForm?.reset();
             if (formPlayerId) formPlayerId.value = '';
-            if (formPosition) formPosition.value = 'H';
             if (formIsLoan) formIsLoan.checked = false;
+            selectedPositions = ['H'];
         }
+
+        updatePositionPillsSelection(selectedPositions);
         document.getElementById('player-modal')?.classList.add('active');
     }
 
@@ -5553,30 +5619,51 @@
             deleteLineupConfig(activeLineupKey);
         });
 
+        // Multi-select position pills toggle in modal
+        document.getElementById('form-position-pills')?.addEventListener('click', (e) => {
+            const btn = e.target.closest('.pos-select-pill');
+            if (!btn) return;
+            e.preventDefault();
+            btn.classList.toggle('active');
+
+            const activePills = document.querySelectorAll('#form-position-pills .pos-select-pill.active');
+            if (activePills.length === 0) {
+                btn.classList.add('active');
+            }
+
+            const selected = Array.from(document.querySelectorAll('#form-position-pills .pos-select-pill.active'))
+                .map(b => (b.dataset.pos || '').toUpperCase());
+            const hiddenPosInput = document.getElementById('form-position');
+            if (hiddenPosInput) hiddenPosInput.value = selected.join(', ');
+        });
+
         document.getElementById('player-form')?.addEventListener('submit', (e) => {
             e.preventDefault();
             const formPlayerId = document.getElementById('form-player-id');
             const formName = document.getElementById('form-name');
             const formNumber = document.getElementById('form-number');
-            const formPosition = document.getElementById('form-position');
             const formIsLoan = document.getElementById('form-is-loan');
             const formNotes = document.getElementById('form-notes');
+
+            const activePills = Array.from(document.querySelectorAll('#form-position-pills .pos-select-pill.active'))
+                .map(b => (b.dataset.pos || '').toUpperCase());
+            const positions = activePills.length > 0 ? activePills : ['H'];
+            const position = positions.join(', ');
 
             const id = (formPlayerId && formPlayerId.value) ? formPlayerId.value : ('p_' + Date.now());
             const name = formName ? formName.value.trim() : '';
             const number = formNumber ? parseInt(formNumber.value, 10) : NaN;
-            const position = formPosition ? formPosition.value : 'H';
             const isLoan = formIsLoan ? formIsLoan.checked : false;
             const notes = formNotes ? formNotes.value.trim() : '';
 
             if (!name || isNaN(number)) return;
 
             const existingIndex = roster.findIndex(p => p.id === id);
-            const playerData = { id, name, number, position, isLoan, notes };
+            const playerData = { id, name, number, position, positions, isLoan, notes };
 
             if (existingIndex >= 0) {
                 roster[existingIndex] = playerData;
-                showToast('Pelaajan tiedot päivitetty!');
+                showToast('Pelaajan tiedot ja pelipaikat päivitetty!');
             } else {
                 roster.push(playerData);
                 showToast('Uusi pelaaja lisätty rinkiin!');
@@ -5680,6 +5767,7 @@
                         name: name,
                         number: number,
                         position: position,
+                        positions: [position],
                         isLoan: false,
                         notes: 'Tuotu kuvasta 📷'
                     });
@@ -5702,14 +5790,42 @@
             renderRoster();
         });
 
-        document.querySelectorAll('.pill-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                document.querySelectorAll('.pill-btn').forEach(b => b.classList.remove('active'));
-                btn.classList.add('active');
-                activeFilter = btn.dataset.filter;
+        // Multi-select Roster Filter Pills
+        const filterContainer = document.getElementById('roster-filter-pills');
+        if (filterContainer) {
+            filterContainer.addEventListener('click', (e) => {
+                const btn = e.target.closest('.pill-btn');
+                if (!btn) return;
+                const filterKey = btn.dataset.filter;
+                if (!filterKey) return;
+
+                if (filterKey === 'all') {
+                    activeFilters.clear();
+                    activeFilters.add('all');
+                } else {
+                    activeFilters.delete('all');
+                    if (activeFilters.has(filterKey)) {
+                        activeFilters.delete(filterKey);
+                    } else {
+                        activeFilters.add(filterKey);
+                    }
+                    if (activeFilters.size === 0) {
+                        activeFilters.add('all');
+                    }
+                }
+
+                filterContainer.querySelectorAll('.pill-btn').forEach(b => {
+                    const k = b.dataset.filter;
+                    if (activeFilters.has(k)) {
+                        b.classList.add('active');
+                    } else {
+                        b.classList.remove('active');
+                    }
+                });
+
                 renderRoster();
             });
-        });
+        }
 
         document.getElementById('roster-list-container')?.addEventListener('click', (e) => {
             const tapAssignTrigger = e.target.closest('[data-action="tap-assign"]');

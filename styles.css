@@ -569,6 +569,60 @@ body {
     color: #fde047;
 }
 
+/* FORM POSITION MULTI-SELECT PILLS (v37.7) */
+.form-position-pills {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.35rem;
+    margin-top: 0.35rem;
+}
+
+@media (max-width: 480px) {
+    .form-position-pills {
+        grid-template-columns: 1fr;
+    }
+}
+
+.pos-select-pill {
+    background: var(--bg-surface-alt, #1e293b);
+    border: 1.5px solid var(--border-color, rgba(255, 255, 255, 0.12));
+    border-radius: var(--radius-md, 8px);
+    color: var(--text-secondary, #94a3b8);
+    padding: 0.45rem 0.65rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+    user-select: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 0.35rem;
+    text-align: left;
+    touch-action: manipulation;
+}
+
+.pos-select-pill:hover {
+    background: var(--bg-card-hover, #334155);
+    border-color: var(--text-secondary, #94a3b8);
+    color: var(--text-primary, #ffffff);
+}
+
+.pos-select-pill.active {
+    background: rgba(59, 130, 246, 0.22);
+    border-color: var(--accent-field, #3b82f6);
+    color: #93c5fd;
+    font-weight: 700;
+    box-shadow: 0 0 10px rgba(59, 130, 246, 0.3);
+}
+
+.pos-select-pill.is-mv-pill.active {
+    background: rgba(16, 185, 129, 0.22);
+    border-color: var(--accent-mv, #10b981);
+    color: #6ee7b7;
+    box-shadow: 0 0 10px rgba(16, 185, 129, 0.3);
+}
+
 /* COMPACT ROSTER HEADER & BUTTONS */
 .roster-header-flex {
     display: flex;
