@@ -3182,8 +3182,9 @@
         summaryGridContainer.innerHTML = '';
 
         const posKeys = ['MV', 'VP', 'OP', 'VH', 'KH', 'OH'];
+        const displayConfigs = lineupConfigs.filter(c => c.id !== 'custom' && c.id !== 'freeform' && c.type !== 'drawing_only');
 
-        lineupConfigs.forEach(cConfig => {
+        displayConfigs.forEach(cConfig => {
             const lKey = cConfig.id;
             const lName = cConfig.name;
             const curLineup = lineups[lKey] || {};
@@ -3736,18 +3737,31 @@
         showToast('Pelaaja poistettu.');
     }
 
-    function exportLineupsToClipboard() {
-        let text = `🏑 ${teams.find(t => t.id === currentTeamId)?.name || 'SALIBANDY'} - KENTÄLLISET\n\n`;
+    function generateLineupsExportText(specificLineupKey = null) {
+        const curTeam = teams.find(t => t.id === currentTeamId);
+        const teamName = curTeam ? curTeam.name : 'Joukkue';
+        let text = `🏑 ${teamName.toUpperCase()} - KENTÄLLISET\n\n`;
 
-        lineupConfigs.forEach(cConfig => {
+        const targetConfigs = specificLineupKey 
+            ? lineupConfigs.filter(c => c.id === specificLineupKey)
+            : lineupConfigs.filter(c => c.id !== 'custom' && c.id !== 'freeform' && c.type !== 'drawing_only');
+
+        let totalFound = 0;
+        targetConfigs.forEach(cConfig => {
             const key = cConfig.id;
             const name = cConfig.name;
             const lineup = lineups[key] || {};
+            const posOrder = ['MV', 'VP', 'OP', 'VH', 'KH', 'OH'];
             const hasPlayers = Object.values(lineup).some(val => val !== '');
+            const posResAny = posOrder.some(pos => {
+                const r = getPosReserves(key, pos);
+                return r && r.length > 0;
+            });
+            const genRes = getGeneralReserves(key) || [];
 
-            if (hasPlayers) {
+            if (hasPlayers || posResAny || genRes.length > 0) {
+                totalFound++;
                 text += `📌 ${name.toUpperCase()}:\n`;
-                const posOrder = ['MV', 'VP', 'OP', 'VH', 'KH', 'OH'];
                 posOrder.forEach(pos => {
                     const pid = lineup[pos];
                     const player = roster.find(p => p.id === pid);
@@ -3760,14 +3774,13 @@
                         posRes.forEach(rId => {
                             const rPlayer = roster.find(p => p.id === rId);
                             if (rPlayer) {
-                                text += `     ↳ 🪑 Varamies: #${rPlayer.number} ${rPlayer.name}${rPlayer.isLoan ? ' (LAINA)' : ''}\n`;
+                                text += `     ↳ 🪑 Varamies (${pos}): #${rPlayer.number} ${rPlayer.name}${rPlayer.isLoan ? ' (LAINA)' : ''}\n`;
                             }
                         });
                     }
                 });
 
-                const genRes = getGeneralReserves(key);
-                if (genRes && genRes.length > 0) {
+                if (genRes.length > 0) {
                     text += `  🪑 VAIHTOPENKKI / VARAMIEHET:\n`;
                     genRes.forEach(rId => {
                         const rPlayer = roster.find(p => p.id === rId);
@@ -3780,13 +3793,36 @@
             }
         });
 
-        if (typeof navigator !== 'undefined' && navigator.clipboard) {
-            navigator.clipboard.writeText(text).then(() => {
-                showToast('Kentälliset kopioitu leikepöydälle! 📋');
-            }).catch(() => {
-                showToast('Kopiointi epäonnistui.');
-            });
+        if (totalFound === 0) {
+            text += `(Ei vielä sijoitettuja pelaajia kentällisissä)\n`;
         }
+
+        return text.trim();
+    }
+
+    function openExportTextModal(specificLineupKey = null) {
+        const text = generateLineupsExportText(specificLineupKey);
+        const textarea = document.getElementById('export-modal-textarea');
+        const titleEl = document.getElementById('export-modal-title');
+        
+        if (textarea) {
+            textarea.value = text;
+        }
+
+        if (titleEl) {
+            if (specificLineupKey) {
+                const config = lineupConfigs.find(c => c.id === specificLineupKey);
+                titleEl.textContent = `📋 ${config ? config.name : 'Kentällinen'} tekstinä (Esikatselu)`;
+            } else {
+                titleEl.textContent = `📋 Kaikki kentälliset tekstinä (Esikatselu)`;
+            }
+        }
+
+        document.getElementById('export-modal')?.classList.add('active');
+    }
+
+    function exportLineupsToClipboard(specificLineupKey = null) {
+        openExportTextModal(specificLineupKey);
     }
 
     function openPhotoModal() {
@@ -4731,9 +4767,44 @@
             renderCourtBoards();
         });
 
-        document.getElementById('btn-export-text')?.addEventListener('click', exportLineupsToClipboard);
-        document.getElementById('btn-copy-this-lineup')?.addEventListener('click', exportLineupsToClipboard);
-        document.getElementById('btn-copy-all-summary')?.addEventListener('click', exportLineupsToClipboard);
+        document.getElementById('btn-export-text')?.addEventListener('click', () => openExportTextModal(null));
+        document.getElementById('btn-copy-this-lineup')?.addEventListener('click', () => openExportTextModal(activeLineupKey));
+        document.getElementById('btn-copy-all-summary')?.addEventListener('click', () => openExportTextModal(null));
+
+        // EXPORT PREVIEW MODAL EVENTS
+        document.getElementById('btn-close-export-modal')?.addEventListener('click', () => {
+            document.getElementById('export-modal')?.classList.remove('active');
+        });
+        document.getElementById('btn-close-export-modal-bottom')?.addEventListener('click', () => {
+            document.getElementById('export-modal')?.classList.remove('active');
+        });
+
+        document.getElementById('btn-copy-export-modal')?.addEventListener('click', () => {
+            const textarea = document.getElementById('export-modal-textarea');
+            if (textarea && textarea.value) {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(textarea.value).then(() => {
+                        showToast('Kentälliset kopioitu leikepöydälle! 📋');
+                    }).catch(() => {
+                        textarea.select();
+                        document.execCommand('copy');
+                        showToast('Kentälliset kopioitu leikepöydälle! 📋');
+                    });
+                } else {
+                    textarea.select();
+                    document.execCommand('copy');
+                    showToast('Kentälliset kopioitu leikepöydälle! 📋');
+                }
+            }
+        });
+
+        document.getElementById('btn-wa-export-modal')?.addEventListener('click', () => {
+            const textarea = document.getElementById('export-modal-textarea');
+            if (textarea && textarea.value) {
+                const text = encodeURIComponent(textarea.value);
+                window.open(`https://api.whatsapp.com/send?text=${text}`, '_blank');
+            }
+        });
 
         // SHARE MODAL EVENTS
         document.getElementById('btn-open-share-modal')?.addEventListener('click', openShareModal);

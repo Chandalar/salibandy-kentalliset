@@ -10,8 +10,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 
-    <!-- CSS Stylesheet (Cache Busted v35.1) -->
-    <link rel="stylesheet" href="styles.css?v=35.1">
+    <!-- CSS Stylesheet (Cache Busted v36.0) -->
+    <link rel="stylesheet" href="styles.css?v=36.0">
 
     <!-- OCR Tesseract.js (Optinen tekstintunnistus valokuvista) -->
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4.1.1/dist/tesseract.min.js"></script>
@@ -604,12 +604,42 @@
         </div>
     </div>
 
+    <!-- EXPORT TEXT PREVIEW MODAL -->
+    <div class="modal-overlay" id="export-modal">
+        <div class="modal-card modal-card-wide" style="max-width: 650px;">
+            <div class="modal-header">
+                <h3 id="export-modal-title">📋 Kentälliset tekstinä (Esikatselu)</h3>
+                <button class="close-btn" id="btn-close-export-modal">&times;</button>
+            </div>
+
+            <p class="panel-hint" style="padding: 0 0 0.6rem 0;">
+                Alla näet luodun tekstiversion. Voit lukea sen, muokata sitä suoraan tai kopioida leikepöydälle tai jakaa WhatsAppiin.
+            </p>
+
+            <div class="form-group" style="margin-bottom: 0.8rem;">
+                <textarea id="export-modal-textarea" class="export-textarea" placeholder="Ei sijoitettuja pelaajia..."></textarea>
+            </div>
+
+            <div class="modal-actions" style="display: flex; gap: 0.5rem; justify-content: space-between; flex-wrap: wrap;">
+                <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                    <button type="button" class="btn btn-primary" id="btn-copy-export-modal" title="Kopioi leikepöydälle">
+                        📋 Kopioi leikepöydälle
+                    </button>
+                    <button type="button" class="btn btn-whatsapp" id="btn-wa-export-modal" title="Jaa WhatsAppiin">
+                        💬 Jaa WhatsAppiin
+                    </button>
+                </div>
+                <button type="button" class="btn btn-outline" id="btn-close-export-modal-bottom">Sulje</button>
+            </div>
+        </div>
+    </div>
+
     <!-- TOAST NOTIFICATION CONTAINER -->
     <div id="toast" class="toast-notification"></div>
 
-    <!-- Firebase Config & App Engine (Cache Busted v35.1) -->
-    <script src="firebase-config.js?v=35.1"></script>
-    <script src="app.js?v=35.1"></script>
+    <!-- Firebase Config & App Engine (Cache Busted v36.0) -->
+    <script src="firebase-config.js?v=36.0"></script>
+    <script src="app.js?v=36.0"></script>
 
 </body>
 </html>
