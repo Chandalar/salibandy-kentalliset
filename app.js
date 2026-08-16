@@ -1825,7 +1825,7 @@
             let circleInnerHtml = '';
             if (showPhoto) {
                 circleInnerHtml = `
-                    <div class="node-circle has-player-photo" style="background-image: url('${player.photo}');" title="${escapeHtml(player.name)} - Kaksoisklikkaa muokataksesi">
+                    <div class="node-circle has-player-photo" style="background-image: url('${player.photo}') !important;" title="${escapeHtml(player.name)} - Kaksoisklikkaa muokataksesi">
                         <span class="node-num-tag">#${player.number}</span>
                         <button class="node-remove-btn" data-action="remove-lineup-player" data-pos="${pos}">✕</button>
                     </div>
@@ -1957,7 +1957,7 @@
             let circleInnerHtml = '';
             if (photoUrl) {
                 circleInnerHtml = `
-                    <div class="extra-player-circle has-player-photo ${isMv ? 'is-mv-circle' : ''}" style="background-image: url('${photoUrl}');" title="${escapeHtml(fullName || 'Oma pelaaja')} - Kaksoisklikkaa muokataksesi">
+                    <div class="extra-player-circle has-player-photo ${isMv ? 'is-mv-circle' : ''}" style="background-image: url('${photoUrl}') !important;" title="${escapeHtml(fullName || 'Oma pelaaja')} - Kaksoisklikkaa muokataksesi">
                         <span class="node-num-tag">${escapeHtml(extraP.label || (player ? '#' + player.number : 'P'))}</span>
                         <button class="extra-player-remove-btn" data-action="remove-extra-player" data-extra-id="${extraP.id}" data-court-id="${courtId}">✕</button>
                     </div>

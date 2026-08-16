@@ -4050,19 +4050,42 @@ body[data-court-color="grid"] .pitch-container .court-surface,
 }
 
 /* Custom Primary & MV colors for tokens */
-.court-player-node.is-field .node-circle,
-.court-extra-player-node.is-field .extra-player-circle {
+.court-player-node.is-field .node-circle:not(.has-player-photo),
+.court-extra-player-node.is-field .extra-player-circle:not(.has-player-photo) {
     background: var(--team-primary-color, #2563eb) !important;
 }
 
-.court-player-node.is-mv .node-circle,
-.court-extra-player-node.is-mv .extra-player-circle {
+.court-player-node.is-mv .node-circle:not(.has-player-photo),
+.court-extra-player-node.is-mv .extra-player-circle:not(.has-player-photo) {
     background: var(--team-mv-color, #10b981) !important;
 }
 
+/* Photo Node Styling - Highest Priority (v38.2) */
+.court-player-node .node-circle.has-player-photo,
+.court-extra-player-node .extra-player-circle.has-player-photo,
+.node-circle.has-player-photo,
+.extra-player-circle.has-player-photo {
+    background-size: cover !important;
+    background-position: center !important;
+    background-repeat: no-repeat !important;
+    background-color: #0f172a !important;
+    border: 2px solid #ffffff !important;
+    color: transparent !important;
+    clip-path: none !important;
+    border-radius: 50% !important;
+    width: 36px !important;
+    height: 36px !important;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.6) !important;
+}
+
+.court-player-node.is-selected .node-circle.has-player-photo,
+.court-extra-player-node.is-selected .extra-player-circle.has-player-photo {
+    box-shadow: 0 0 0 3px #ffffff, 0 0 18px rgba(59, 130, 246, 0.95) !important;
+}
+
 /* Jersey 👕 Style */
-.token-style-jersey .node-circle,
-.token-style-jersey .extra-player-circle {
+.token-style-jersey .node-circle:not(.has-player-photo),
+.token-style-jersey .extra-player-circle:not(.has-player-photo) {
     width: 38px;
     height: 38px;
     border-radius: 6px 6px 4px 4px !important;
