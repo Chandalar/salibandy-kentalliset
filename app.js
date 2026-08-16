@@ -5871,6 +5871,21 @@
                 showToast('Uusi pelaaja lisätty rinkiin!');
             }
 
+            // Sync updated photo and name to all placed extra players on courts
+            Object.keys(lineupExtraPlayers).forEach(ck => {
+                if (Array.isArray(lineupExtraPlayers[ck])) {
+                    lineupExtraPlayers[ck].forEach(ep => {
+                        if (ep.playerId === id || (ep.label && (ep.label === '#' + number || ep.label === String(number)))) {
+                            ep.playerId = id;
+                            ep.fullName = name;
+                            ep.label = '#' + number;
+                            ep.photo = photo;
+                            ep.position = position;
+                        }
+                    });
+                }
+            });
+
             saveState();
             updateRosterCounters();
             renderRoster();

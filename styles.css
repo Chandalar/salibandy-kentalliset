@@ -700,27 +700,32 @@ body {
     flex-shrink: 0;
 }
 
-/* COURT PLAYER NODE WITH PHOTO */
-.node-circle.has-player-photo {
+/* COURT PLAYER NODE & EXTRA PLAYER WITH PHOTO */
+.node-circle.has-player-photo,
+.extra-player-circle.has-player-photo {
     background-size: cover !important;
     background-position: center !important;
     background-repeat: no-repeat !important;
+    background-color: #0f172a !important;
     position: relative;
-    border-color: #ffffff !important;
+    border: 2px solid #ffffff !important;
+    color: transparent !important;
 }
 
-.node-circle .node-num-tag {
+.node-circle .node-num-tag,
+.extra-player-circle .node-num-tag {
     position: absolute;
     bottom: -4px;
     right: -4px;
     background: #0f172a;
-    color: #ffffff;
+    color: #ffffff !important;
     border: 1.5px solid var(--border-highlight);
     font-size: 0.62rem;
     font-weight: 800;
     padding: 0 0.25rem;
     border-radius: 9999px;
     line-height: 1.15;
+    z-index: 15;
 }
 
 /* LINEUP SLOT AVATAR */
@@ -2008,6 +2013,17 @@ body[data-court-color="grid"] .faceoff-dot {
     position: relative;
     touch-action: none;
     user-select: none;
+}
+
+.extra-player-circle.has-player-photo,
+.node-circle.has-player-photo {
+    background: transparent !important;
+    background-size: cover !important;
+    background-position: center !important;
+    background-repeat: no-repeat !important;
+    background-color: #0f172a !important;
+    color: transparent !important;
+    border-color: #ffffff !important;
 }
 
 .court-extra-player-node.is-selected .extra-player-circle {
