@@ -1835,7 +1835,7 @@
                 openModal(player);
             });
 
-            setupNodeTouchDragging(node, coords, posKeyStore, courtId);
+            setupNodeTouchDragging(node, coords, posKeyStore, courtId, player);
             layersEl.appendChild(node);
         });
     }
@@ -1851,8 +1851,8 @@
             ballNode.style.top = ball.y + '%';
 
             ballNode.innerHTML = `
-                <div class="ball-circle" title="Salibandypallo">
-                    <img src="ball.png?v=22.0" class="floorball-png-icon" alt="Pallo">
+                <div class="ball-circle" title="Salibandypallo (Reikäpallo)">
+                    <span style="font-size: 0.95rem; line-height: 1;">⚪</span>
                     <button class="ball-remove-btn" data-action="remove-ball" data-ball-id="${ball.id}" data-court-id="${courtId}">✕</button>
                 </div>
             `;
@@ -1914,26 +1914,53 @@
 
         extraPlayers.forEach(extraP => {
             const isSelected = activeSelectedElementId === extraP.id;
-            const isMv = extraP.isMv || (extraP.position === 'MV');
+            let player = null;
+            if (extraP.playerId) {
+                player = roster.find(p => p.id === extraP.playerId);
+            }
+            if (!player && extraP.label) {
+                const cleanNum = parseInt(String(extraP.label).replace('#', '').trim(), 10);
+                if (!isNaN(cleanNum)) {
+                    player = roster.find(p => p.number === cleanNum);
+                }
+            }
+
+            const isMv = player ? isPlayerMv(player) : (extraP.isMv || (extraP.position === 'MV'));
             const extraNode = document.createElement('div');
             extraNode.className = `court-extra-player-node ${isMv ? 'is-mv' : 'is-field'} ${isSelected ? 'is-selected' : ''} ${tokenStyleClass}`;
             extraNode.style.left = extraP.x + '%';
             extraNode.style.top = extraP.y + '%';
 
             let displayName = '';
-            if (extraP.fullName && labelMode !== 'num') {
-                displayName = `<span class="extra-player-subname">${escapeHtml(extraP.fullName)}</span>`;
+            const fullName = player ? player.name : extraP.fullName;
+            if (fullName && labelMode !== 'num') {
+                displayName = `<span class="extra-player-subname">${escapeHtml(fullName)}</span>`;
+            }
+
+            const photoUrl = (player && player.photo) || extraP.photo || '';
+            let circleInnerHtml = '';
+            if (photoUrl) {
+                circleInnerHtml = `
+                    <div class="extra-player-circle has-player-photo ${isMv ? 'is-mv-circle' : ''}" style="background-image: url('${photoUrl}');" title="${escapeHtml(fullName || 'Oma pelaaja')} - Kaksoisklikkaa muokataksesi">
+                        <span class="node-num-tag">${escapeHtml(extraP.label || (player ? '#' + player.number : 'P'))}</span>
+                        <button class="extra-player-remove-btn" data-action="remove-extra-player" data-extra-id="${extraP.id}" data-court-id="${courtId}">✕</button>
+                    </div>
+                `;
+            } else {
+                circleInnerHtml = `
+                    <div class="extra-player-circle ${isMv ? 'is-mv-circle' : ''}" title="${escapeHtml(fullName || 'Oma pelaaja')} - Kaksoisklikkaa muokataksesi">
+                        ${escapeHtml(extraP.label || (player ? String(player.number) : 'P'))}
+                        <button class="extra-player-remove-btn" data-action="remove-extra-player" data-extra-id="${extraP.id}" data-court-id="${courtId}">✕</button>
+                    </div>
+                `;
             }
 
             extraNode.innerHTML = `
-                <div class="extra-player-circle ${isMv ? 'is-mv-circle' : ''}" title="${extraP.fullName ? `${escapeHtml(extraP.fullName)} (${extraP.label})` : 'Oma pelaaja'} - Kaksoisklikkaa muokataksesi">
-                    ${escapeHtml(extraP.label || 'P')}
-                    <button class="extra-player-remove-btn" data-action="remove-extra-player" data-extra-id="${extraP.id}" data-court-id="${courtId}">✕</button>
-                </div>
+                ${circleInnerHtml}
                 ${displayName}
             `;
 
-            setupExtraPlayerTouchDragging(extraNode, extraP, courtId);
+            setupExtraPlayerTouchDragging(extraNode, extraP, courtId, player);
             layersEl.appendChild(extraNode);
         });
     }
@@ -2762,9 +2789,37 @@
         oppNode.addEventListener('pointerdown', onPointerDown);
     }
 
-    function setupExtraPlayerTouchDragging(extraNode, extraObj, courtId) {
+    function setupExtraPlayerTouchDragging(extraNode, extraObj, courtId, boundPlayer = null) {
         let isDragging = false;
+        let hasMoved = false;
+        let startX = 0;
+        let startY = 0;
         let rafId = null;
+        let lastTapTime = 0;
+
+        const handleEdit = () => {
+            let p = boundPlayer;
+            if (!p && extraObj.playerId) {
+                p = roster.find(item => item.id === extraObj.playerId);
+            }
+            if (!p && extraObj.label) {
+                const cleanNum = parseInt(String(extraObj.label).replace('#', '').trim(), 10);
+                if (!isNaN(cleanNum)) {
+                    p = roster.find(item => item.number === cleanNum);
+                }
+            }
+
+            if (p) {
+                openModal(p);
+            } else {
+                const newLabel = prompt('Syötä pelaajan numero tai tunnus (esim. 19, P1, OP):', extraObj.label || 'P');
+                if (newLabel !== null && newLabel.trim() !== '') {
+                    extraObj.label = newLabel.trim();
+                    saveState();
+                    renderCourtBoards();
+                }
+            }
+        };
 
         const onPointerDown = (e) => {
             const tool = courtDrawingTools[courtId] || 'select';
@@ -2772,7 +2827,18 @@
             selectCourtElement(extraObj.id, extraNode);
             if (e.target.classList.contains('extra-player-remove-btn')) return;
 
+            const now = Date.now();
+            if (now - lastTapTime < 350) {
+                lastTapTime = 0;
+                handleEdit();
+                return;
+            }
+            lastTapTime = now;
+
             isDragging = true;
+            hasMoved = false;
+            startX = e.clientX;
+            startY = e.clientY;
             extraNode.setPointerCapture(e.pointerId);
 
             extraNode.addEventListener('pointermove', onPointerMove);
@@ -2782,6 +2848,9 @@
 
         const onPointerMove = (e) => {
             if (!isDragging) return;
+            if (Math.abs(e.clientX - startX) > 4 || Math.abs(e.clientY - startY) > 4) {
+                hasMoved = true;
+            }
             e.preventDefault();
 
             const courtContainer = document.getElementById(`floorball-court-${courtId}`);
@@ -2811,19 +2880,17 @@
             extraNode.removeEventListener('pointermove', onPointerMove);
             extraNode.removeEventListener('pointerup', onPointerUp);
             extraNode.removeEventListener('pointercancel', onPointerUp);
-            saveState();
+            if (hasMoved) {
+                saveState();
+            }
         };
 
         extraNode.addEventListener('pointerdown', onPointerDown);
 
         extraNode.addEventListener('dblclick', (e) => {
+            if (e.target.classList.contains('extra-player-remove-btn')) return;
             e.stopPropagation();
-            const newLabel = prompt('Syötä pelaajan numero tai tunnus (esim. 19, P1, OP):', extraObj.label || 'P');
-            if (newLabel !== null && newLabel.trim() !== '') {
-                extraObj.label = newLabel.trim();
-                saveState();
-                renderCourtBoards();
-            }
+            handleEdit();
         });
     }
 
@@ -3144,9 +3211,13 @@
         ballNode.addEventListener('pointerdown', onPointerDown);
     }
 
-    function setupNodeTouchDragging(node, coords, posKeyStore, courtId) {
+    function setupNodeTouchDragging(node, coords, posKeyStore, courtId, player = null) {
         let isDragging = false;
+        let hasMoved = false;
+        let startX = 0;
+        let startY = 0;
         let rafId = null;
+        let lastTapTime = 0;
 
         const onPointerDown = (e) => {
             const tool = courtDrawingTools[courtId] || 'select';
@@ -3154,7 +3225,18 @@
             selectCourtElement(posKeyStore, node);
             if (e.target.classList.contains('node-remove-btn')) return;
             
+            const now = Date.now();
+            if (now - lastTapTime < 350) {
+                lastTapTime = 0;
+                if (player) openModal(player);
+                return;
+            }
+            lastTapTime = now;
+
             isDragging = true;
+            hasMoved = false;
+            startX = e.clientX;
+            startY = e.clientY;
             node.setPointerCapture(e.pointerId);
 
             node.addEventListener('pointermove', onPointerMove);
@@ -3164,6 +3246,9 @@
 
         const onPointerMove = (e) => {
             if (!isDragging) return;
+            if (Math.abs(e.clientX - startX) > 4 || Math.abs(e.clientY - startY) > 4) {
+                hasMoved = true;
+            }
             e.preventDefault();
 
             const courtContainer = document.getElementById(`floorball-court-${courtId}`);
@@ -3194,7 +3279,9 @@
             node.removeEventListener('pointermove', onPointerMove);
             node.removeEventListener('pointerup', onPointerUp);
             node.removeEventListener('pointercancel', onPointerUp);
-            saveState();
+            if (hasMoved) {
+                saveState();
+            }
         };
 
         node.addEventListener('pointerdown', onPointerDown);
@@ -5926,25 +6013,46 @@
             });
         }
 
+        let rosterCardClickTimer = null;
+        let lastRosterClickId = null;
+        let lastRosterClickTime = 0;
+
         document.getElementById('roster-list-container')?.addEventListener('click', (e) => {
+            const actionBtn = e.target.closest('.mini-action-btn');
+            if (actionBtn) {
+                const action = actionBtn.dataset.action;
+                const id = actionBtn.dataset.id;
+                if (action === 'edit') {
+                    const player = roster.find(p => p.id === id);
+                    if (player) openModal(player);
+                } else if (action === 'delete') {
+                    deletePlayer(id);
+                }
+                return;
+            }
+
             const tapAssignTrigger = e.target.closest('[data-action="tap-assign"]');
             if (tapAssignTrigger) {
                 const id = tapAssignTrigger.dataset.id;
                 const player = roster.find(p => p.id === id);
-                if (player) openAssignModal(player);
-                return;
-            }
+                if (!player) return;
 
-            const actionBtn = e.target.closest('.mini-action-btn');
-            if (!actionBtn) return;
-            const action = actionBtn.dataset.action;
-            const id = actionBtn.dataset.id;
-            
-            if (action === 'edit') {
-                const player = roster.find(p => p.id === id);
-                if (player) openModal(player);
-            } else if (action === 'delete') {
-                deletePlayer(id);
+                const now = Date.now();
+                if (lastRosterClickId === id && (now - lastRosterClickTime < 380)) {
+                    // Double click / double tap detected!
+                    if (rosterCardClickTimer) clearTimeout(rosterCardClickTimer);
+                    lastRosterClickTime = 0;
+                    lastRosterClickId = null;
+                    openModal(player);
+                } else {
+                    // First click, wait 260ms before opening assign modal to allow double click
+                    lastRosterClickId = id;
+                    lastRosterClickTime = now;
+                    if (rosterCardClickTimer) clearTimeout(rosterCardClickTimer);
+                    rosterCardClickTimer = setTimeout(() => {
+                        openAssignModal(player);
+                    }, 260);
+                }
             }
         });
 
