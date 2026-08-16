@@ -2831,6 +2831,128 @@
         showToast(lineupGridPaper[courtKey] ? '📐 Ruutupaperipohja aktivoitu!' : '🏟️ Vakiokenttäpohja aktivoitu!');
     }
 
+    function rotateCoord(pt, toVertical) {
+        if (!pt || typeof pt.x !== 'number' || typeof pt.y !== 'number') return { x: 50, y: 50 };
+        let newX, newY;
+        if (toVertical) {
+            // Horizontal (40x20) -> Vertical (20x40):
+            // (x, y) where own goal was left (x=12, y=50) -> own goal is bottom (x=50, y=88)
+            newX = pt.y;
+            newY = 100 - pt.x;
+        } else {
+            // Vertical (20x40) -> Horizontal (40x20):
+            // (x, y) where own goal was bottom (x=50, y=88) -> own goal is left (x=12, y=50)
+            newX = 100 - pt.y;
+            newY = pt.x;
+        }
+        return {
+            x: Math.max(2, Math.min(98, Math.round(newX * 10) / 10)),
+            y: Math.max(2, Math.min(98, Math.round(newY * 10) / 10))
+        };
+    }
+
+    function toggleCourtOrientation() {
+        const oldMode = orientationMode;
+        const newMode = (oldMode === 'horizontal') ? 'vertical' : 'horizontal';
+        const toVertical = (newMode === 'vertical');
+
+        const transformCourtData = (courtKey) => {
+            // 1. Extra players
+            if (lineupExtraPlayers && lineupExtraPlayers[courtKey] && Array.isArray(lineupExtraPlayers[courtKey])) {
+                lineupExtraPlayers[courtKey].forEach(p => {
+                    const rot = rotateCoord(p, toVertical);
+                    p.x = rot.x;
+                    p.y = rot.y;
+                });
+            }
+
+            // 2. Opponents
+            if (lineupOpponents && lineupOpponents[courtKey] && Array.isArray(lineupOpponents[courtKey])) {
+                lineupOpponents[courtKey].forEach(o => {
+                    const rot = rotateCoord(o, toVertical);
+                    o.x = rot.x;
+                    o.y = rot.y;
+                });
+            }
+
+            // 3. Balls
+            if (lineupBalls && lineupBalls[courtKey] && Array.isArray(lineupBalls[courtKey])) {
+                lineupBalls[courtKey].forEach(b => {
+                    const rot = rotateCoord(b, toVertical);
+                    b.x = rot.x;
+                    b.y = rot.y;
+                });
+            }
+
+            // 4. Cones
+            if (lineupCones && lineupCones[courtKey] && Array.isArray(lineupCones[courtKey])) {
+                lineupCones[courtKey].forEach(c => {
+                    const rot = rotateCoord(c, toVertical);
+                    c.x = rot.x;
+                    c.y = rot.y;
+                });
+            }
+
+            // 5. Text Notes
+            if (lineupTextNotes && lineupTextNotes[courtKey] && Array.isArray(lineupTextNotes[courtKey])) {
+                lineupTextNotes[courtKey].forEach(t => {
+                    const rot = rotateCoord(t, toVertical);
+                    t.x = rot.x;
+                    t.y = rot.y;
+                });
+            }
+
+            // 6. Tactical Drawings & Lines & Rectangles
+            if (lineupDrawings && lineupDrawings[courtKey] && Array.isArray(lineupDrawings[courtKey])) {
+                lineupDrawings[courtKey].forEach(d => {
+                    if (d.type === 'rect') {
+                        let newX, newY, newW, newH;
+                        if (toVertical) {
+                            newX = d.y;
+                            newY = 100 - (d.x + d.w);
+                            newW = d.h;
+                            newH = d.w;
+                        } else {
+                            newX = 100 - (d.y + d.h);
+                            newY = d.x;
+                            newW = d.h;
+                            newH = d.w;
+                        }
+                        d.x = Math.max(2, Math.min(96, Math.round(newX * 10) / 10));
+                        d.y = Math.max(2, Math.min(96, Math.round(newY * 10) / 10));
+                        d.w = Math.max(4, Math.round(newW * 10) / 10);
+                        d.h = Math.max(4, Math.round(newH * 10) / 10);
+                    } else if (d.pointsPct && Array.isArray(d.pointsPct)) {
+                        d.pointsPct = d.pointsPct.map(p => rotateCoord(p, toVertical));
+                    }
+                });
+            }
+
+            // 7. Lineup Court Positions (if custom dragged)
+            const posKeys = ['MV', 'VP', 'OP', 'VH', 'KH', 'OH', 'VM'];
+            posKeys.forEach(pos => {
+                const oldKeyStore = `${courtKey}_${pos}_${oldMode}`;
+                const newKeyStore = `${courtKey}_${pos}_${newMode}`;
+                if (lineupCourtPositions && lineupCourtPositions[oldKeyStore]) {
+                    const rot = rotateCoord(lineupCourtPositions[oldKeyStore], toVertical);
+                    lineupCourtPositions[newKeyStore] = rot;
+                }
+            });
+        };
+
+        // Run on all courts of the active page and the general activeLineupKey
+        const page = getCurrentPage();
+        if (page && page.courts) {
+            page.courts.forEach(c => transformCourtData(getCourtKey(c.id)));
+        }
+        transformCourtData(activeLineupKey);
+
+        orientationMode = newMode;
+        saveState();
+        renderCourtBoards();
+        showToast(`Kentän asento vaihdettu: ${toVertical ? 'Pysty (20x40m) 📐' : 'Vaaka (40x20m) 🏟️'}`);
+    }
+
     function setupRectTouchDragging(rectNode, rectObj, courtId) {
         let isDragging = false;
         let startPointer = { x: 0, y: 0 };
@@ -4237,9 +4359,10 @@
             : (activeLineupKey === 'freeform');
 
         // Create high-res export canvas
+        const isVert = orientationMode === 'vertical';
         const exportCanvas = document.createElement('canvas');
-        const width = 1600;
-        const height = 1000;
+        const width = isVert ? 1100 : 1600;
+        const height = isVert ? 1600 : 1000;
         exportCanvas.width = width;
         exportCanvas.height = height;
         const ctx = exportCanvas.getContext('2d');
@@ -4260,7 +4383,7 @@
 
         // Team Title & Lineup
         ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 26px "Outfit", sans-serif';
+        ctx.font = 'bold 24px "Outfit", sans-serif';
         const teamName = (curTeam.name || 'Salibandy').toUpperCase();
         const lineupTitle = `${teamName} • ${getLineupName(activeLineupKey)} - ${court.title || 'Taktiikkakuva'}`;
         ctx.fillText(`🏑 ${lineupTitle}`, 30, 50);
@@ -4268,7 +4391,7 @@
         // Match Info in Header
         if (curTeam.matchInfo && (curTeam.matchInfo.opponent || curTeam.matchInfo.time)) {
             ctx.fillStyle = '#f59e0b';
-            ctx.font = 'bold 20px "Plus Jakarta Sans", sans-serif';
+            ctx.font = 'bold 18px "Plus Jakarta Sans", sans-serif';
             const mText = `⚔️ ${curTeam.matchInfo.opponent || ''} ${curTeam.matchInfo.time ? '• ' + curTeam.matchInfo.time : ''}`;
             const mWidth = ctx.measureText(mText).width;
             ctx.fillText(mText, width - mWidth - 30, 50);
@@ -4318,33 +4441,63 @@
             ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
             ctx.lineWidth = 3;
 
-            // Center Line
-            ctx.beginPath();
-            ctx.moveTo(courtX + courtW / 2, courtY);
-            ctx.lineTo(courtX + courtW / 2, courtY + courtH);
-            ctx.stroke();
+            if (isVert) {
+                // Center Line (Horizontal in vertical mode)
+                ctx.beginPath();
+                ctx.moveTo(courtX, courtY + courtH / 2);
+                ctx.lineTo(courtX + courtW, courtY + courtH / 2);
+                ctx.stroke();
 
-            // Center Circle & Spot
-            ctx.beginPath();
-            ctx.arc(courtX + courtW / 2, courtY + courtH / 2, 70, 0, Math.PI * 2);
-            ctx.stroke();
+                // Center Circle & Spot
+                ctx.beginPath();
+                ctx.arc(courtX + courtW / 2, courtY + courtH / 2, 70, 0, Math.PI * 2);
+                ctx.stroke();
 
-            ctx.fillStyle = '#ec4899';
-            ctx.beginPath();
-            ctx.arc(courtX + courtW / 2, courtY + courtH / 2, 8, 0, Math.PI * 2);
-            ctx.fill();
+                ctx.fillStyle = '#ec4899';
+                ctx.beginPath();
+                ctx.arc(courtX + courtW / 2, courtY + courtH / 2, 8, 0, Math.PI * 2);
+                ctx.fill();
 
-            // Goal Areas Left & Right
-            const goalW = 120;
-            const goalH = 160;
-            // Left Goal
-            ctx.strokeRect(courtX + 80, courtY + courtH / 2 - goalH / 2, goalW, goalH);
-            ctx.fillStyle = '#dc2626';
-            ctx.fillRect(courtX + 110, courtY + courtH / 2 - 40, 24, 80);
+                // Goal Areas Top & Bottom
+                const goalW = 160;
+                const goalH = 100;
+                // Top Goal
+                ctx.strokeRect(courtX + courtW / 2 - goalW / 2, courtY + 70, goalW, goalH);
+                ctx.fillStyle = '#dc2626';
+                ctx.fillRect(courtX + courtW / 2 - 36, courtY + 90, 72, 24);
 
-            // Right Goal
-            ctx.strokeRect(courtX + courtW - 80 - goalW, courtY + courtH / 2 - goalH / 2, goalW, goalH);
-            ctx.fillRect(courtX + courtW - 110 - 24, courtY + courtH / 2 - 40, 24, 80);
+                // Bottom Goal
+                ctx.strokeRect(courtX + courtW / 2 - goalW / 2, courtY + courtH - 70 - goalH, goalW, goalH);
+                ctx.fillRect(courtX + courtW / 2 - 36, courtY + courtH - 90 - 24, 72, 24);
+            } else {
+                // Center Line
+                ctx.beginPath();
+                ctx.moveTo(courtX + courtW / 2, courtY);
+                ctx.lineTo(courtX + courtW / 2, courtY + courtH);
+                ctx.stroke();
+
+                // Center Circle & Spot
+                ctx.beginPath();
+                ctx.arc(courtX + courtW / 2, courtY + courtH / 2, 70, 0, Math.PI * 2);
+                ctx.stroke();
+
+                ctx.fillStyle = '#ec4899';
+                ctx.beginPath();
+                ctx.arc(courtX + courtW / 2, courtY + courtH / 2, 8, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Goal Areas Left & Right
+                const goalW = 120;
+                const goalH = 160;
+                // Left Goal
+                ctx.strokeRect(courtX + 80, courtY + courtH / 2 - goalH / 2, goalW, goalH);
+                ctx.fillStyle = '#dc2626';
+                ctx.fillRect(courtX + 110, courtY + courtH / 2 - 36, 24, 72);
+
+                // Right Goal
+                ctx.strokeRect(courtX + courtW - 80 - goalW, courtY + courtH / 2 - goalH / 2, goalW, goalH);
+                ctx.fillRect(courtX + courtW - 110 - 24, courtY + courtH / 2 - 36, 24, 72);
+            }
         }
 
         // Center Watermark / Logo
@@ -4369,57 +4522,86 @@
         // Draw Drawings (Passes, Runs, Shots, Areas)
         drawings.forEach(d => {
             if (d.type === 'rect') {
-                const rx = courtX + (d.start.x / 100) * courtW;
-                const ry = courtY + (d.start.y / 100) * courtH;
-                const rw = ((d.end.x - d.start.x) / 100) * courtW;
-                const rh = ((d.end.y - d.start.y) / 100) * courtH;
-                ctx.fillStyle = 'rgba(234, 179, 8, 0.2)';
+                const rx = courtX + (d.x / 100) * courtW;
+                const ry = courtY + (d.y / 100) * courtH;
+                const rw = (d.w / 100) * courtW;
+                const rh = (d.h / 100) * courtH;
+                ctx.fillStyle = 'rgba(59, 130, 246, 0.22)';
                 ctx.fillRect(rx, ry, rw, rh);
-                ctx.strokeStyle = '#eab308';
+                ctx.strokeStyle = '#60a5fa';
                 ctx.lineWidth = 3;
                 ctx.strokeRect(rx, ry, rw, rh);
-            } else if (d.type === 'pass') {
-                const sx = courtX + (d.start.x / 100) * courtW;
-                const sy = courtY + (d.start.y / 100) * courtH;
-                const ex = courtX + (d.end.x / 100) * courtW;
-                const ey = courtY + (d.end.y / 100) * courtH;
+            } else if (d.pointsPct && d.pointsPct.length >= 2) {
+                const pts = d.pointsPct.map(p => ({
+                    x: courtX + (p.x / 100) * courtW,
+                    y: courtY + (p.y / 100) * courtH
+                }));
+                const start = pts[0];
+                const end = pts[pts.length - 1];
+
                 ctx.save();
-                ctx.strokeStyle = '#3b82f6';
-                ctx.lineWidth = 5;
-                ctx.setLineDash([12, 8]);
-                ctx.beginPath();
-                ctx.moveTo(sx, sy);
-                ctx.lineTo(ex, ey);
-                ctx.stroke();
-                ctx.restore();
-            } else if (d.type === 'run') {
-                ctx.save();
-                ctx.strokeStyle = '#10b981';
-                ctx.lineWidth = 5;
-                ctx.beginPath();
-                const path = d.path || [d.start, d.end];
-                path.forEach((pt, pIdx) => {
-                    const px = courtX + (pt.x / 100) * courtW;
-                    const py = courtY + (pt.y / 100) * courtH;
-                    if (pIdx === 0) ctx.moveTo(px, py);
-                    else ctx.lineTo(px, py);
-                });
-                ctx.stroke();
-                ctx.restore();
-            } else if (d.type === 'shot') {
-                const sx = courtX + (d.start.x / 100) * courtW;
-                const sy = courtY + (d.start.y / 100) * courtH;
-                const ex = courtX + (d.end.x / 100) * courtW;
-                const ey = courtY + (d.end.y / 100) * courtH;
-                ctx.save();
-                ctx.strokeStyle = '#ef4444';
-                ctx.lineWidth = 6;
-                ctx.shadowColor = 'rgba(239, 68, 68, 0.8)';
-                ctx.shadowBlur = 10;
-                ctx.beginPath();
-                ctx.moveTo(sx, sy);
-                ctx.lineTo(ex, ey);
-                ctx.stroke();
+                if (d.type === 'pass') {
+                    ctx.strokeStyle = d.color || '#eab308';
+                    ctx.lineWidth = 4.5;
+                    ctx.setLineDash([12, 8]);
+                    ctx.beginPath();
+                    ctx.moveTo(start.x, start.y);
+                    ctx.lineTo(end.x, end.y);
+                    ctx.stroke();
+
+                    const angle = Math.atan2(end.y - start.y, end.x - start.x);
+                    ctx.setLineDash([]);
+                    ctx.fillStyle = d.color || '#eab308';
+                    ctx.beginPath();
+                    ctx.moveTo(end.x, end.y);
+                    ctx.lineTo(end.x - 18 * Math.cos(angle - Math.PI / 5), end.y - 18 * Math.sin(angle - Math.PI / 5));
+                    ctx.lineTo(end.x - 18 * Math.cos(angle + Math.PI / 5), end.y - 18 * Math.sin(angle + Math.PI / 5));
+                    ctx.closePath();
+                    ctx.fill();
+                } else if (d.type === 'shot') {
+                    ctx.strokeStyle = d.color || '#ec4899';
+                    ctx.lineWidth = 5.5;
+                    ctx.setLineDash([12, 6]);
+                    ctx.beginPath();
+                    ctx.moveTo(start.x, start.y);
+                    ctx.lineTo(end.x, end.y);
+                    ctx.stroke();
+
+                    const angle = Math.atan2(end.y - start.y, end.x - start.x);
+                    ctx.setLineDash([]);
+                    ctx.fillStyle = d.color || '#ec4899';
+                    ctx.beginPath();
+                    ctx.moveTo(end.x, end.y);
+                    ctx.lineTo(end.x - 18 * Math.cos(angle - Math.PI / 5), end.y - 18 * Math.sin(angle - Math.PI / 5));
+                    ctx.lineTo(end.x - 18 * Math.cos(angle + Math.PI / 5), end.y - 18 * Math.sin(angle + Math.PI / 5));
+                    ctx.closePath();
+                    ctx.fill();
+
+                    ctx.strokeStyle = '#ffffff';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.arc(end.x, end.y, 8, 0, 2 * Math.PI);
+                    ctx.stroke();
+                } else {
+                    ctx.strokeStyle = d.color || '#38bdf8';
+                    ctx.lineWidth = 4.5;
+                    ctx.lineCap = 'round';
+                    ctx.lineJoin = 'round';
+                    ctx.beginPath();
+                    ctx.moveTo(pts[0].x, pts[0].y);
+                    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+                    ctx.stroke();
+
+                    const prev = pts[Math.max(0, pts.length - 4)];
+                    const angle = Math.atan2(end.y - prev.y, end.x - prev.x);
+                    ctx.fillStyle = d.color || '#38bdf8';
+                    ctx.beginPath();
+                    ctx.moveTo(end.x, end.y);
+                    ctx.lineTo(end.x - 18 * Math.cos(angle - Math.PI / 5), end.y - 18 * Math.sin(angle - Math.PI / 5));
+                    ctx.lineTo(end.x - 18 * Math.cos(angle + Math.PI / 5), end.y - 18 * Math.sin(angle + Math.PI / 5));
+                    ctx.closePath();
+                    ctx.fill();
+                }
                 ctx.restore();
             }
         });
@@ -4943,9 +5125,7 @@
             const toggleOrientBtn = e.target.closest('[data-action="toggle-orientation"]');
             if (toggleOrientBtn) {
                 e.preventDefault();
-                orientationMode = (orientationMode === 'horizontal') ? 'vertical' : 'horizontal';
-                renderCourtBoards();
-                showToast(`Kentän asento vaihtoi: ${orientationMode === 'vertical' ? 'Pysty (20x40m)' : 'Vaaka (40x20m)'}`);
+                toggleCourtOrientation();
                 return;
             }
 

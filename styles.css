@@ -1187,21 +1187,21 @@ body {
 }
 
 .pitch-container.mode-vertical {
-    height: 520px;
-    max-height: 75vh;
+    height: 840px;
+    max-height: 86vh;
     aspect-ratio: 1 / 2;
     width: auto;
-    max-width: 100%;
+    max-width: 96vw;
     margin: 0 auto;
     display: block;
 }
 
 .pitch-container.mode-horizontal {
     width: 100%;
-    max-width: 800px;
+    max-width: 880px;
     aspect-ratio: 2 / 1;
     height: auto;
-    max-height: 55vh;
+    max-height: 62vh;
     margin: 0 auto;
     display: block;
 }
