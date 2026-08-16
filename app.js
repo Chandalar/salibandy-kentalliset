@@ -1793,7 +1793,7 @@
             let fallbackKeyStore = `${activeLineupKey}_${pos}_${orientationMode}`;
             let coords = lineupCourtPositions[posKeyStore] || lineupCourtPositions[fallbackKeyStore] || defaultCoords;
 
-            const isMv = player.position === 'MV';
+            const isMv = isPlayerMv(player);
             const isVm = pos === 'VM';
             const node = document.createElement('div');
             node.className = `court-player-node ${isMv ? 'is-mv' : (isVm ? 'is-vm pos-node-vm' : 'is-field')} ${activeSelectedElementId === posKeyStore ? 'is-selected' : ''} ${tokenStyleClass}`;
@@ -1805,15 +1805,35 @@
             if (labelMode === 'name') labelText = player.name;
             if (isVm) labelText = `🪑 ${labelText}`;
 
+            let circleInnerHtml = '';
+            if (player.photo) {
+                circleInnerHtml = `
+                    <div class="node-circle has-player-photo" style="background-image: url('${player.photo}');" title="${escapeHtml(player.name)} - Kaksoisklikkaa muokataksesi">
+                        <span class="node-num-tag">#${player.number}</span>
+                        <button class="node-remove-btn" data-action="remove-lineup-player" data-pos="${pos}">✕</button>
+                    </div>
+                `;
+            } else {
+                circleInnerHtml = `
+                    <div class="node-circle" title="${escapeHtml(player.name)} - Kaksoisklikkaa muokataksesi">
+                        ${player.number}
+                        <button class="node-remove-btn" data-action="remove-lineup-player" data-pos="${pos}">✕</button>
+                    </div>
+                `;
+            }
+
             node.innerHTML = `
-                <div class="node-circle">
-                    ${player.number}
-                    <button class="node-remove-btn" data-action="remove-lineup-player" data-pos="${pos}">✕</button>
-                </div>
+                ${circleInnerHtml}
                 <div class="node-label">
                     ${player.isLoan ? '⭐' : ''} ${escapeHtml(labelText)}
                 </div>
             `;
+
+            node.addEventListener('dblclick', (e) => {
+                if (e.target.closest('button')) return;
+                e.stopPropagation();
+                openModal(player);
+            });
 
             setupNodeTouchDragging(node, coords, posKeyStore, courtId);
             layersEl.appendChild(node);
@@ -3361,8 +3381,11 @@
             }
 
             card.innerHTML = `
-                <div class="player-card-main" data-action="tap-assign" data-id="${player.id}">
-                    <div class="player-number-badge">${player.number}</div>
+                <div class="player-card-main" data-action="tap-assign" data-id="${player.id}" title="Klikkaa sijoittaaksesi kenttään. Kaksoisklikkaa muokataksesi pelaajaa.">
+                    <div class="player-card-avatar-wrap">
+                        ${player.photo ? `<img src="${player.photo}" class="player-card-photo" alt="${escapeHtml(player.name)}">` : ''}
+                        <div class="player-number-badge">${player.number}</div>
+                    </div>
                     <div class="player-info-block">
                         <div class="player-name-row">
                             <span class="player-name">${escapeHtml(player.name)}</span>
@@ -3380,6 +3403,12 @@
                     <button class="mini-action-btn danger-text" data-action="delete" data-id="${player.id}" title="Poista">🗑️</button>
                 </div>
             `;
+
+            card.addEventListener('dblclick', (e) => {
+                if (e.target.closest('.mini-action-btn')) return;
+                e.stopPropagation();
+                openModal(player);
+            });
 
             rosterListContainer.appendChild(card);
         });
@@ -3409,9 +3438,11 @@
             slot.dataset.position = pos;
 
             if (player) {
+                const avatarHtml = player.photo ? `<img src="${player.photo}" class="slot-player-avatar" alt="${escapeHtml(player.name)}">` : '';
                 slot.innerHTML = `
                     <div class="slot-pos-tag">${pos}</div>
-                    <div class="slot-player-info">
+                    <div class="slot-player-info" title="Kaksoisklikkaa muokataksesi pelaajaa">
+                        ${avatarHtml}
                         <span class="slot-player-num">#${player.number}</span>
                         <span class="slot-player-name">${escapeHtml(player.name)}</span>
                         ${player.isLoan ? '<span class="loan-pill-tiny">⭐</span>' : ''}
@@ -3419,6 +3450,12 @@
                     <button class="slot-add-reserve-btn" data-action="open-add-reserve" data-pos="${pos}" title="Lisää varamies tälle paikalle">+ 🪑 Varamies</button>
                     <button class="slot-remove-btn" data-action="remove-slot" data-pos="${pos}" title="Poista paikalta">✕</button>
                 `;
+
+                slot.addEventListener('dblclick', (e) => {
+                    if (e.target.closest('button')) return;
+                    e.stopPropagation();
+                    openModal(player);
+                });
             } else {
                 slot.innerHTML = `
                     <div class="slot-pos-tag">${pos}</div>
@@ -4022,6 +4059,31 @@
         if (hiddenPosInput) hiddenPosInput.value = normalized.join(', ');
     }
 
+    function setPlayerPhotoPreview(dataUrl) {
+        const photoDataInput = document.getElementById('form-photo-data');
+        const photoImg = document.getElementById('form-photo-img');
+        const placeholder = document.getElementById('form-photo-placeholder');
+        const removeBtn = document.getElementById('btn-remove-photo');
+
+        if (photoDataInput) photoDataInput.value = dataUrl || '';
+
+        if (dataUrl) {
+            if (photoImg) {
+                photoImg.src = dataUrl;
+                photoImg.style.display = 'block';
+            }
+            if (placeholder) placeholder.style.display = 'none';
+            if (removeBtn) removeBtn.style.display = 'inline-block';
+        } else {
+            if (photoImg) {
+                photoImg.src = '';
+                photoImg.style.display = 'none';
+            }
+            if (placeholder) placeholder.style.display = 'block';
+            if (removeBtn) removeBtn.style.display = 'none';
+        }
+    }
+
     function openModal(editPlayer = null) {
         const modalTitle = document.getElementById('modal-title');
         const formPlayerId = document.getElementById('form-player-id');
@@ -4030,6 +4092,8 @@
         const formIsLoan = document.getElementById('form-is-loan');
         const formNotes = document.getElementById('form-notes');
         const playerForm = document.getElementById('player-form');
+        const photoFileInput = document.getElementById('form-photo-input');
+        if (photoFileInput) photoFileInput.value = '';
 
         let selectedPositions = ['H'];
 
@@ -4041,12 +4105,14 @@
             if (formIsLoan) formIsLoan.checked = editPlayer.isLoan;
             if (formNotes) formNotes.value = editPlayer.notes || '';
             selectedPositions = getPlayerPositions(editPlayer);
+            setPlayerPhotoPreview(editPlayer.photo || '');
         } else {
             if (modalTitle) modalTitle.textContent = 'Lisää uusi pelaaja / Laina';
             playerForm?.reset();
             if (formPlayerId) formPlayerId.value = '';
             if (formIsLoan) formIsLoan.checked = false;
             selectedPositions = ['H'];
+            setPlayerPhotoPreview('');
         }
 
         updatePositionPillsSelection(selectedPositions);
@@ -5637,6 +5703,37 @@
             if (hiddenPosInput) hiddenPosInput.value = selected.join(', ');
         });
 
+        // Photo upload listener
+        document.getElementById('form-photo-input')?.addEventListener('change', (e) => {
+            const file = e.target.files?.[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (evt) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    const size = 160;
+                    canvas.width = size;
+                    canvas.height = size;
+                    const ctx = canvas.getContext('2d');
+                    const minDim = Math.min(img.width, img.height);
+                    const sx = (img.width - minDim) / 2;
+                    const sy = (img.height - minDim) / 2;
+                    ctx.drawImage(img, sx, sy, minDim, minDim, 0, 0, size, size);
+                    const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+                    setPlayerPhotoPreview(dataUrl);
+                };
+                img.src = evt.target.result;
+            };
+            reader.readAsDataURL(file);
+        });
+
+        document.getElementById('btn-remove-photo')?.addEventListener('click', () => {
+            const fileInput = document.getElementById('form-photo-input');
+            if (fileInput) fileInput.value = '';
+            setPlayerPhotoPreview('');
+        });
+
         document.getElementById('player-form')?.addEventListener('submit', (e) => {
             e.preventDefault();
             const formPlayerId = document.getElementById('form-player-id');
@@ -5644,6 +5741,7 @@
             const formNumber = document.getElementById('form-number');
             const formIsLoan = document.getElementById('form-is-loan');
             const formNotes = document.getElementById('form-notes');
+            const formPhotoData = document.getElementById('form-photo-data');
 
             const activePills = Array.from(document.querySelectorAll('#form-position-pills .pos-select-pill.active'))
                 .map(b => (b.dataset.pos || '').toUpperCase());
@@ -5655,15 +5753,16 @@
             const number = formNumber ? parseInt(formNumber.value, 10) : NaN;
             const isLoan = formIsLoan ? formIsLoan.checked : false;
             const notes = formNotes ? formNotes.value.trim() : '';
+            const photo = formPhotoData ? formPhotoData.value : '';
 
             if (!name || isNaN(number)) return;
 
             const existingIndex = roster.findIndex(p => p.id === id);
-            const playerData = { id, name, number, position, positions, isLoan, notes };
+            const playerData = { id, name, number, position, positions, isLoan, notes, photo };
 
             if (existingIndex >= 0) {
                 roster[existingIndex] = playerData;
-                showToast('Pelaajan tiedot ja pelipaikat päivitetty!');
+                showToast('Pelaajan tiedot, pelipaikat ja kuva päivitetty!');
             } else {
                 roster.push(playerData);
                 showToast('Uusi pelaaja lisätty rinkiin!');
