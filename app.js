@@ -10,8 +10,30 @@
     // INITIAL DEFAULT DATA & TEAMS
     // ==========================================
     const DEFAULT_TEAMS = [
-        { id: 'team_edustus', name: 'Edustusjoukkue' },
-        { id: 'team_junnut', name: 'A-Juniorit' }
+        { 
+            id: 'team_edustus', 
+            name: 'Edustusjoukkue',
+            logo: '🦁',
+            primaryColor: '#2563eb',
+            mvColor: '#10b981',
+            tokenStyle: 'circle',
+            arenaName: 'Kotiareena',
+            rinkColor: 'black',
+            showCourtLogo: true,
+            matchInfo: { opponent: '', time: '', meta: '', showBanner: false }
+        },
+        { 
+            id: 'team_junnut', 
+            name: 'A-Juniorit',
+            logo: '⚡',
+            primaryColor: '#dc2626',
+            mvColor: '#eab308',
+            tokenStyle: 'circle',
+            arenaName: 'Junnuareena',
+            rinkColor: 'black',
+            showCourtLogo: true,
+            matchInfo: { opponent: '', time: '', meta: '', showBanner: false }
+        }
     ];
 
     const DEFAULT_ROSTER = [
@@ -156,6 +178,14 @@
         return `${activeLineupKey}_${activePageId}_${courtId}`;
     }
 
+    function renderCourtWatermarkHtml(curTeam) {
+        if (!curTeam || curTeam.showCourtLogo === false || !curTeam.logo) return '';
+        if (curTeam.logo.startsWith('data:image') || curTeam.logo.startsWith('http')) {
+            return `<img src="${escapeHtml(curTeam.logo)}" alt="Logo watermark">`;
+        }
+        return `<span class="watermark-emoji">${escapeHtml(curTeam.logo)}</span>`;
+    }
+
     function applyThemeAndSettings() {
         if (typeof document === 'undefined') return;
 
@@ -169,6 +199,46 @@
 
         // Court Color
         document.body.setAttribute('data-court-color', courtColor);
+
+        const curTeam = teams.find(t => t.id === currentTeamId) || {};
+
+        // Dynamic Team Jersey Colors
+        document.documentElement.style.setProperty('--team-primary-color', curTeam.primaryColor || '#2563eb');
+        document.documentElement.style.setProperty('--team-mv-color', curTeam.mvColor || '#10b981');
+
+        // Header Team Logo
+        const logoWrapper = document.getElementById('header-team-logo-wrapper');
+        if (logoWrapper) {
+            if (curTeam.logo) {
+                if (curTeam.logo.startsWith('data:image') || curTeam.logo.startsWith('http')) {
+                    logoWrapper.innerHTML = `<img src="${escapeHtml(curTeam.logo)}" class="header-team-logo-img" alt="Logo">`;
+                } else {
+                    logoWrapper.innerHTML = `<span class="header-team-logo-emoji">${escapeHtml(curTeam.logo)}</span>`;
+                }
+            } else {
+                logoWrapper.innerHTML = `<div class="logo-icon">🏑</div>`;
+            }
+        }
+
+        // Match Info Banner
+        const matchBanner = document.getElementById('match-info-banner');
+        const matchTitle = document.getElementById('match-title-text');
+        const matchMeta = document.getElementById('match-meta-text');
+        const mInfo = curTeam.matchInfo || {};
+        if (matchBanner) {
+            if (mInfo.showBanner && (mInfo.opponent || mInfo.time || mInfo.meta)) {
+                matchBanner.style.display = 'flex';
+                if (matchTitle) matchTitle.textContent = mInfo.opponent ? mInfo.opponent : 'Ottelu';
+                if (matchMeta) {
+                    const parts = [];
+                    if (mInfo.time) parts.push(mInfo.time);
+                    if (mInfo.meta) parts.push(mInfo.meta);
+                    matchMeta.textContent = parts.join(' • ') || (curTeam.arenaName || '');
+                }
+            } else {
+                matchBanner.style.display = 'none';
+            }
+        }
 
         // Update settings modal buttons
         document.querySelectorAll('.theme-opt-btn').forEach(b => {
@@ -1472,6 +1542,8 @@
                 : (activeLineupKey === 'freeform');
 
             const isFreeform = (activeLineupKey === 'freeform');
+            const curTeam = teams.find(t => t.id === currentTeamId) || {};
+            const rinkWhiteClass = (curTeam.rinkColor === 'white') ? 'rink-white' : '';
 
             const card = document.createElement('div');
             card.className = 'court-board-card';
@@ -1484,6 +1556,8 @@
                         <button class="btn-xs btn-outline" data-action="rename-court" data-court-id="${courtId}">✏️ Nimeä</button>
                     </div>
                     <div class="court-header-actions">
+                        <button class="btn-xs btn-outline" data-action="open-tactical-presets" data-court-id="${courtId}" title="Käytä valmista salibandykuviota (2-2-1, 2-1-2, YV)">⚡ Valmiit kuviot</button>
+                        <button class="btn-xs btn-outline" data-action="export-court-png" data-court-id="${courtId}" title="Lataa kuvio terävänä PNG-kuvatiedostona">📸 Lataa kuva</button>
                         <button class="btn-xs btn-outline" data-action="duplicate-court" data-court-id="${courtId}" title="Monista tämä kuvio suoraan alapuolelle">📋 Kopioi kuvio</button>
                         <button class="btn-xs btn-outline" data-action="clear-court-drawings" data-court-id="${courtId}">🧹 Tyhjennä</button>
                         ${courts.length > 1 ? `<button class="btn-xs btn-outline danger-text" data-action="delete-court" data-court-id="${courtId}">🗑️ Poista kuvio</button>` : ''}
@@ -1541,12 +1615,19 @@
                 </div>
 
                 <div class="pitch-outer-wrapper">
-                    <div class="pitch-container ${orientationMode === 'vertical' ? 'mode-vertical' : 'mode-horizontal'} ${isGridPaper ? 'mode-grid-paper' : ''} ${isFreeform ? 'mode-pure-canvas' : ''}" id="floorball-court-${courtId}">
+                    <div class="pitch-container ${orientationMode === 'vertical' ? 'mode-vertical' : 'mode-horizontal'} ${isGridPaper ? 'mode-grid-paper' : ''} ${isFreeform ? 'mode-pure-canvas' : ''} ${rinkWhiteClass}" id="floorball-court-${courtId}">
                         <div class="court-surface"></div>
                         <div class="court-center-line"></div>
                         <div class="center-spot-pink"></div>
                         <div class="center-line-tick tick-left"></div>
                         <div class="center-line-tick tick-right"></div>
+
+                        <div class="court-center-logo-watermark" id="court-logo-watermark-${courtId}">
+                            ${renderCourtWatermarkHtml(curTeam)}
+                        </div>
+                        <div class="court-arena-name-badge" id="court-arena-badge-${courtId}">
+                            ${escapeHtml(curTeam.arenaName || '')}
+                        </div>
 
                         <div class="goal-area-container goal-1">
                             <div class="goal-outer-box"></div>
@@ -1681,6 +1762,8 @@
         const currentLineup = lineups[activeLineupKey] || {};
         const posKeys = ['MV', 'VP', 'OP', 'VH', 'KH', 'OH', 'VM'];
         const courtKey = getCourtKey(courtId);
+        const curTeam = teams.find(t => t.id === currentTeamId) || {};
+        const tokenStyleClass = (curTeam.tokenStyle === 'jersey') ? 'token-style-jersey' : (curTeam.tokenStyle === 'pill' ? 'token-style-pill' : 'token-style-circle');
 
         posKeys.forEach(pos => {
             const playerId = currentLineup[pos];
@@ -1697,7 +1780,7 @@
             const isMv = player.position === 'MV';
             const isVm = pos === 'VM';
             const node = document.createElement('div');
-            node.className = `court-player-node ${isMv ? 'is-mv' : (isVm ? 'is-vm pos-node-vm' : 'is-field')} ${activeSelectedElementId === posKeyStore ? 'is-selected' : ''}`;
+            node.className = `court-player-node ${isMv ? 'is-mv' : (isVm ? 'is-vm pos-node-vm' : 'is-field')} ${activeSelectedElementId === posKeyStore ? 'is-selected' : ''} ${tokenStyleClass}`;
             node.style.left = coords.x + '%';
             node.style.top = coords.y + '%';
 
@@ -1790,11 +1873,14 @@
     function renderCourtExtraPlayersForInstance(courtId, layersEl) {
         const courtKey = getCourtKey(courtId);
         const extraPlayers = lineupExtraPlayers[courtKey] || lineupExtraPlayers[activeLineupKey] || [];
+        const curTeam = teams.find(t => t.id === currentTeamId) || {};
+        const tokenStyleClass = (curTeam.tokenStyle === 'jersey') ? 'token-style-jersey' : (curTeam.tokenStyle === 'pill' ? 'token-style-pill' : 'token-style-circle');
+
         extraPlayers.forEach(extraP => {
             const isSelected = activeSelectedElementId === extraP.id;
             const isMv = extraP.isMv || (extraP.position === 'MV');
             const extraNode = document.createElement('div');
-            extraNode.className = `court-extra-player-node ${isMv ? 'is-mv' : 'is-field'} ${isSelected ? 'is-selected' : ''}`;
+            extraNode.className = `court-extra-player-node ${isMv ? 'is-mv' : 'is-field'} ${isSelected ? 'is-selected' : ''} ${tokenStyleClass}`;
             extraNode.style.left = extraP.x + '%';
             extraNode.style.top = extraP.y + '%';
 
@@ -3740,7 +3826,15 @@
     function generateLineupsExportText(specificLineupKey = null) {
         const curTeam = teams.find(t => t.id === currentTeamId);
         const teamName = curTeam ? curTeam.name : 'Joukkue';
-        let text = `🏑 ${teamName.toUpperCase()} - KENTÄLLISET\n\n`;
+        let text = `🏑 ${teamName.toUpperCase()} - KENTÄLLISET\n`;
+
+        if (curTeam && curTeam.matchInfo) {
+            const m = curTeam.matchInfo;
+            if (m.opponent) text += `⚔️ Ottelu: ${m.opponent}\n`;
+            if (m.time) text += `📅 Aika: ${m.time}\n`;
+            if (m.meta) text += `🏟️ Paikka/Sarja: ${m.meta}\n`;
+        }
+        text += `\n`;
 
         const targetConfigs = specificLineupKey 
             ? lineupConfigs.filter(c => c.id === specificLineupKey)
@@ -3823,6 +3917,647 @@
 
     function exportLineupsToClipboard(specificLineupKey = null) {
         openExportTextModal(specificLineupKey);
+    }
+
+    // ==========================================
+    // TEAM CUSTOMIZATION & BRANDING (v37.0)
+    // ==========================================
+    let tempTeamLogo = null;
+    let tempPrimaryColor = '#2563eb';
+    let tempMvColor = '#10b981';
+    let tempTokenStyle = 'circle';
+    let tempRinkColor = 'black';
+
+    function openTeamCustomizeModal() {
+        const curTeam = teams.find(t => t.id === currentTeamId);
+        if (!curTeam) return;
+
+        tempTeamLogo = curTeam.logo || '🏑';
+        tempPrimaryColor = curTeam.primaryColor || '#2563eb';
+        tempMvColor = curTeam.mvColor || '#10b981';
+        tempTokenStyle = curTeam.tokenStyle || 'circle';
+        tempRinkColor = curTeam.rinkColor || 'black';
+
+        updateLogoPreviewDisplay();
+
+        const primaryInput = document.getElementById('cust-primary-color');
+        const primaryText = document.getElementById('cust-primary-color-text');
+        if (primaryInput) primaryInput.value = tempPrimaryColor;
+        if (primaryText) primaryText.textContent = tempPrimaryColor;
+
+        const mvInput = document.getElementById('cust-mv-color');
+        const mvText = document.getElementById('cust-mv-color-text');
+        if (mvInput) mvInput.value = tempMvColor;
+        if (mvText) mvText.textContent = tempMvColor;
+
+        const arenaInput = document.getElementById('cust-arena-name');
+        if (arenaInput) arenaInput.value = curTeam.arenaName || '';
+
+        const courtLogoCheck = document.getElementById('cust-show-court-logo');
+        if (courtLogoCheck) courtLogoCheck.checked = (curTeam.showCourtLogo !== false);
+
+        document.querySelectorAll('.token-style-btn').forEach(b => {
+            b.classList.toggle('active', b.dataset.style === tempTokenStyle);
+        });
+
+        document.querySelectorAll('.rink-style-btn').forEach(b => {
+            b.classList.toggle('active', b.dataset.rink === tempRinkColor);
+        });
+
+        document.getElementById('team-customize-modal')?.classList.add('active');
+    }
+
+    function updateLogoPreviewDisplay() {
+        const previewEl = document.getElementById('cust-logo-preview');
+        if (!previewEl) return;
+        if (!tempTeamLogo) {
+            previewEl.innerHTML = '🏑';
+            return;
+        }
+        if (tempTeamLogo.startsWith('data:image') || tempTeamLogo.startsWith('http')) {
+            previewEl.innerHTML = `<img src="${escapeHtml(tempTeamLogo)}" style="max-width:100%;max-height:100%;object-fit:contain;" alt="Logo preview">`;
+        } else {
+            previewEl.innerHTML = escapeHtml(tempTeamLogo);
+        }
+    }
+
+    function saveTeamCustomize() {
+        const curTeam = teams.find(t => t.id === currentTeamId);
+        if (!curTeam) return;
+
+        curTeam.logo = tempTeamLogo;
+        curTeam.primaryColor = tempPrimaryColor;
+        curTeam.mvColor = tempMvColor;
+        curTeam.tokenStyle = tempTokenStyle;
+        curTeam.rinkColor = tempRinkColor;
+
+        const arenaInput = document.getElementById('cust-arena-name');
+        if (arenaInput) curTeam.arenaName = arenaInput.value.trim();
+
+        const courtLogoCheck = document.getElementById('cust-show-court-logo');
+        if (courtLogoCheck) curTeam.showCourtLogo = courtLogoCheck.checked;
+
+        saveState();
+        applyThemeAndSettings();
+        renderCourtBoards();
+        renderActiveLineupSlots();
+        if (activeLineupKey === 'summary') renderSummaryView();
+
+        document.getElementById('team-customize-modal')?.classList.remove('active');
+        showToast('Joukkueen kustomointi tallennettu! ✨');
+    }
+
+    // ==========================================
+    // MATCH & EVENT INFO BANNER (v37.0)
+    // ==========================================
+    function openMatchModal() {
+        const curTeam = teams.find(t => t.id === currentTeamId);
+        const mInfo = (curTeam && curTeam.matchInfo) ? curTeam.matchInfo : {};
+
+        const oppInput = document.getElementById('match-input-opponent');
+        const timeInput = document.getElementById('match-input-time');
+        const metaInput = document.getElementById('match-input-meta');
+        const showCheck = document.getElementById('match-input-show-banner');
+
+        if (oppInput) oppInput.value = mInfo.opponent || '';
+        if (timeInput) timeInput.value = mInfo.time || '';
+        if (metaInput) metaInput.value = mInfo.meta || (curTeam?.arenaName ? curTeam.arenaName : '');
+        if (showCheck) showCheck.checked = (mInfo.showBanner !== false);
+
+        document.getElementById('match-info-modal')?.classList.add('active');
+    }
+
+    function saveMatchInfo(e) {
+        if (e) e.preventDefault();
+        const curTeam = teams.find(t => t.id === currentTeamId);
+        if (!curTeam) return;
+
+        const oppInput = document.getElementById('match-input-opponent');
+        const timeInput = document.getElementById('match-input-time');
+        const metaInput = document.getElementById('match-input-meta');
+        const showCheck = document.getElementById('match-input-show-banner');
+
+        curTeam.matchInfo = {
+            opponent: oppInput ? oppInput.value.trim() : '',
+            time: timeInput ? timeInput.value.trim() : '',
+            meta: metaInput ? metaInput.value.trim() : '',
+            showBanner: showCheck ? showCheck.checked : true
+        };
+
+        saveState();
+        applyThemeAndSettings();
+        document.getElementById('match-info-modal')?.classList.remove('active');
+        showToast('Peli-info tallennettu! 🏆');
+    }
+
+    function clearMatchInfo() {
+        const curTeam = teams.find(t => t.id === currentTeamId);
+        if (curTeam) {
+            curTeam.matchInfo = { opponent: '', time: '', meta: '', showBanner: false };
+            saveState();
+            applyThemeAndSettings();
+            document.getElementById('match-info-modal')?.classList.remove('active');
+            showToast('Peli-info tyhjennetty.');
+        }
+    }
+
+    // ==========================================
+    // TACTICAL PRESETS (v37.0)
+    // ==========================================
+    let targetCourtIdForPreset = null;
+
+    function openTacticalPresetsModal(courtId) {
+        targetCourtIdForPreset = courtId;
+        document.getElementById('tactical-presets-modal')?.classList.add('active');
+    }
+
+    function applyTacticalPreset(courtId, presetType) {
+        if (!courtId) courtId = targetCourtIdForPreset;
+        const courtKey = getCourtKey(courtId);
+        const page = getCurrentPage();
+        const court = page.courts.find(c => c.id === courtId);
+        if (!court) return;
+
+        // Clear existing drawings for this court
+        lineupDrawings[courtKey] = [];
+        if (!lineupCourtPositions) lineupCourtPositions = {};
+
+        if (presetType === '2-2-1') {
+            court.title = '2-2-1 Korkea Karvaus';
+            court.description = `2-2-1 Korkea Karvaus:\n• Kärkipelaajat (VH & OH) antavat aktiivisen paineen ja ohjaavat vastustajan avauksen laitaan.\n• Sentteri (KH) peittää keskustan syöttölinjat.\n• Puolustajat (VP & OP) katkovat rännikiekot ja puolustavat eteenpäin.`;
+            
+            lineupCourtPositions[`${courtKey}_MV_${orientationMode}`] = { x: 12, y: 50 };
+            lineupCourtPositions[`${courtKey}_VP_${orientationMode}`] = { x: 34, y: 30 };
+            lineupCourtPositions[`${courtKey}_OP_${orientationMode}`] = { x: 34, y: 70 };
+            lineupCourtPositions[`${courtKey}_KH_${orientationMode}`] = { x: 55, y: 50 };
+            lineupCourtPositions[`${courtKey}_VH_${orientationMode}`] = { x: 74, y: 24 };
+            lineupCourtPositions[`${courtKey}_OH_${orientationMode}`] = { x: 74, y: 76 };
+
+            // Add pressing run arrows
+            lineupDrawings[courtKey].push({
+                type: 'run',
+                start: { x: 74, y: 24 },
+                end: { x: 86, y: 20 },
+                path: [{ x: 74, y: 24 }, { x: 86, y: 20 }]
+            });
+            lineupDrawings[courtKey].push({
+                type: 'run',
+                start: { x: 74, y: 76 },
+                end: { x: 86, y: 80 },
+                path: [{ x: 74, y: 76 }, { x: 86, y: 80 }]
+            });
+        } 
+        else if (presetType === '2-1-2') {
+            court.title = '2-1-2 Noppavitonen / Trappi';
+            court.description = `2-1-2 Noppavitonen / Keskialueen Trappi:\n• Klassinen 5-nopparyhmitys. Annetaan vastustajan pakkien syötellä rauhassa.\n• Kun pallo pelataan puolenkentän yli, koko viisikko iskee samanaikaisesti syöttösuuntiin kiinni.\n• Tavoitteena nopea riisto ja suora vastaisku.`;
+
+            lineupCourtPositions[`${courtKey}_MV_${orientationMode}`] = { x: 12, y: 50 };
+            lineupCourtPositions[`${courtKey}_VP_${orientationMode}`] = { x: 30, y: 30 };
+            lineupCourtPositions[`${courtKey}_OP_${orientationMode}`] = { x: 30, y: 70 };
+            lineupCourtPositions[`${courtKey}_KH_${orientationMode}`] = { x: 50, y: 50 };
+            lineupCourtPositions[`${courtKey}_VH_${orientationMode}`] = { x: 65, y: 25 };
+            lineupCourtPositions[`${courtKey}_OH_${orientationMode}`] = { x: 65, y: 75 };
+
+            lineupDrawings[courtKey].push({
+                type: 'rect',
+                start: { x: 40, y: 18 },
+                end: { x: 62, y: 82 }
+            });
+        }
+        else if (presetType === '1-2-2') {
+            court.title = '1-2-2 Puolustusblokki';
+            court.description = `1-2-2 Matalampi Puolustusblokki:\n• Sentteri/kärki ohjaa hyökkäystä laitaan.\n• Laiturit (VH & OH) ja pakit (VP & OP) muodostavat kaksi tiivistä linjaa.\n• Keskusta pidetään täysin tukossa ja peitetään vedot sektorista.`;
+
+            lineupCourtPositions[`${courtKey}_MV_${orientationMode}`] = { x: 12, y: 50 };
+            lineupCourtPositions[`${courtKey}_VP_${orientationMode}`] = { x: 26, y: 34 };
+            lineupCourtPositions[`${courtKey}_OP_${orientationMode}`] = { x: 26, y: 66 };
+            lineupCourtPositions[`${courtKey}_VH_${orientationMode}`] = { x: 44, y: 26 };
+            lineupCourtPositions[`${courtKey}_OH_${orientationMode}`] = { x: 44, y: 74 };
+            lineupCourtPositions[`${courtKey}_KH_${orientationMode}`] = { x: 62, y: 50 };
+        }
+        else if (presetType === 'corner-freekick') {
+            court.title = 'Kulmavapari & Suora Veto';
+            court.description = `Hyökkäyspään Kulmavapari:\n1. Pallo kulmasta (VH) nopealla maanuoliaisella suoraan keskelle slottiin (KH).\n2. KH vetää suoraan syötöstä (one-timer) takayläkulmaan.\n3. OH tekee kovan maskin vastustajan maalivahdille ja siivoaa reboundin.`;
+
+            lineupCourtPositions[`${courtKey}_MV_${orientationMode}`] = { x: 12, y: 50 };
+            lineupCourtPositions[`${courtKey}_VH_${orientationMode}`] = { x: 88, y: 16 };
+            lineupCourtPositions[`${courtKey}_KH_${orientationMode}`] = { x: 70, y: 46 };
+            lineupCourtPositions[`${courtKey}_OH_${orientationMode}`] = { x: 85, y: 50 };
+            lineupCourtPositions[`${courtKey}_OP_${orientationMode}`] = { x: 58, y: 70 };
+            lineupCourtPositions[`${courtKey}_VP_${orientationMode}`] = { x: 52, y: 28 };
+
+            // Ball at corner
+            lineupBalls[courtKey] = [{ id: 'b_corner_' + Date.now(), x: 89, y: 16 }];
+
+            // Pass from corner to slot
+            lineupDrawings[courtKey].push({
+                type: 'pass',
+                start: { x: 88, y: 16 },
+                end: { x: 71, y: 46 }
+            });
+            // Shot from slot to net
+            lineupDrawings[courtKey].push({
+                type: 'shot',
+                start: { x: 70, y: 46 },
+                end: { x: 88, y: 49 }
+            });
+        }
+        else if (presetType === 'powerplay') {
+            court.title = '5v4 Ylivoimakuvio (Sateenvarjo & Siivet)';
+            court.description = `5v4 Ylivoimakuvio (Sateenvarjo & Siivet):\n• Nopea pallonliike vasemman ja oikean siiven sekä viivamiesten välillä.\n• Etsitään poikkisyöttöä takatolpalle tai viivalta laukausta slottiohjauksella.\n• Keskipelaaja (KH) valmiina ohjauksiin ja irtopalloihin.`;
+
+            lineupCourtPositions[`${courtKey}_MV_${orientationMode}`] = { x: 12, y: 50 };
+            lineupCourtPositions[`${courtKey}_VP_${orientationMode}`] = { x: 50, y: 28 };
+            lineupCourtPositions[`${courtKey}_OP_${orientationMode}`] = { x: 50, y: 72 };
+            lineupCourtPositions[`${courtKey}_VH_${orientationMode}`] = { x: 76, y: 18 };
+            lineupCourtPositions[`${courtKey}_OH_${orientationMode}`] = { x: 76, y: 82 };
+            lineupCourtPositions[`${courtKey}_KH_${orientationMode}`] = { x: 68, y: 50 };
+
+            // Ball with left wing
+            lineupBalls[courtKey] = [{ id: 'b_pp_' + Date.now(), x: 77, y: 18 }];
+
+            // Pass arrows
+            lineupDrawings[courtKey].push({
+                type: 'pass',
+                start: { x: 76, y: 18 },
+                end: { x: 51, y: 28 }
+            });
+            lineupDrawings[courtKey].push({
+                type: 'pass',
+                start: { x: 50, y: 28 },
+                end: { x: 50, y: 72 }
+            });
+            lineupDrawings[courtKey].push({
+                type: 'pass',
+                start: { x: 50, y: 72 },
+                end: { x: 76, y: 82 }
+            });
+        }
+
+        saveState();
+        renderCourtBoards();
+        document.getElementById('tactical-presets-modal')?.classList.remove('active');
+        showToast(`Kuvio asetettu: ${court.title}! 🏒✨`);
+    }
+
+    // ==========================================
+    // EXPORT COURT TO PNG IMAGE (v37.0)
+    // ==========================================
+    function exportCourtToPng(courtId) {
+        const page = getCurrentPage();
+        const court = page.courts.find(c => c.id === courtId);
+        if (!court) return;
+
+        const courtKey = getCourtKey(courtId);
+        const curTeam = teams.find(t => t.id === currentTeamId) || {};
+        const lineup = lineups[activeLineupKey] || {};
+        const drawings = lineupDrawings[courtKey] || lineupDrawings[activeLineupKey] || [];
+        const balls = lineupBalls[courtKey] || lineupBalls[activeLineupKey] || [];
+        const cones = lineupCones[courtKey] || lineupCones[activeLineupKey] || [];
+        const opponents = lineupOpponents[courtKey] || lineupOpponents[activeLineupKey] || [];
+        const extraPlayers = lineupExtraPlayers[courtKey] || lineupExtraPlayers[activeLineupKey] || [];
+        const textNotes = lineupTextNotes[courtKey] || lineupTextNotes[activeLineupKey] || [];
+        const isGridPaper = (lineupGridPaper[courtKey] !== undefined) 
+            ? !!lineupGridPaper[courtKey] 
+            : (activeLineupKey === 'freeform');
+
+        // Create high-res export canvas
+        const exportCanvas = document.createElement('canvas');
+        const width = 1600;
+        const height = 1000;
+        exportCanvas.width = width;
+        exportCanvas.height = height;
+        const ctx = exportCanvas.getContext('2d');
+
+        // 1. Overall Dark Background
+        ctx.fillStyle = '#080c14';
+        ctx.fillRect(0, 0, width, height);
+
+        // 2. Top Header Bar
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(0, 0, width, 80);
+        ctx.strokeStyle = '#334155';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(0, 80);
+        ctx.lineTo(width, 80);
+        ctx.stroke();
+
+        // Team Title & Lineup
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 26px "Outfit", sans-serif';
+        const teamName = (curTeam.name || 'Salibandy').toUpperCase();
+        const lineupTitle = `${teamName} • ${getLineupName(activeLineupKey)} - ${court.title || 'Taktiikkakuva'}`;
+        ctx.fillText(`🏑 ${lineupTitle}`, 30, 50);
+
+        // Match Info in Header
+        if (curTeam.matchInfo && (curTeam.matchInfo.opponent || curTeam.matchInfo.time)) {
+            ctx.fillStyle = '#f59e0b';
+            ctx.font = 'bold 20px "Plus Jakarta Sans", sans-serif';
+            const mText = `⚔️ ${curTeam.matchInfo.opponent || ''} ${curTeam.matchInfo.time ? '• ' + curTeam.matchInfo.time : ''}`;
+            const mWidth = ctx.measureText(mText).width;
+            ctx.fillText(mText, width - mWidth - 30, 50);
+        }
+
+        // 3. Court Area Dimensions
+        const courtX = 40;
+        const courtY = 100;
+        const courtW = width - 80;
+        const courtH = height - 200;
+
+        // Court Surface Color
+        let floorColor = '#1e3a8a'; // classic blue
+        if (courtColor === 'graphite') floorColor = '#1e293b';
+        if (courtColor === 'wood') floorColor = '#78350f';
+        if (courtColor === 'green') floorColor = '#064e3b';
+        if (isGridPaper) floorColor = '#131b2e';
+
+        ctx.fillStyle = floorColor;
+        ctx.beginPath();
+        ctx.roundRect(courtX, courtY, courtW, courtH, 24);
+        ctx.fill();
+
+        // Rink Board
+        ctx.strokeStyle = (curTeam.rinkColor === 'white') ? '#f8fafc' : '#020617';
+        ctx.lineWidth = 10;
+        ctx.stroke();
+
+        // Grid pattern if gridpaper
+        if (isGridPaper) {
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+            ctx.lineWidth = 1;
+            for (let x = courtX; x <= courtX + courtW; x += 30) {
+                ctx.beginPath();
+                ctx.moveTo(x, courtY);
+                ctx.lineTo(x, courtY + courtH);
+                ctx.stroke();
+            }
+            for (let y = courtY; y <= courtY + courtH; y += 30) {
+                ctx.beginPath();
+                ctx.moveTo(courtX, y);
+                ctx.lineTo(courtX + courtW, y);
+                ctx.stroke();
+            }
+        } else {
+            // Court Lines (White)
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+            ctx.lineWidth = 3;
+
+            // Center Line
+            ctx.beginPath();
+            ctx.moveTo(courtX + courtW / 2, courtY);
+            ctx.lineTo(courtX + courtW / 2, courtY + courtH);
+            ctx.stroke();
+
+            // Center Circle & Spot
+            ctx.beginPath();
+            ctx.arc(courtX + courtW / 2, courtY + courtH / 2, 70, 0, Math.PI * 2);
+            ctx.stroke();
+
+            ctx.fillStyle = '#ec4899';
+            ctx.beginPath();
+            ctx.arc(courtX + courtW / 2, courtY + courtH / 2, 8, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Goal Areas Left & Right
+            const goalW = 120;
+            const goalH = 160;
+            // Left Goal
+            ctx.strokeRect(courtX + 80, courtY + courtH / 2 - goalH / 2, goalW, goalH);
+            ctx.fillStyle = '#dc2626';
+            ctx.fillRect(courtX + 110, courtY + courtH / 2 - 40, 24, 80);
+
+            // Right Goal
+            ctx.strokeRect(courtX + courtW - 80 - goalW, courtY + courtH / 2 - goalH / 2, goalW, goalH);
+            ctx.fillRect(courtX + courtW - 110 - 24, courtY + courtH / 2 - 40, 24, 80);
+        }
+
+        // Center Watermark / Logo
+        if (curTeam.showCourtLogo !== false && curTeam.logo) {
+            ctx.save();
+            ctx.globalAlpha = 0.22;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.font = '110px sans-serif';
+            ctx.fillText(curTeam.logo, courtX + courtW / 2, courtY + courtH / 2);
+            ctx.restore();
+        }
+
+        // Arena Name in Corner
+        if (curTeam.arenaName) {
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+            ctx.font = 'bold 16px "Outfit", sans-serif';
+            ctx.textAlign = 'right';
+            ctx.fillText(curTeam.arenaName.toUpperCase(), courtX + courtW - 20, courtY + courtH - 20);
+        }
+
+        // Draw Drawings (Passes, Runs, Shots, Areas)
+        drawings.forEach(d => {
+            if (d.type === 'rect') {
+                const rx = courtX + (d.start.x / 100) * courtW;
+                const ry = courtY + (d.start.y / 100) * courtH;
+                const rw = ((d.end.x - d.start.x) / 100) * courtW;
+                const rh = ((d.end.y - d.start.y) / 100) * courtH;
+                ctx.fillStyle = 'rgba(234, 179, 8, 0.2)';
+                ctx.fillRect(rx, ry, rw, rh);
+                ctx.strokeStyle = '#eab308';
+                ctx.lineWidth = 3;
+                ctx.strokeRect(rx, ry, rw, rh);
+            } else if (d.type === 'pass') {
+                const sx = courtX + (d.start.x / 100) * courtW;
+                const sy = courtY + (d.start.y / 100) * courtH;
+                const ex = courtX + (d.end.x / 100) * courtW;
+                const ey = courtY + (d.end.y / 100) * courtH;
+                ctx.save();
+                ctx.strokeStyle = '#3b82f6';
+                ctx.lineWidth = 5;
+                ctx.setLineDash([12, 8]);
+                ctx.beginPath();
+                ctx.moveTo(sx, sy);
+                ctx.lineTo(ex, ey);
+                ctx.stroke();
+                ctx.restore();
+            } else if (d.type === 'run') {
+                ctx.save();
+                ctx.strokeStyle = '#10b981';
+                ctx.lineWidth = 5;
+                ctx.beginPath();
+                const path = d.path || [d.start, d.end];
+                path.forEach((pt, pIdx) => {
+                    const px = courtX + (pt.x / 100) * courtW;
+                    const py = courtY + (pt.y / 100) * courtH;
+                    if (pIdx === 0) ctx.moveTo(px, py);
+                    else ctx.lineTo(px, py);
+                });
+                ctx.stroke();
+                ctx.restore();
+            } else if (d.type === 'shot') {
+                const sx = courtX + (d.start.x / 100) * courtW;
+                const sy = courtY + (d.start.y / 100) * courtH;
+                const ex = courtX + (d.end.x / 100) * courtW;
+                const ey = courtY + (d.end.y / 100) * courtH;
+                ctx.save();
+                ctx.strokeStyle = '#ef4444';
+                ctx.lineWidth = 6;
+                ctx.shadowColor = 'rgba(239, 68, 68, 0.8)';
+                ctx.shadowBlur = 10;
+                ctx.beginPath();
+                ctx.moveTo(sx, sy);
+                ctx.lineTo(ex, ey);
+                ctx.stroke();
+                ctx.restore();
+            }
+        });
+
+        // Draw Lineup Players
+        const posKeys = ['MV', 'VP', 'OP', 'VH', 'KH', 'OH', 'VM'];
+        posKeys.forEach(pos => {
+            const pid = lineup[pos];
+            if (!pid) return;
+            const player = roster.find(p => p.id === pid);
+            if (!player) return;
+
+            let defaultCoords = DEFAULT_POS_COORDS[orientationMode][pos] || { x: 50, y: 50 };
+            let posKeyStore = `${courtKey}_${pos}_${orientationMode}`;
+            let fallbackKeyStore = `${activeLineupKey}_${pos}_${orientationMode}`;
+            let coords = lineupCourtPositions[posKeyStore] || lineupCourtPositions[fallbackKeyStore] || defaultCoords;
+
+            const px = courtX + (coords.x / 100) * courtW;
+            const py = courtY + (coords.y / 100) * courtH;
+
+            const isMv = player.position === 'MV';
+            ctx.fillStyle = isMv ? (curTeam.mvColor || '#10b981') : (curTeam.primaryColor || '#2563eb');
+            ctx.beginPath();
+            ctx.arc(px, py, 22, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+
+            // Number
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 18px "Outfit", sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(String(player.number), px, py);
+
+            // Name label below
+            if (labelMode !== 'num') {
+                ctx.font = 'bold 14px "Plus Jakarta Sans", sans-serif';
+                ctx.fillStyle = '#ffffff';
+                ctx.shadowColor = 'rgba(0,0,0,0.8)';
+                ctx.shadowBlur = 4;
+                ctx.fillText(player.name, px, py + 34);
+                ctx.shadowBlur = 0;
+            }
+        });
+
+        // Draw Extra Players
+        extraPlayers.forEach(extraP => {
+            const px = courtX + (extraP.x / 100) * courtW;
+            const py = courtY + (extraP.y / 100) * courtH;
+            const isMv = extraP.isMv || (extraP.position === 'MV');
+            ctx.fillStyle = isMv ? (curTeam.mvColor || '#10b981') : (curTeam.primaryColor || '#2563eb');
+            ctx.beginPath();
+            ctx.arc(px, py, 20, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 16px "Outfit", sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(extraP.label || 'P', px, py);
+        });
+
+        // Draw Opponents
+        opponents.forEach(opp => {
+            const ox = courtX + (opp.x / 100) * courtW;
+            const oy = courtY + (opp.y / 100) * courtH;
+            ctx.fillStyle = '#dc2626';
+            ctx.beginPath();
+            ctx.arc(ox, oy, 18, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 15px "Outfit", sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(opp.label || 'V', ox, oy);
+        });
+
+        // Draw Balls
+        balls.forEach(b => {
+            const bx = courtX + (b.x / 100) * courtW;
+            const by = courtY + (b.y / 100) * courtH;
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.arc(bx, by, 12, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#000000';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+        });
+
+        // Draw Cones
+        cones.forEach(c => {
+            const cx = courtX + (c.x / 100) * courtW;
+            const cy = courtY + (c.y / 100) * courtH;
+            ctx.font = '22px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('🔶', cx, cy);
+        });
+
+        // Draw Text Notes
+        textNotes.forEach(tNode => {
+            const tx = courtX + (tNode.x / 100) * courtW;
+            const ty = courtY + (tNode.y / 100) * courtH;
+            ctx.font = 'bold 16px "Plus Jakarta Sans", sans-serif';
+            const tWidth = ctx.measureText(tNode.text).width;
+            ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+            ctx.fillRect(tx - 6, ty - 14, tWidth + 12, 28);
+            ctx.strokeStyle = '#38bdf8';
+            ctx.lineWidth = 1.5;
+            ctx.strokeRect(tx - 6, ty - 14, tWidth + 12, 28);
+            ctx.fillStyle = '#ffffff';
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(tNode.text, tx, ty);
+        });
+
+        // 4. Bottom Footer with Tactical Notes
+        if (court.description) {
+            ctx.fillStyle = '#0f172a';
+            ctx.fillRect(0, height - 90, width, 90);
+            ctx.strokeStyle = '#334155';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(0, height - 90);
+            ctx.lineTo(width, height - 90);
+            ctx.stroke();
+
+            ctx.fillStyle = '#94a3b8';
+            ctx.font = 'bold 14px "Outfit", sans-serif';
+            ctx.textAlign = 'left';
+            ctx.fillText('📝 TAKTISET OHJEET:', 30, height - 60);
+
+            ctx.fillStyle = '#f8fafc';
+            ctx.font = '15px "Plus Jakarta Sans", sans-serif';
+            const shortDesc = court.description.replace(/\n/g, '  |  ');
+            ctx.fillText(shortDesc, 30, height - 32);
+        }
+
+        // Trigger Download
+        const link = document.createElement('a');
+        const safeName = (teamName + '_' + (court.title || 'Taktiikka')).replace(/[^a-zA-Z0-9åäöÅÄÖ_-]/g, '_');
+        link.download = `${safeName}.png`;
+        link.href = exportCanvas.toDataURL('image/png');
+        link.click();
+        showToast('📸 Kenttäkuva ladattu laitteellesi (PNG)!');
     }
 
     function openPhotoModal() {
@@ -4092,6 +4827,20 @@
             if (renameCourtBtn) {
                 e.preventDefault();
                 renameCourtBoard(renameCourtBtn.dataset.courtId);
+                return;
+            }
+
+            const openPresetsBtn = e.target.closest('[data-action="open-tactical-presets"]');
+            if (openPresetsBtn) {
+                e.preventDefault();
+                openTacticalPresetsModal(openPresetsBtn.dataset.courtId);
+                return;
+            }
+
+            const exportPngBtn = e.target.closest('[data-action="export-court-png"]');
+            if (exportPngBtn) {
+                e.preventDefault();
+                exportCourtToPng(exportPngBtn.dataset.courtId);
                 return;
             }
 
@@ -4911,6 +5660,128 @@
             if (file) {
                 restoreBackupJson(file);
                 e.target.value = '';
+            }
+        });
+
+        // ==========================================
+        // TEAM CUSTOMIZATION LISTENERS (v37.0)
+        // ==========================================
+        document.getElementById('btn-customize-team')?.addEventListener('click', openTeamCustomizeModal);
+        document.getElementById('header-team-logo-wrapper')?.addEventListener('click', openTeamCustomizeModal);
+        document.getElementById('btn-close-team-customize-modal')?.addEventListener('click', () => {
+            document.getElementById('team-customize-modal')?.classList.remove('active');
+        });
+        document.getElementById('btn-save-team-customize')?.addEventListener('click', saveTeamCustomize);
+
+        document.getElementById('btn-upload-team-logo')?.addEventListener('click', () => {
+            document.getElementById('team-logo-file-input')?.click();
+        });
+
+        document.getElementById('team-logo-file-input')?.addEventListener('change', (e) => {
+            const file = e.target.files?.[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (evt) => {
+                    tempTeamLogo = evt.target.result;
+                    updateLogoPreviewDisplay();
+                };
+                reader.readAsDataURL(file);
+                e.target.value = '';
+            }
+        });
+
+        document.getElementById('btn-remove-team-logo')?.addEventListener('click', () => {
+            tempTeamLogo = '🏑';
+            updateLogoPreviewDisplay();
+        });
+
+        document.querySelectorAll('.logo-preset-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                tempTeamLogo = btn.dataset.icon;
+                updateLogoPreviewDisplay();
+            });
+        });
+
+        const custPrimaryColorInput = document.getElementById('cust-primary-color');
+        const custPrimaryColorText = document.getElementById('cust-primary-color-text');
+        custPrimaryColorInput?.addEventListener('input', (e) => {
+            tempPrimaryColor = e.target.value;
+            if (custPrimaryColorText) custPrimaryColorText.textContent = tempPrimaryColor;
+        });
+
+        const custMvColorInput = document.getElementById('cust-mv-color');
+        const custMvColorText = document.getElementById('cust-mv-color-text');
+        custMvColorInput?.addEventListener('input', (e) => {
+            tempMvColor = e.target.value;
+            if (custMvColorText) custMvColorText.textContent = tempMvColor;
+        });
+
+        document.querySelectorAll('#chips-primary-color .color-chip').forEach(chip => {
+            chip.addEventListener('click', () => {
+                tempPrimaryColor = chip.dataset.color;
+                if (custPrimaryColorInput) custPrimaryColorInput.value = tempPrimaryColor;
+                if (custPrimaryColorText) custPrimaryColorText.textContent = tempPrimaryColor;
+            });
+        });
+
+        document.querySelectorAll('#chips-mv-color .color-chip').forEach(chip => {
+            chip.addEventListener('click', () => {
+                tempMvColor = chip.dataset.color;
+                if (custMvColorInput) custMvColorInput.value = tempMvColor;
+                if (custMvColorText) custMvColorText.textContent = tempMvColor;
+            });
+        });
+
+        document.querySelectorAll('.token-style-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.token-style-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                tempTokenStyle = btn.dataset.style;
+            });
+        });
+
+        document.querySelectorAll('.rink-style-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.rink-style-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                tempRinkColor = btn.dataset.rink;
+            });
+        });
+
+        // ==========================================
+        // MATCH INFO LISTENERS (v37.0)
+        // ==========================================
+        document.getElementById('btn-open-match-modal')?.addEventListener('click', openMatchModal);
+        document.getElementById('btn-close-match-modal')?.addEventListener('click', () => {
+            document.getElementById('match-info-modal')?.classList.remove('active');
+        });
+        document.getElementById('match-info-form')?.addEventListener('submit', saveMatchInfo);
+        document.getElementById('btn-clear-match-info')?.addEventListener('click', clearMatchInfo);
+        document.getElementById('btn-toggle-match-banner')?.addEventListener('click', () => {
+            const curTeam = teams.find(t => t.id === currentTeamId);
+            if (curTeam) {
+                if (!curTeam.matchInfo) curTeam.matchInfo = {};
+                curTeam.matchInfo.showBanner = !curTeam.matchInfo.showBanner;
+                saveState();
+                applyThemeAndSettings();
+            }
+        });
+
+        // ==========================================
+        // TACTICAL PRESETS LISTENERS (v37.0)
+        // ==========================================
+        document.getElementById('btn-close-tactical-presets-modal')?.addEventListener('click', () => {
+            document.getElementById('tactical-presets-modal')?.classList.remove('active');
+        });
+        document.getElementById('btn-close-tactical-presets-bottom')?.addEventListener('click', () => {
+            document.getElementById('tactical-presets-modal')?.classList.remove('active');
+        });
+
+        document.getElementById('tactical-presets-grid')?.addEventListener('click', (e) => {
+            const applyBtn = e.target.closest('[data-action="apply-preset"]');
+            if (applyBtn) {
+                const preset = applyBtn.dataset.preset;
+                applyTacticalPreset(targetCourtIdForPreset, preset);
             }
         });
 

@@ -10,8 +10,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 
-    <!-- CSS Stylesheet (Cache Busted v36.0) -->
-    <link rel="stylesheet" href="styles.css?v=36.0">
+    <!-- CSS Stylesheet (Cache Busted v37.0) -->
+    <link rel="stylesheet" href="styles.css?v=37.0">
 
     <!-- OCR Tesseract.js (Optinen tekstintunnistus valokuvista) -->
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4.1.1/dist/tesseract.min.js"></script>
@@ -26,11 +26,14 @@
     <!-- APP HEADER -->
     <header class="app-header">
         <div class="header-brand">
-            <div class="logo-icon">🏑</div>
+            <div id="header-team-logo-wrapper" class="header-team-logo-wrapper" title="Joukkueen logo / seuratunnus (Klikkaa kustomoidaksesi)">
+                <div class="logo-icon">🏑</div>
+            </div>
             <div>
                 <h1>Salibandyn Kentälliset</h1>
                 <div class="team-selector-wrapper">
                     <select id="team-select" class="team-dropdown"></select>
+                    <button class="btn-xs btn-outline highlight-customize" id="btn-customize-team" title="Muokkaa joukkueen logoa, värejä, areenaa ja asetuksia">🎨 Kustomoi</button>
                     <button class="btn-xs btn-outline" id="btn-new-team" title="Uusi joukkue">+ Uusi</button>
                     <button class="btn-xs btn-outline danger-text" id="btn-delete-team" title="Poista nykyinen joukkue">🗑️</button>
                 </div>
@@ -149,6 +152,19 @@
                 <button class="btn-xs btn-outline" id="btn-add-tactic-page" title="Lisää uusi taktiikkasivu / kuvio (esim. YV1, YV2)">+ Uusi sivu</button>
                 <button class="btn-xs btn-outline" data-action="add-court-board" id="btn-add-court-top" title="Lisää uusi kuvio nykyisen alapuolelle">➕ Lisää kuvio</button>
                 <button class="btn-xs btn-outline danger-text" id="btn-delete-tactic-page" title="Poista nykyinen taktiikkasivu">🗑️ Poista sivu</button>
+            </div>
+
+            <!-- MATCH & EVENT INFO BANNER -->
+            <div class="match-info-banner" id="match-info-banner">
+                <div class="match-info-content">
+                    <span class="match-badge">🏆 OTTELU</span>
+                    <span class="match-title-text" id="match-title-text">vs Vastustaja</span>
+                    <span class="match-meta-text" id="match-meta-text">La klo 18:30 • Kotiareena</span>
+                </div>
+                <div class="match-info-actions">
+                    <button class="btn-xs btn-outline" id="btn-open-match-modal" title="Muokkaa ottelutietoja ja peli-infoa">✏️ Peli-info</button>
+                    <button class="btn-xs btn-outline" id="btn-toggle-match-banner" title="Piilota / Näytä ottelubanneri">✕</button>
+                </div>
             </div>
 
             <!-- VERTICALLY STACKED COURTS CONTAINER -->
@@ -634,12 +650,248 @@
         </div>
     </div>
 
+    <!-- JOUKKUEEN KUSTOMOINTI & SEURA-ASETUKSET MODAALI -->
+    <div class="modal-overlay" id="team-customize-modal">
+        <div class="modal-card modal-card-wide" style="max-width: 680px;">
+            <div class="modal-header">
+                <h3>🎨 Joukkueen Kustomointi & Seura-asetukset</h3>
+                <button class="close-btn" id="btn-close-team-customize-modal">&times;</button>
+            </div>
+
+            <div class="customize-modal-body" style="max-height: 70vh; overflow-y: auto; padding: 0.2rem 0.4rem;">
+                
+                <!-- 1. Joukkueen Nimi & Logo -->
+                <div class="settings-group">
+                    <label class="settings-label">🛡️ 1. Joukkueen Logo & Seuratunnus</label>
+                    <div style="display: flex; align-items: center; gap: 1rem; margin-top: 0.5rem; flex-wrap: wrap;">
+                        <div class="team-logo-preview-box" id="cust-logo-preview-box" title="Nykyinen logo">
+                            <div id="cust-logo-preview" class="logo-preview-content">🏑</div>
+                        </div>
+                        <div style="flex: 1; min-width: 220px; display: flex; flex-direction: column; gap: 0.4rem;">
+                            <div style="display: flex; gap: 0.4rem;">
+                                <button type="button" class="btn btn-sm btn-outline" id="btn-upload-team-logo">
+                                    📷 Lataa oma kuva
+                                </button>
+                                <button type="button" class="btn btn-sm btn-outline danger-text" id="btn-remove-team-logo" title="Poista oma logo">
+                                    ✕ Poista
+                                </button>
+                                <input type="file" id="team-logo-file-input" accept="image/*" style="display:none;">
+                            </div>
+                            <span style="font-size: 0.72rem; color: var(--text-muted);">Voit ladata seuran vaakunan (PNG, JPG, SVG) tai valita alta pikatunnuksen:</span>
+                            <div class="logo-preset-swatches" id="logo-preset-swatches">
+                                <button type="button" class="logo-preset-btn" data-icon="🦁">🦁</button>
+                                <button type="button" class="logo-preset-btn" data-icon="🦅">🦅</button>
+                                <button type="button" class="logo-preset-btn" data-icon="🐺">🐺</button>
+                                <button type="button" class="logo-preset-btn" data-icon="⚡">⚡</button>
+                                <button type="button" class="logo-preset-btn" data-icon="🐻">🐻</button>
+                                <button type="button" class="logo-preset-btn" data-icon="🏑">🏑</button>
+                                <button type="button" class="logo-preset-btn" data-icon="🏆">🏆</button>
+                                <button type="button" class="logo-preset-btn" data-icon="🔥">🔥</button>
+                                <button type="button" class="logo-preset-btn" data-icon="⚔️">⚔️</button>
+                                <button type="button" class="logo-preset-btn" data-icon="🛡️">🛡️</button>
+                                <button type="button" class="logo-preset-btn" data-icon="🦈">🦈</button>
+                                <button type="button" class="logo-preset-btn" data-icon="🐯">🐯</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. Joukkueen Pelipaitojen Värit (Seuravärit) -->
+                <div class="settings-group" style="margin-top: 1rem; border-top: 1px solid var(--border-color); padding-top: 0.8rem;">
+                    <label class="settings-label">🎨 2. Seuravärit (Pelipaidat kentällä)</label>
+                    
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-top: 0.5rem;">
+                        <!-- Kenttäpelaajien Paita -->
+                        <div class="color-picker-group">
+                            <span style="font-size: 0.78rem; font-weight: 700; color: var(--text-secondary);">👕 Kenttäpelaajien paita:</span>
+                            <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.35rem;">
+                                <input type="color" id="cust-primary-color" value="#2563eb" class="custom-color-input" title="Valitse oma väri">
+                                <span id="cust-primary-color-text" style="font-family: monospace; font-size: 0.75rem;">#2563eb</span>
+                            </div>
+                            <div class="preset-color-chips" id="chips-primary-color">
+                                <button type="button" class="color-chip" style="background:#2563eb;" data-color="#2563eb" title="Sininen"></button>
+                                <button type="button" class="color-chip" style="background:#dc2626;" data-color="#dc2626" title="Punainen"></button>
+                                <button type="button" class="color-chip" style="background:#eab308;" data-color="#eab308" title="Keltainen"></button>
+                                <button type="button" class="color-chip" style="background:#1e293b;" data-color="#1e293b" title="Musta / Grafiitti"></button>
+                                <button type="button" class="color-chip" style="background:#16a34a;" data-color="#16a34a" title="Vihreä"></button>
+                                <button type="button" class="color-chip" style="background:#ea580c;" data-color="#ea580c" title="Oranssi"></button>
+                                <button type="button" class="color-chip" style="background:#9333ea;" data-color="#9333ea" title="Violetti"></button>
+                                <button type="button" class="color-chip" style="background:#0d9488;" data-color="#0d9488" title="Turkoosi"></button>
+                                <button type="button" class="color-chip" style="background:#f8fafc; border:1px solid #94a3b8;" data-color="#f8fafc" title="Valkoinen"></button>
+                            </div>
+                        </div>
+
+                        <!-- Maalivahdin Paita -->
+                        <div class="color-picker-group">
+                            <span style="font-size: 0.78rem; font-weight: 700; color: var(--text-secondary);">🟢 Maalivahdin paita:</span>
+                            <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.35rem;">
+                                <input type="color" id="cust-mv-color" value="#10b981" class="custom-color-input" title="Valitse maalivahdin väri">
+                                <span id="cust-mv-color-text" style="font-family: monospace; font-size: 0.75rem;">#10b981</span>
+                            </div>
+                            <div class="preset-color-chips" id="chips-mv-color">
+                                <button type="button" class="color-chip" style="background:#10b981;" data-color="#10b981" title="Vihreä"></button>
+                                <button type="button" class="color-chip" style="background:#eab308;" data-color="#eab308" title="Keltainen"></button>
+                                <button type="button" class="color-chip" style="background:#ef4444;" data-color="#ef4444" title="Punainen"></button>
+                                <button type="button" class="color-chip" style="background:#0f172a;" data-color="#0f172a" title="Musta"></button>
+                                <button type="button" class="color-chip" style="background:#f97316;" data-color="#f97316" title="Oranssi"></button>
+                                <button type="button" class="color-chip" style="background:#3b82f6;" data-color="#3b82f6" title="Sininen"></button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3. Pelaajanappulan Ulkoasu Kentällä -->
+                <div class="settings-group" style="margin-top: 1rem; border-top: 1px solid var(--border-color); padding-top: 0.8rem;">
+                    <label class="settings-label">👕 3. Pelaajanappulan Ulkoasu Kentällä</label>
+                    <div class="settings-options-row" style="margin-top: 0.4rem;">
+                        <button type="button" class="btn btn-sm btn-outline token-style-btn active" data-style="circle">
+                            🔵 Klassinen kiekko
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline token-style-btn" data-style="jersey">
+                            👕 Pelipaita
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline token-style-btn" data-style="pill">
+                            🏷️ Pilleri
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 4. Kotiareena & Kaukalo -->
+                <div class="settings-group" style="margin-top: 1rem; border-top: 1px solid var(--border-color); padding-top: 0.8rem;">
+                    <label class="settings-label">🏟️ 4. Kotiareena & Kaukalon Ulkoasu</label>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.8rem; margin-top: 0.4rem;">
+                        <div>
+                            <span style="font-size: 0.76rem; color: var(--text-secondary);">Kotiareenan nimi (näkyy kentän laidassa):</span>
+                            <input type="text" id="cust-arena-name" class="form-input" placeholder="esim. Energia Areena" style="margin-top: 0.25rem;">
+                        </div>
+                        <div>
+                            <span style="font-size: 0.76rem; color: var(--text-secondary);">Kaukalon laitojen tyyli:</span>
+                            <div class="settings-options-row" style="margin-top: 0.25rem;">
+                                <button type="button" class="btn btn-sm btn-outline rink-style-btn active" data-rink="black">⬛ Musta kaukalo</button>
+                                <button type="button" class="btn btn-sm btn-outline rink-style-btn" data-rink="white">⬜ Valkoinen kaukalo</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div style="margin-top: 0.6rem; display: flex; align-items: center; gap: 0.5rem;">
+                        <input type="checkbox" id="cust-show-court-logo" checked>
+                        <label for="cust-show-court-logo" style="font-size: 0.78rem; cursor: pointer;">Näytä seuran logo keskiympyrässä kentällä</label>
+                    </div>
+                </div>
+
+            </div>
+
+            <div class="modal-actions" style="margin-top: 1rem;">
+                <button type="button" class="btn btn-primary" id="btn-save-team-customize">Tallenna kustomointi ✨</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MATCH & EVENT INFO MODAALI -->
+    <div class="modal-overlay" id="match-info-modal">
+        <div class="modal-card" style="max-width: 520px;">
+            <div class="modal-header">
+                <h3>🏆 Ottelu- ja Peli-info</h3>
+                <button class="close-btn" id="btn-close-match-modal">&times;</button>
+            </div>
+
+            <form id="match-info-form">
+                <div class="form-group">
+                    <label for="match-input-opponent">⚔️ Vastustaja / Ottelu *</label>
+                    <input type="text" id="match-input-opponent" class="form-input" placeholder="esim. vs Classic" required>
+                </div>
+                <div class="form-group">
+                    <label for="match-input-time">📅 Päivä & Kellonaika</label>
+                    <input type="text" id="match-input-time" class="form-input" placeholder="esim. La 22.8. klo 18:30">
+                </div>
+                <div class="form-group">
+                    <label for="match-input-meta">🏟️ Pelipaikka / Sarja / Turnaus</label>
+                    <input type="text" id="match-input-meta" class="form-input" placeholder="esim. Energia Areena • P15 Aluesarja">
+                </div>
+                <div class="form-group" style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.6rem;">
+                    <input type="checkbox" id="match-input-show-banner" checked>
+                    <label for="match-input-show-banner" style="font-size: 0.82rem; cursor: pointer;">Näytä ottelubanneri kentän yläpuolella</label>
+                </div>
+                <div class="modal-actions" style="margin-top: 1.2rem;">
+                    <button type="button" class="btn btn-outline" id="btn-clear-match-info">Tyhjennä</button>
+                    <button type="submit" class="btn btn-primary">Tallenna peli-info 🏆</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- VALMIIT SALIBANDYN TAKTIIKKAPOHJAT MODAALI -->
+    <div class="modal-overlay" id="tactical-presets-modal">
+        <div class="modal-card modal-card-wide" style="max-width: 660px;">
+            <div class="modal-header">
+                <h3>⚡ Valmiit Salibandyn Taktiikkapohjat</h3>
+                <button class="close-btn" id="btn-close-tactical-presets-modal">&times;</button>
+            </div>
+
+            <p class="panel-hint" style="padding: 0 0 0.8rem 0;">
+                Valitse salibandyn taktiikkakuvio. Pelaajat asettuvat automaattisesti kenttäryhmitykseen ja piirrosviivat muodostetaan valmiiksi:
+            </p>
+
+            <div class="tactical-presets-grid" id="tactical-presets-grid">
+                
+                <div class="tactical-preset-card" data-preset="2-2-1">
+                    <div class="preset-card-header">
+                        <span class="preset-tag">KARVAUS</span>
+                        <h4>🏃 2-2-1 Korkea Karvaus</h4>
+                    </div>
+                    <p class="preset-desc">Aktiivinen kärkiprässi: 2 hyökkääjää ohjaa laitaan, sentteri ja välipeittäjät katkovat syöttölinjoja.</p>
+                    <button type="button" class="btn btn-sm btn-primary" data-action="apply-preset" data-preset="2-2-1">Ota käyttöön 🏒</button>
+                </div>
+
+                <div class="tactical-preset-card" data-preset="2-1-2">
+                    <div class="preset-card-header">
+                        <span class="preset-tag tag-blue">NOPPAVITONEN</span>
+                        <h4>🎲 2-1-2 Noppavitonen / Trappi</h4>
+                    </div>
+                    <p class="preset-desc">Salibandyn klassinen noppamuoto keskialueen tiiviillä ohjauksella ja vastahyökkäysvalmiudella.</p>
+                    <button type="button" class="btn btn-sm btn-primary" data-action="apply-preset" data-preset="2-1-2">Ota käyttöön 🏒</button>
+                </div>
+
+                <div class="tactical-preset-card" data-preset="1-2-2">
+                    <div class="preset-card-header">
+                        <span class="preset-tag tag-green">PUOLUSTUS</span>
+                        <h4>🛡️ 1-2-2 Matalampi Blokki</h4>
+                    </div>
+                    <p class="preset-desc">Tiivis viisikkopuolustus: yksi kärkikarvaaja ja kaksi matalaa linjaa keskustan tukkimiseen.</p>
+                    <button type="button" class="btn btn-sm btn-primary" data-action="apply-preset" data-preset="1-2-2">Ota käyttöön 🏒</button>
+                </div>
+
+                <div class="tactical-preset-card" data-preset="corner-freekick">
+                    <div class="preset-card-header">
+                        <span class="preset-tag tag-amber">VAPARI</span>
+                        <h4>💥 Kulmavapari & Suora veto</h4>
+                    </div>
+                    <p class="preset-desc">Hyökkäyspään erikoistilanne: syöttö kulmasta slottiin suoraan one-timer-laukaukseen ja maski maalille.</p>
+                    <button type="button" class="btn btn-sm btn-primary" data-action="apply-preset" data-preset="corner-freekick">Ota käyttöön 🏒</button>
+                </div>
+
+                <div class="tactical-preset-card" data-preset="powerplay">
+                    <div class="preset-card-header">
+                        <span class="preset-tag tag-purple">YLIVOIMA (YV)</span>
+                        <h4>⚡ YV Sateenvarjo & Siivet</h4>
+                    </div>
+                    <p class="preset-desc">5v4 Ylivoimakuvio: 2 viivamiestä, 1 puskuri/slottipelaaja ja 2 laukaisusiipeä poikkisyöttöuhalla.</p>
+                    <button type="button" class="btn btn-sm btn-primary" data-action="apply-preset" data-preset="powerplay">Ota käyttöön 🏒</button>
+                </div>
+
+            </div>
+
+            <div class="modal-actions" style="margin-top: 1rem;">
+                <button type="button" class="btn btn-outline" id="btn-close-tactical-presets-bottom">Sulje</button>
+            </div>
+        </div>
+    </div>
+
     <!-- TOAST NOTIFICATION CONTAINER -->
     <div id="toast" class="toast-notification"></div>
 
-    <!-- Firebase Config & App Engine (Cache Busted v36.0) -->
-    <script src="firebase-config.js?v=36.0"></script>
-    <script src="app.js?v=36.0"></script>
+    <!-- Firebase Config & App Engine (Cache Busted v37.0) -->
+    <script src="firebase-config.js?v=37.0"></script>
+    <script src="app.js?v=37.0"></script>
 
 </body>
 </html>
