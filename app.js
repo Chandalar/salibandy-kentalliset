@@ -132,6 +132,19 @@
     let teams = loadFromStorage('salibandy_teams_v1', DEFAULT_TEAMS);
     let currentTeamId = loadFromStorage('salibandy_active_team_id', 'team_edustus');
 
+    if (Array.isArray(teams)) {
+        teams.forEach(t => {
+            if (!t.logo) {
+                t.logo = (t.id === 'team_edustus') ? '🦁' : ((t.id === 'team_junnut') ? '⚡' : '🏑');
+            }
+            if (!t.primaryColor) t.primaryColor = (t.id === 'team_junnut') ? '#dc2626' : '#2563eb';
+            if (!t.mvColor) t.mvColor = (t.id === 'team_junnut') ? '#eab308' : '#10b981';
+            if (!t.tokenStyle) t.tokenStyle = 'circle';
+            if (!t.rinkColor) t.rinkColor = 'black';
+            if (t.showCourtLogo === undefined) t.showCourtLogo = true;
+        });
+    }
+
     cleanCorruptedUserTeams();
 
     let roster = loadRosterForTeam(currentTeamId);
@@ -1093,6 +1106,8 @@
 
         saveState();
 
+        applyThemeAndSettings();
+        renderTeamDropdown();
         renderTabs();
         renderTacticalPageBadges();
         updateRosterCounters();
