@@ -1839,72 +1839,64 @@
         });
     }
 
-    function setupTextTouchDragging(node, textObj, courtId) {
+    function setupTextTouchDragging(textNode, textObj, courtId) {
         let isDragging = false;
-        let startX = 0, startY = 0;
-        let origPctX = textObj.x, origPctY = textObj.y;
-        let hasMoved = false;
+        let rafId = null;
 
-        const courtContainer = document.getElementById(`floorball-court-${courtId}`);
-
-        function onPointerDown(e) {
+        const onPointerDown = (e) => {
+            const tool = courtDrawingTools[courtId] || 'select';
+            if (tool !== 'select' && tool !== 'text') return;
+            selectCourtElement(textObj.id, textNode);
             if (e.target.closest('button')) return;
+
             isDragging = true;
-            hasMoved = false;
-            selectCourtElement(textObj.id, node);
-            node.setPointerCapture(e.pointerId);
+            try {
+                textNode.setPointerCapture(e.pointerId);
+            } catch (err) {}
 
-            startX = e.clientX;
-            startY = e.clientY;
-            origPctX = textObj.x;
-            origPctY = textObj.y;
+            textNode.addEventListener('pointermove', onPointerMove);
+            textNode.addEventListener('pointerup', onPointerUp);
+            textNode.addEventListener('pointercancel', onPointerUp);
+        };
 
-            node.addEventListener('pointermove', onPointerMove);
-            node.addEventListener('pointerup', onPointerUp);
-            node.addEventListener('pointercancel', onPointerUp);
-            e.stopPropagation();
-        }
-
-        function onPointerMove(e) {
+        const onPointerMove = (e) => {
             if (!isDragging) return;
+            e.preventDefault();
+
+            const courtContainer = document.getElementById(`floorball-court-${courtId}`);
             if (!courtContainer) return;
-            const courtRect = courtContainer.getBoundingClientRect();
-            if (courtRect.width === 0 || courtRect.height === 0) return;
 
-            const dx = e.clientX - startX;
-            const dy = e.clientY - startY;
+            const rect = courtContainer.getBoundingClientRect();
+            if (rect.width === 0 || rect.height === 0) return;
 
-            if (Math.abs(dx) > 3 || Math.abs(dy) > 3) hasMoved = true;
+            let newX = ((e.clientX - rect.left) / rect.width) * 100;
+            let newY = ((e.clientY - rect.top) / rect.height) * 100;
 
-            const dxPct = (dx / courtRect.width) * 100;
-            const dyPct = (dy / courtRect.height) * 100;
+            newX = Math.max(2, Math.min(98, newX));
+            newY = Math.max(2, Math.min(98, newY));
 
-            let newX = origPctX + dxPct;
-            let newY = origPctY + dyPct;
+            textObj.x = Math.round(newX * 10) / 10;
+            textObj.y = Math.round(newY * 10) / 10;
 
-            newX = Math.max(2, Math.min(98, Math.round(newX * 10) / 10));
-            newY = Math.max(2, Math.min(98, Math.round(newY * 10) / 10));
+            if (rafId) cancelAnimationFrame(rafId);
+            rafId = requestAnimationFrame(() => {
+                textNode.style.left = textObj.x + '%';
+                textNode.style.top = textObj.y + '%';
+            });
+        };
 
-            node.style.left = newX + '%';
-            node.style.top = newY + '%';
-            textObj.x = newX;
-            textObj.y = newY;
-        }
-
-        function onPointerUp(e) {
+        const onPointerUp = (e) => {
             if (!isDragging) return;
             isDragging = false;
-            node.removeEventListener('pointermove', onPointerMove);
-            node.removeEventListener('pointerup', onPointerUp);
-            node.removeEventListener('pointercancel', onPointerUp);
+            if (rafId) cancelAnimationFrame(rafId);
+            textNode.removeEventListener('pointermove', onPointerMove);
+            textNode.removeEventListener('pointerup', onPointerUp);
+            textNode.removeEventListener('pointercancel', onPointerUp);
+            saveState();
+        };
 
-            if (hasMoved) {
-                saveState();
-            }
-        }
-
-        node.addEventListener('pointerdown', onPointerDown);
-        node.addEventListener('dblclick', (e) => {
+        textNode.addEventListener('pointerdown', onPointerDown);
+        textNode.addEventListener('dblclick', (e) => {
             e.stopPropagation();
             editCourtTextNote(courtId, textObj.id);
         });
