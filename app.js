@@ -2043,14 +2043,42 @@
         });
     }
 
+    function getDrawingStepNum(drawing, drawingIndex, drawingsList) {
+        if (drawing.stepNum !== undefined && drawing.stepNum !== null && drawing.stepNum !== '') {
+            return String(drawing.stepNum);
+        }
+        let lineDrawings = (drawingsList || []).filter(d => d.type === 'pass' || d.type === 'shot' || d.type === 'run');
+        let idx = lineDrawings.indexOf(drawing);
+        return String(idx >= 0 ? (idx + 1) : (drawingIndex + 1));
+    }
+
+    function editLineStepNumber(courtId, lineId) {
+        const courtKey = getCourtKey(courtId);
+        const drawings = lineupDrawings[courtKey] || [];
+        const lineObj = drawings.find(d => d.id === lineId);
+        if (!lineObj) return;
+
+        const currentNum = getDrawingStepNum(lineObj, 0, drawings);
+        const newNum = prompt('Muokkaa piirroksen järjestysnumeroa / vaihetta (esim. 1, 2, 3... tai jätä tyhjäksi):', currentNum);
+        if (newNum !== null) {
+            lineObj.stepNum = newNum.trim();
+            saveState();
+            renderCourtBoards();
+            showToast(`Piirroksen numero päivitetty: #${lineObj.stepNum || '-'} ✏️`);
+        }
+    }
+
     function renderCourtLineNodesForInstance(courtId, layersEl) {
         const courtKey = getCourtKey(courtId);
         const drawings = lineupDrawings[courtKey] || lineupDrawings[activeLineupKey] || [];
         const lineDrawings = drawings.filter(d => d.type === 'pass' || d.type === 'shot' || d.type === 'run');
 
-        lineDrawings.forEach(lineObj => {
+        lineDrawings.forEach((lineObj, idx) => {
             const pts = lineObj.pointsPct;
             if (!pts || pts.length < 2) return;
+
+            const stepNum = getDrawingStepNum(lineObj, idx, lineDrawings);
+            if (!lineObj.stepNum) lineObj.stepNum = stepNum;
 
             const startPct = pts[0];
             const endPct = pts[pts.length - 1];
@@ -2072,11 +2100,18 @@
             lineNode.style.top = midPct.y + '%';
 
             lineNode.innerHTML = `
-                <div class="line-mid-handle ${handleClass}" title="Siirrä koko viivaa sormella/hiirellä">
-                    <span style="font-size: 0.72rem; line-height: 1;">${icon}</span>
-                    <button class="line-remove-btn" data-action="remove-line" data-line-id="${lineObj.id}" data-court-id="${courtId}">✕</button>
+                <div class="line-mid-handle ${handleClass}" title="Vaihe #${stepNum} - Kaksoisklikkaa muokataksesi numeroa. Siirrä vetämällä.">
+                    <span class="line-step-badge">${escapeHtml(stepNum)}</span>
+                    <span class="line-tool-icon">${icon}</span>
+                    <button class="line-edit-btn" data-action="edit-line-number" data-line-id="${lineObj.id}" data-court-id="${courtId}" title="Muokkaa numeroa">✏️</button>
+                    <button class="line-remove-btn" data-action="remove-line" data-line-id="${lineObj.id}" data-court-id="${courtId}" title="Poista viiva">✕</button>
                 </div>
             `;
+
+            lineNode.addEventListener('dblclick', (e) => {
+                e.stopPropagation();
+                editLineStepNumber(courtId, lineObj.id);
+            });
 
             setupLineMidpointDragging(lineNode, lineObj, courtId);
             layersEl.appendChild(lineNode);
@@ -2285,20 +2320,20 @@
                     renderCourtBoards();
                     showToast('Taktinen alue luotu! Työkalu pysyy aktiivisena 🔲');
                 } else {
-                    let color = '#38bdf8';
-                    if (tool === 'pass') color = '#eab308';
-                    if (tool === 'shot') color = '#ec4899';
+                    const existingLines = (lineupDrawings[courtKey] || []).filter(d => d.type === 'pass' || d.type === 'shot' || d.type === 'run');
+                    const nextStepNum = existingLines.length + 1;
 
                     lineupDrawings[courtKey].push({
                         id: 'draw_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
                         type: tool,
+                        stepNum: nextStepNum,
                         pointsPct: [...pathPct],
                         color: color
                     });
 
                     saveState();
                     renderCourtBoards();
-                    showToast(`${tool === 'pass' ? 'Syöttöviiva' : (tool === 'shot' ? 'Vetoviiva' : 'Juoksuviiva')} piirretty! Työkalu pysyy aktiivisena 🏒`);
+                    showToast(`${tool === 'pass' ? 'Syöttö' : (tool === 'shot' ? 'Veto' : 'Juoksu')} #${nextStepNum} piirretty! Työkalu pysyy aktiivisena 🏒`);
                 }
             }
             courtPathPctMap[courtId] = [];
@@ -2316,8 +2351,11 @@
         ctxEl.clearRect(0, 0, canvasEl.width, canvasEl.height);
         const courtKey = getCourtKey(courtId);
         const currentDrawings = lineupDrawings[courtKey] || lineupDrawings[activeLineupKey] || [];
-        currentDrawings.forEach(draw => {
+        currentDrawings.forEach((draw, idx) => {
             if (draw.type !== 'rect') {
+                if (!draw.stepNum) {
+                    draw.stepNum = getDrawingStepNum(draw, idx, currentDrawings);
+                }
                 renderPathOnCtx(ctxEl, canvasEl, draw, draw.type, draw.color);
             }
         });
@@ -2386,6 +2424,12 @@
             ctxEl.closePath();
             ctxEl.fill();
             ctxEl.restore();
+
+            if (drawObj.stepNum !== undefined && drawObj.stepNum !== null && drawObj.stepNum !== '') {
+                const midX = (start.x + end.x) / 2;
+                const midY = (start.y + end.y) / 2;
+                drawStepNumberBadgeOnCtx(ctxEl, midX, midY, String(drawObj.stepNum), color || '#eab308');
+            }
             return;
         }
 
@@ -2419,6 +2463,12 @@
             ctxEl.arc(end.x, end.y, 7, 0, 2 * Math.PI);
             ctxEl.stroke();
             ctxEl.restore();
+
+            if (drawObj.stepNum !== undefined && drawObj.stepNum !== null && drawObj.stepNum !== '') {
+                const midX = (start.x + end.x) / 2;
+                const midY = (start.y + end.y) / 2;
+                drawStepNumberBadgeOnCtx(ctxEl, midX, midY, String(drawObj.stepNum), color || '#ec4899');
+            }
             return;
         }
 
@@ -2447,7 +2497,31 @@
         ctxEl.lineTo(end.x - 16 * Math.cos(angle + Math.PI / 5), end.y - 16 * Math.sin(angle + Math.PI / 5));
         ctxEl.closePath();
         ctxEl.fill();
+        ctxEl.restore();
 
+        if (drawObj.stepNum !== undefined && drawObj.stepNum !== null && drawObj.stepNum !== '') {
+            const midIdx = Math.floor(points.length / 2);
+            const midX = points[midIdx].x;
+            const midY = points[midIdx].y;
+            drawStepNumberBadgeOnCtx(ctxEl, midX, midY, String(drawObj.stepNum), color || '#38bdf8');
+        }
+    }
+
+    function drawStepNumberBadgeOnCtx(ctxEl, x, y, text, borderColor) {
+        ctxEl.save();
+        ctxEl.beginPath();
+        ctxEl.arc(x, y, 11, 0, Math.PI * 2);
+        ctxEl.fillStyle = '#0f172a';
+        ctxEl.fill();
+        ctxEl.strokeStyle = borderColor || '#ffffff';
+        ctxEl.lineWidth = 2.5;
+        ctxEl.stroke();
+
+        ctxEl.fillStyle = '#ffffff';
+        ctxEl.font = 'bold 11px "Outfit", sans-serif';
+        ctxEl.textAlign = 'center';
+        ctxEl.textBaseline = 'middle';
+        ctxEl.fillText(text, x, y);
         ctxEl.restore();
     }
 
@@ -4232,16 +4306,18 @@
 
             // Add pressing run arrows
             lineupDrawings[courtKey].push({
+                id: 'preset_run_1',
                 type: 'run',
-                start: { x: 74, y: 24 },
-                end: { x: 86, y: 20 },
-                path: [{ x: 74, y: 24 }, { x: 86, y: 20 }]
+                stepNum: 1,
+                color: '#38bdf8',
+                pointsPct: [{ x: 74, y: 24 }, { x: 86, y: 20 }]
             });
             lineupDrawings[courtKey].push({
+                id: 'preset_run_2',
                 type: 'run',
-                start: { x: 74, y: 76 },
-                end: { x: 86, y: 80 },
-                path: [{ x: 74, y: 76 }, { x: 86, y: 80 }]
+                stepNum: 2,
+                color: '#38bdf8',
+                pointsPct: [{ x: 74, y: 76 }, { x: 86, y: 80 }]
             });
         } 
         else if (presetType === '2-1-2') {
@@ -4256,9 +4332,12 @@
             lineupCourtPositions[`${courtKey}_OH_${orientationMode}`] = { x: 65, y: 75 };
 
             lineupDrawings[courtKey].push({
+                id: 'preset_rect_1',
                 type: 'rect',
-                start: { x: 40, y: 18 },
-                end: { x: 62, y: 82 }
+                x: 40,
+                y: 18,
+                w: 22,
+                h: 64
             });
         }
         else if (presetType === '1-2-2') {
@@ -4286,17 +4365,21 @@
             // Ball at corner
             lineupBalls[courtKey] = [{ id: 'b_corner_' + Date.now(), x: 89, y: 16 }];
 
-            // Pass from corner to slot
+            // Pass from corner to slot (Step 1)
             lineupDrawings[courtKey].push({
+                id: 'preset_pass_1',
                 type: 'pass',
-                start: { x: 88, y: 16 },
-                end: { x: 71, y: 46 }
+                stepNum: 1,
+                color: '#eab308',
+                pointsPct: [{ x: 88, y: 16 }, { x: 71, y: 46 }]
             });
-            // Shot from slot to net
+            // Shot from slot to net (Step 2)
             lineupDrawings[courtKey].push({
+                id: 'preset_shot_2',
                 type: 'shot',
-                start: { x: 70, y: 46 },
-                end: { x: 88, y: 49 }
+                stepNum: 2,
+                color: '#ec4899',
+                pointsPct: [{ x: 70, y: 46 }, { x: 88, y: 49 }]
             });
         }
         else if (presetType === 'powerplay') {
@@ -4313,21 +4396,27 @@
             // Ball with left wing
             lineupBalls[courtKey] = [{ id: 'b_pp_' + Date.now(), x: 77, y: 18 }];
 
-            // Pass arrows
+            // Pass arrows (Steps 1, 2, 3)
             lineupDrawings[courtKey].push({
+                id: 'preset_pp_1',
                 type: 'pass',
-                start: { x: 76, y: 18 },
-                end: { x: 51, y: 28 }
+                stepNum: 1,
+                color: '#eab308',
+                pointsPct: [{ x: 76, y: 18 }, { x: 51, y: 28 }]
             });
             lineupDrawings[courtKey].push({
+                id: 'preset_pp_2',
                 type: 'pass',
-                start: { x: 50, y: 28 },
-                end: { x: 50, y: 72 }
+                stepNum: 2,
+                color: '#eab308',
+                pointsPct: [{ x: 50, y: 28 }, { x: 50, y: 72 }]
             });
             lineupDrawings[courtKey].push({
+                id: 'preset_pp_3',
                 type: 'pass',
-                start: { x: 50, y: 72 },
-                end: { x: 76, y: 82 }
+                stepNum: 3,
+                color: '#eab308',
+                pointsPct: [{ x: 50, y: 72 }, { x: 76, y: 82 }]
             });
         }
 
@@ -4603,6 +4692,34 @@
                     ctx.fill();
                 }
                 ctx.restore();
+
+                const stepNum = getDrawingStepNum(d, 0, drawings);
+                if (stepNum) {
+                    let midX, midY;
+                    if (d.type === 'pass' || d.type === 'shot') {
+                        midX = (start.x + end.x) / 2;
+                        midY = (start.y + end.y) / 2;
+                    } else {
+                        const midIdx = Math.floor(pts.length / 2);
+                        midX = pts[midIdx].x;
+                        midY = pts[midIdx].y;
+                    }
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.arc(midX, midY, 16, 0, Math.PI * 2);
+                    ctx.fillStyle = '#0f172a';
+                    ctx.fill();
+                    ctx.strokeStyle = d.color || '#38bdf8';
+                    ctx.lineWidth = 3.5;
+                    ctx.stroke();
+
+                    ctx.fillStyle = '#ffffff';
+                    ctx.font = 'bold 15px "Outfit", sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(String(stepNum), midX, midY);
+                    ctx.restore();
+                }
             }
         });
 
@@ -5212,6 +5329,14 @@
                     renderCourtBoards();
                     showToast('Taktinen alue poistettu.');
                 }
+                return;
+            }
+
+            const editLineNumberBtn = e.target.closest('[data-action="edit-line-number"]');
+            if (editLineNumberBtn) {
+                e.preventDefault();
+                e.stopPropagation();
+                editLineStepNumber(editLineNumberBtn.dataset.courtId, editLineNumberBtn.dataset.lineId);
                 return;
             }
 
