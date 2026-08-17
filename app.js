@@ -2498,12 +2498,10 @@
         const courtKey = getCourtKey(courtId);
         const currentDrawings = lineupDrawings[courtKey] || lineupDrawings[activeLineupKey] || [];
         currentDrawings.forEach((draw, idx) => {
-            if (draw.type !== 'rect') {
-                if (!draw.stepNum) {
-                    draw.stepNum = getDrawingStepNum(draw, idx, currentDrawings);
-                }
-                renderPathOnCtx(ctxEl, canvasEl, draw, draw.type, draw.color);
+            if (!draw.stepNum && draw.type !== 'rect') {
+                draw.stepNum = getDrawingStepNum(draw, idx, currentDrawings);
             }
+            renderPathOnCtx(ctxEl, canvasEl, draw, draw.type, draw.color);
         });
     }
 
@@ -2517,26 +2515,29 @@
 
     function renderPathOnCtx(ctxEl, canvasEl, drawObj, type, color) {
         const ptsPct = drawObj.pointsPct;
-        if (!ptsPct || ptsPct.length < 2) return;
-
         const canvasW = canvasEl.width;
         const canvasH = canvasEl.height;
 
-        const points = ptsPct.map(p => ({
-            x: (p.x / 100) * canvasW,
-            y: (p.y / 100) * canvasH
-        }));
-
         if (type === 'rect') {
-            const start = points[0];
-            const end = points[points.length - 1];
-            const x = Math.min(start.x, end.x);
-            const y = Math.min(start.y, end.y);
-            const w = Math.abs(end.x - start.x);
-            const h = Math.abs(end.y - start.y);
+            let x, y, w, h;
+            if (drawObj.x !== undefined && drawObj.w !== undefined) {
+                x = (drawObj.x / 100) * canvasW;
+                y = (drawObj.y / 100) * canvasH;
+                w = (drawObj.w / 100) * canvasW;
+                h = (drawObj.h / 100) * canvasH;
+            } else if (ptsPct && ptsPct.length >= 2) {
+                const p1 = ptsPct[0];
+                const p2 = ptsPct[ptsPct.length - 1];
+                x = (Math.min(p1.x, p2.x) / 100) * canvasW;
+                y = (Math.min(p1.y, p2.y) / 100) * canvasH;
+                w = (Math.abs(p2.x - p1.x) / 100) * canvasW;
+                h = (Math.abs(p2.y - p1.y) / 100) * canvasH;
+            } else {
+                return;
+            }
 
             ctxEl.save();
-            ctxEl.fillStyle = 'rgba(59, 130, 246, 0.22)';
+            ctxEl.fillStyle = 'rgba(59, 130, 246, 0.20)';
             ctxEl.strokeStyle = '#60a5fa';
             ctxEl.lineWidth = 2;
             ctxEl.setLineDash([6, 4]);
@@ -2545,6 +2546,13 @@
             ctxEl.restore();
             return;
         }
+
+        if (!ptsPct || ptsPct.length < 2) return;
+
+        const points = ptsPct.map(p => ({
+            x: (p.x / 100) * canvasW,
+            y: (p.y / 100) * canvasH
+        }));
 
         if (type === 'pass') {
             const start = points[0];
@@ -3246,6 +3254,10 @@
             rafId = requestAnimationFrame(() => {
                 rectNode.style.left = rectObj.x + '%';
                 rectNode.style.top = rectObj.y + '%';
+                const canvasEl = document.getElementById(`tactic-canvas-${courtId}`);
+                if (canvasEl && typeof canvasEl.getContext === 'function') {
+                    drawCanvasLinesForInstance(courtId, canvasEl, canvasEl.getContext('2d'));
+                }
             });
         };
 
@@ -3258,6 +3270,10 @@
             rectNode.removeEventListener('pointerup', onPointerUp);
             rectNode.removeEventListener('pointercancel', onPointerUp);
             saveState();
+            const canvasEl = document.getElementById(`tactic-canvas-${courtId}`);
+            if (canvasEl && typeof canvasEl.getContext === 'function') {
+                drawCanvasLinesForInstance(courtId, canvasEl, canvasEl.getContext('2d'));
+            }
         };
 
         rectNode.addEventListener('pointerdown', onPointerDown);
