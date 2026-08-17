@@ -734,6 +734,9 @@
             });
     }
 
+    let lastLoadedCloudPayloadString = '';
+    let isAnyDraggingActive = false;
+
     function listenToCloudFirestore(user) {
         if (!window.SalibandyFirebase || !window.SalibandyFirebase.isReady()) return;
         const db = window.SalibandyFirebase.getDb();
@@ -741,12 +744,17 @@
 
         if (unsubscribeFirestore) unsubscribeFirestore();
 
-        unsubscribeFirestore = userRef.onSnapshot((doc) => {
+        unsubscribeFirestore = userRef.onSnapshot({ includeMetadataChanges: true }, (doc) => {
+            if (doc.metadata && doc.metadata.hasPendingWrites) {
+                return;
+            }
+
             if (isCloudLoading) return;
 
             if (!doc.exists) {
                 isCloudLoading = true;
                 const initialPayload = buildFullCloudPayload();
+                lastLoadedCloudPayloadString = JSON.stringify(initialPayload);
                 userRef.set(initialPayload, { merge: true }).then(() => {
                     updateCloudSyncBadge(true);
                     isCloudLoading = false;
@@ -759,6 +767,14 @@
 
             const cloudData = doc.data();
             if (!cloudData) return;
+
+            const incomingStr = JSON.stringify(cloudData);
+            if (incomingStr === lastLoadedCloudPayloadString) {
+                return;
+            }
+            lastLoadedCloudPayloadString = incomingStr;
+
+            if (isAnyDraggingActive) return;
 
             if (!cloudData.rosters || !cloudData.lineups) {
                 const fullPayload = buildFullCloudPayload();
@@ -1052,19 +1068,26 @@
         }
     }
 
+    let cloudSyncDebounceTimer = null;
+
     function saveState() {
         saveStateLocalOnly();
 
-        if (currentUser && typeof window !== 'undefined' && window.SalibandyFirebase && window.SalibandyFirebase.isReady() && !isCloudLoading) {
-            const db = window.SalibandyFirebase.getDb();
-            const payload = buildFullCloudPayload();
-            db.collection('users').doc(currentUser.uid).set(payload, { merge: true })
-                .then(() => {
-                    updateCloudSyncBadge(true);
-                })
-                .catch(err => {
-                    console.warn('Cloud Firestore save error:', err);
-                });
+        if (currentUser && typeof window !== 'undefined' && window.SalibandyFirebase && window.SalibandyFirebase.isReady()) {
+            if (cloudSyncDebounceTimer) clearTimeout(cloudSyncDebounceTimer);
+            cloudSyncDebounceTimer = setTimeout(() => {
+                if (isCloudLoading) return;
+                const db = window.SalibandyFirebase.getDb();
+                const payload = buildFullCloudPayload();
+                lastLoadedCloudPayloadString = JSON.stringify(payload);
+                db.collection('users').doc(currentUser.uid).set(payload, { merge: true })
+                    .then(() => {
+                        updateCloudSyncBadge(true);
+                    })
+                    .catch(err => {
+                        console.warn('Cloud Firestore save error:', err);
+                    });
+            }, 3000);
         }
     }
 
@@ -2018,6 +2041,7 @@
             if (e.target.closest('button')) return;
 
             isDragging = true;
+            isAnyDraggingActive = true;
             try {
                 textNode.setPointerCapture(e.pointerId);
             } catch (err) {}
@@ -2056,6 +2080,7 @@
         const onPointerUp = (e) => {
             if (!isDragging) return;
             isDragging = false;
+            isAnyDraggingActive = false;
             if (rafId) cancelAnimationFrame(rafId);
             textNode.removeEventListener('pointermove', onPointerMove);
             textNode.removeEventListener('pointerup', onPointerUp);
@@ -2594,6 +2619,7 @@
             if (e.target.classList.contains('line-remove-btn')) return;
 
             isDragging = true;
+            isAnyDraggingActive = true;
             startPointer = { x: e.clientX, y: e.clientY };
             initialPts = JSON.parse(JSON.stringify(lineObj.pointsPct));
             lineNode.setPointerCapture(e.pointerId);
@@ -2645,6 +2671,7 @@
         const onPointerUp = (e) => {
             if (!isDragging) return;
             isDragging = false;
+            isAnyDraggingActive = false;
             if (rafId) cancelAnimationFrame(rafId);
             lineNode.removeEventListener('pointermove', onPointerMove);
             lineNode.removeEventListener('pointerup', onPointerUp);
@@ -2669,6 +2696,7 @@
             selectCourtElement(lineObj.id, endpointNode);
 
             isDragging = true;
+            isAnyDraggingActive = true;
             endpointNode.setPointerCapture(e.pointerId);
 
             endpointNode.addEventListener('pointermove', onPointerMove);
@@ -2707,6 +2735,7 @@
         const onPointerUp = (e) => {
             if (!isDragging) return;
             isDragging = false;
+            isAnyDraggingActive = false;
             if (rafId) cancelAnimationFrame(rafId);
             endpointNode.removeEventListener('pointermove', onPointerMove);
             endpointNode.removeEventListener('pointerup', onPointerUp);
@@ -2732,6 +2761,7 @@
             if (e.target.classList.contains('cone-remove-btn')) return;
             
             isDragging = true;
+            isAnyDraggingActive = true;
             coneNode.setPointerCapture(e.pointerId);
 
             coneNode.addEventListener('pointermove', onPointerMove);
@@ -2766,6 +2796,7 @@
         const onPointerUp = (e) => {
             if (!isDragging) return;
             isDragging = false;
+            isAnyDraggingActive = false;
             if (rafId) cancelAnimationFrame(rafId);
             coneNode.removeEventListener('pointermove', onPointerMove);
             coneNode.removeEventListener('pointerup', onPointerUp);
@@ -2787,6 +2818,7 @@
             if (e.target.classList.contains('opponent-remove-btn')) return;
             
             isDragging = true;
+            isAnyDraggingActive = true;
             oppNode.setPointerCapture(e.pointerId);
 
             oppNode.addEventListener('pointermove', onPointerMove);
@@ -2821,6 +2853,7 @@
         const onPointerUp = (e) => {
             if (!isDragging) return;
             isDragging = false;
+            isAnyDraggingActive = false;
             if (rafId) cancelAnimationFrame(rafId);
             oppNode.removeEventListener('pointermove', onPointerMove);
             oppNode.removeEventListener('pointerup', onPointerUp);
@@ -2878,6 +2911,7 @@
             lastTapTime = now;
 
             isDragging = true;
+            isAnyDraggingActive = true;
             hasMoved = false;
             startX = e.clientX;
             startY = e.clientY;
@@ -2918,6 +2952,7 @@
         const onPointerUp = (e) => {
             if (!isDragging) return;
             isDragging = false;
+            isAnyDraggingActive = false;
             if (rafId) cancelAnimationFrame(rafId);
             extraNode.removeEventListener('pointermove', onPointerMove);
             extraNode.removeEventListener('pointerup', onPointerUp);
@@ -3149,6 +3184,7 @@
             if (e.target.classList.contains('rect-remove-btn')) return;
 
             isDragging = true;
+            isAnyDraggingActive = true;
             startPointer = { x: e.clientX, y: e.clientY };
             startRectPos = { x: rectObj.x, y: rectObj.y };
             rectNode.setPointerCapture(e.pointerId);
@@ -3188,6 +3224,7 @@
         const onPointerUp = (e) => {
             if (!isDragging) return;
             isDragging = false;
+            isAnyDraggingActive = false;
             if (rafId) cancelAnimationFrame(rafId);
             rectNode.removeEventListener('pointermove', onPointerMove);
             rectNode.removeEventListener('pointerup', onPointerUp);
@@ -3209,6 +3246,7 @@
             if (e.target.classList.contains('ball-remove-btn')) return;
             
             isDragging = true;
+            isAnyDraggingActive = true;
             ballNode.setPointerCapture(e.pointerId);
 
             ballNode.addEventListener('pointermove', onPointerMove);
@@ -3243,6 +3281,7 @@
         const onPointerUp = (e) => {
             if (!isDragging) return;
             isDragging = false;
+            isAnyDraggingActive = false;
             if (rafId) cancelAnimationFrame(rafId);
             ballNode.removeEventListener('pointermove', onPointerMove);
             ballNode.removeEventListener('pointerup', onPointerUp);
@@ -3276,6 +3315,7 @@
             lastTapTime = now;
 
             isDragging = true;
+            isAnyDraggingActive = true;
             hasMoved = false;
             startX = e.clientX;
             startY = e.clientY;
@@ -3317,6 +3357,7 @@
         const onPointerUp = (e) => {
             if (!isDragging) return;
             isDragging = false;
+            isAnyDraggingActive = false;
             if (rafId) cancelAnimationFrame(rafId);
             node.removeEventListener('pointermove', onPointerMove);
             node.removeEventListener('pointerup', onPointerUp);
