@@ -1576,8 +1576,9 @@
             const curTeam = teams.find(t => t.id === currentTeamId) || {};
             const rinkWhiteClass = (curTeam.rinkColor === 'white') ? 'rink-white' : '';
 
+            const isFullscreen = (activeFullscreenCourtId === courtId);
             const card = document.createElement('div');
-            card.className = 'court-board-card';
+            card.className = `court-board-card ${isFullscreen ? 'is-fullscreen-court' : ''}`;
             card.dataset.courtId = courtId;
 
             card.innerHTML = `
@@ -1587,7 +1588,7 @@
                         <button class="btn-xs btn-outline" data-action="rename-court" data-court-id="${courtId}">✏️ Nimeä</button>
                     </div>
                     <div class="court-header-actions">
-                        <button class="btn-xs btn-outline highlight-fullscreen" data-action="toggle-fullscreen-court" data-court-id="${courtId}" title="Avaa kuvio koko ruudulle">⛶ Koko ruutu</button>
+                        <button class="btn-xs ${isFullscreen ? 'btn-primary' : 'btn-outline'} highlight-fullscreen" data-action="toggle-fullscreen-court" data-court-id="${courtId}" title="${isFullscreen ? 'Poistu koko ruudun tilasta (Esc)' : 'Avaa kuvio koko ruudulle'}">${isFullscreen ? '✕ Poistu kokoruudusta (Esc)' : '⛶ Koko ruutu'}</button>
                         <button class="btn-xs btn-outline" data-action="open-tactical-presets" data-court-id="${courtId}" title="Käytä valmista salibandykuviota (2-2-1, 2-1-2, YV)">⚡ Valmiit kuviot</button>
                         <button class="btn-xs btn-outline" data-action="export-court-png" data-court-id="${courtId}" title="Lataa kuvio terävänä PNG-kuvatiedostona">📸 Lataa kuva</button>
                         <button class="btn-xs btn-outline" data-action="duplicate-court" data-court-id="${courtId}" title="Monista tämä kuvio suoraan alapuolelle">📋 Kopioi kuvio</button>
@@ -2649,7 +2650,10 @@
             lineNode.removeEventListener('pointerup', onPointerUp);
             lineNode.removeEventListener('pointercancel', onPointerUp);
             saveState();
-            renderCourtBoards();
+            const canvasEl = document.getElementById(`tactic-canvas-${courtId}`);
+            if (canvasEl) drawCanvasLinesForInstance(courtId, canvasEl, canvasEl.getContext('2d'));
+            const layersEl = document.getElementById(`court-players-layer-${courtId}`);
+            if (layersEl) renderCourtNodesForInstance(courtId, layersEl);
         };
 
         lineNode.addEventListener('pointerdown', onPointerDown);
@@ -2708,7 +2712,10 @@
             endpointNode.removeEventListener('pointerup', onPointerUp);
             endpointNode.removeEventListener('pointercancel', onPointerUp);
             saveState();
-            renderCourtBoards();
+            const canvasEl = document.getElementById(`tactic-canvas-${courtId}`);
+            if (canvasEl) drawCanvasLinesForInstance(courtId, canvasEl, canvasEl.getContext('2d'));
+            const layersEl = document.getElementById(`court-players-layer-${courtId}`);
+            if (layersEl) renderCourtNodesForInstance(courtId, layersEl);
         };
 
         endpointNode.addEventListener('pointerdown', onPointerDown);
