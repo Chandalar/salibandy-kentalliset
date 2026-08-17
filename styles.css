@@ -1455,11 +1455,15 @@ body {
     position: relative;
     border-radius: 24px;
     overflow: hidden;
-    background: var(--court-bg);
+    background-color: #1e3a8a;
+    background: radial-gradient(circle at center, #1e3a8a 0%, #0d1624 100%);
     border: 3px solid rgba(255, 255, 255, 0.25);
     box-shadow: inset 0 0 30px rgba(0, 0, 0, 0.7), 0 8px 24px rgba(0,0,0,0.6);
     user-select: none;
-    transition: all 0.2s ease;
+    -webkit-user-select: none;
+    touch-action: pan-y pinch-zoom;
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
 }
 
 .pitch-container.mode-vertical {
@@ -1489,6 +1493,7 @@ body {
     width: 100%;
     height: 100%;
     z-index: 5;
+    background: transparent !important;
 }
 
 .court-surface {
@@ -1497,8 +1502,14 @@ body {
     left: 0;
     right: 0;
     bottom: 0;
+    width: 100%;
+    height: 100%;
+    background-color: #1e3a8a;
     background: radial-gradient(circle at center, #1e3a8a 0%, #0d1624 100%);
-    transition: background 0.25s ease;
+    pointer-events: none !important;
+    z-index: 1;
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
 }
 
 /* COURT COLOR THEMES (v38.0) */

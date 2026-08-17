@@ -689,6 +689,8 @@
         return {
             email: currentUser ? currentUser.email : '',
             updatedAt: serverTs,
+            _lastModifiedBy: clientInstanceId,
+            _lastModifiedAt: Date.now(),
             teams: teams,
             currentTeamId: currentTeamId,
             rosters: rostersMap,
@@ -734,6 +736,7 @@
             });
     }
 
+    const clientInstanceId = 'client_' + Date.now() + '_' + Math.random().toString(36).substr(2, 8);
     let lastLoadedCloudPayloadString = '';
     let isAnyDraggingActive = false;
 
@@ -745,6 +748,7 @@
         if (unsubscribeFirestore) unsubscribeFirestore();
 
         unsubscribeFirestore = userRef.onSnapshot({ includeMetadataChanges: true }, (doc) => {
+            // Ignore uncommitted local writes
             if (doc.metadata && doc.metadata.hasPendingWrites) {
                 return;
             }
@@ -768,13 +772,22 @@
             const cloudData = doc.data();
             if (!cloudData) return;
 
+            // If this snapshot was created by OUR OWN client instance, NEVER reload the DOM!
+            if (cloudData._lastModifiedBy === clientInstanceId) {
+                updateCloudSyncBadge(true);
+                return;
+            }
+
+            // If user is currently dragging or interacting on the screen, skip tearing down the DOM
+            if (isAnyDraggingActive) {
+                return;
+            }
+
             const incomingStr = JSON.stringify(cloudData);
             if (incomingStr === lastLoadedCloudPayloadString) {
                 return;
             }
             lastLoadedCloudPayloadString = incomingStr;
-
-            if (isAnyDraggingActive) return;
 
             if (!cloudData.rosters || !cloudData.lineups) {
                 const fullPayload = buildFullCloudPayload();
@@ -1747,7 +1760,10 @@
         renderCourtNodesForInstance(courtId, layersEl);
         drawCanvasLinesForInstance(courtId, canvasEl, ctxEl);
 
-        setupCourtCanvasDrawing(courtId, courtContainer, canvasEl, ctxEl);
+        if (!canvasEl._drawingEventsAttached) {
+            canvasEl._drawingEventsAttached = true;
+            setupCourtCanvasDrawing(courtId, courtContainer, canvasEl, ctxEl);
+        }
         setCourtDrawingTool(courtId, courtDrawingTools[courtId] || 'select');
 
         // Drag & drop receiver from left roster panel
@@ -2095,6 +2111,18 @@
         });
     }
 
+    function refreshCourtInstanceInPlace(courtId) {
+        const canvasEl = document.getElementById(`tactic-canvas-${courtId}`);
+        if (canvasEl && typeof canvasEl.getContext === 'function') {
+            const ctxEl = canvasEl.getContext('2d');
+            if (ctxEl) drawCanvasLinesForInstance(courtId, canvasEl, ctxEl);
+        }
+        const layersEl = document.getElementById(`court-players-layer-${courtId}`);
+        if (layersEl) {
+            renderCourtNodesForInstance(courtId, layersEl);
+        }
+    }
+
     function editCourtTextNote(courtId, textId) {
         const courtKey = getCourtKey(courtId);
         const list = lineupTextNotes[courtKey] || [];
@@ -2105,7 +2133,7 @@
         if (newText !== null && newText.trim() !== '') {
             textObj.text = newText.trim();
             saveState();
-            renderCourtBoards();
+            refreshCourtInstanceInPlace(courtId);
             showToast('Teksti päivitetty! ✏️');
         }
     }
@@ -2156,7 +2184,7 @@
         if (newNum !== null) {
             lineObj.stepNum = newNum.trim();
             saveState();
-            renderCourtBoards();
+            refreshCourtInstanceInPlace(courtId);
             showToast(`${typeLabel} numero päivitetty: #${lineObj.stepNum || '-'} ✏️`);
         }
     }
@@ -2240,7 +2268,7 @@
         });
 
         saveState();
-        renderCourtBoards();
+        refreshCourtInstanceInPlace(courtId);
         showToast('Salibandypallo lisätty kentälle! ⚪');
     }
 
@@ -2258,7 +2286,7 @@
         });
 
         saveState();
-        renderCourtBoards();
+        refreshCourtInstanceInPlace(courtId);
         showToast('Harjoitustötterö lisätty kentälle! 🔶');
     }
 
@@ -2278,7 +2306,7 @@
         });
 
         saveState();
-        renderCourtBoards();
+        refreshCourtInstanceInPlace(courtId);
         showToast('Vastustaja lisätty kentälle! 🔴');
     }
 
@@ -2983,7 +3011,7 @@
         };
         lineupExtraPlayers[courtKey].push(newExtraPlayer);
         saveState();
-        renderCourtBoards();
+        refreshCourtInstanceInPlace(courtId);
         showToast('Oma pelaaja lisätty kentälle! 🔵');
     }
 
@@ -3036,7 +3064,7 @@
         });
 
         saveState();
-        renderCourtBoards();
+        refreshCourtInstanceInPlace(courtId);
         showToast(`🎉 Kaikki ${roster.length} pelaajaa tuotu kentälle! Voit siirtää kaikkia vapaasti.`);
     }
 
@@ -3376,7 +3404,7 @@
         if (currentDrawings.length > 0) {
             currentDrawings.pop();
             saveState();
-            renderCourtBoards();
+            refreshCourtInstanceInPlace(courtId);
             showToast('Viimeisin piirros kumottu ↩️');
         } else {
             showToast('Ei piirroksia kumottavaksi tässä kentässä.');
@@ -5498,7 +5526,7 @@
                 lineupExtraPlayers[courtKey] = [];
                 lineupTextNotes[courtKey] = [];
                 saveState();
-                renderCourtBoards();
+                refreshCourtInstanceInPlace(courtId);
                 showToast('Piirtoalusta tyhjennetty.');
                 return;
             }
@@ -5578,10 +5606,15 @@
             if (removePlayerBtn) {
                 e.preventDefault();
                 const pos = removePlayerBtn.dataset.pos;
+                const courtId = removePlayerBtn.dataset.courtId;
                 if (lineups[activeLineupKey]) lineups[activeLineupKey][pos] = '';
                 saveState();
                 renderActiveLineupSlots();
-                renderCourtBoards();
+                if (courtId) {
+                    refreshCourtInstanceInPlace(courtId);
+                } else {
+                    renderCourtBoards();
+                }
                 return;
             }
 
@@ -5594,7 +5627,7 @@
                 if (lineupBalls[courtKey]) {
                     lineupBalls[courtKey] = lineupBalls[courtKey].filter(b => b.id !== ballId);
                     saveState();
-                    renderCourtBoards();
+                    refreshCourtInstanceInPlace(courtId);
                     showToast('Pallo poistettu.');
                 }
                 return;
@@ -5609,7 +5642,7 @@
                 if (lineupCones[courtKey]) {
                     lineupCones[courtKey] = lineupCones[courtKey].filter(c => c.id !== coneId);
                     saveState();
-                    renderCourtBoards();
+                    refreshCourtInstanceInPlace(courtId);
                     showToast('Tötterö poistettu.');
                 }
                 return;
@@ -5624,7 +5657,7 @@
                 if (lineupExtraPlayers[courtKey]) {
                     lineupExtraPlayers[courtKey] = lineupExtraPlayers[courtKey].filter(p => p.id !== extraId);
                     saveState();
-                    renderCourtBoards();
+                    refreshCourtInstanceInPlace(courtId);
                     showToast('Oma pelaaja poistettu.');
                 }
                 return;
@@ -5639,7 +5672,7 @@
                 if (lineupOpponents[courtKey]) {
                     lineupOpponents[courtKey] = lineupOpponents[courtKey].filter(o => o.id !== oppId);
                     saveState();
-                    renderCourtBoards();
+                    refreshCourtInstanceInPlace(courtId);
                     showToast('Vastustaja poistettu.');
                 }
                 return;
@@ -5654,7 +5687,7 @@
                 if (lineupDrawings[courtKey]) {
                     lineupDrawings[courtKey] = lineupDrawings[courtKey].filter(d => d.id !== rectId);
                     saveState();
-                    renderCourtBoards();
+                    refreshCourtInstanceInPlace(courtId);
                     showToast('Taktinen alue poistettu.');
                 }
                 return;
@@ -5677,7 +5710,7 @@
                 if (lineupDrawings[courtKey]) {
                     lineupDrawings[courtKey] = lineupDrawings[courtKey].filter(d => d.id !== lineId);
                     saveState();
-                    renderCourtBoards();
+                    refreshCourtInstanceInPlace(courtId);
                     showToast('Viiva poistettu.');
                 }
                 return;
@@ -5692,7 +5725,7 @@
                 if (lineupTextNotes[courtKey]) {
                     lineupTextNotes[courtKey] = lineupTextNotes[courtKey].filter(t => t.id !== textId);
                     saveState();
-                    renderCourtBoards();
+                    refreshCourtInstanceInPlace(courtId);
                     showToast('Teksti poistettu.');
                 }
                 return;
@@ -6553,13 +6586,27 @@
         });
 
         if (typeof window !== 'undefined') {
+            let resizeDebounceTimer = null;
             window.addEventListener('resize', () => {
-                const page = getCurrentPage();
-                if (page && page.courts) {
-                    page.courts.forEach(court => {
-                        initCourtBoardInstance(court.id);
-                    });
-                }
+                if (resizeDebounceTimer) clearTimeout(resizeDebounceTimer);
+                resizeDebounceTimer = setTimeout(() => {
+                    const page = getCurrentPage();
+                    if (page && page.courts) {
+                        page.courts.forEach(court => {
+                            const courtContainer = document.getElementById(`floorball-court-${court.id}`);
+                            const canvasEl = document.getElementById(`tactic-canvas-${court.id}`);
+                            if (courtContainer && canvasEl && typeof canvasEl.getContext === 'function') {
+                                const courtRect = courtContainer.getBoundingClientRect();
+                                if (courtRect.width > 0 && courtRect.height > 0) {
+                                    canvasEl.width = courtRect.width;
+                                    canvasEl.height = courtRect.height;
+                                    const ctxEl = canvasEl.getContext('2d');
+                                    if (ctxEl) drawCanvasLinesForInstance(court.id, canvasEl, ctxEl);
+                                }
+                            }
+                        });
+                    }
+                }, 120);
             });
 
             document.addEventListener('keydown', (e) => {
