@@ -1587,6 +1587,7 @@
                         <button class="btn-xs btn-outline" data-action="rename-court" data-court-id="${courtId}">✏️ Nimeä</button>
                     </div>
                     <div class="court-header-actions">
+                        <button class="btn-xs btn-outline highlight-fullscreen" data-action="toggle-fullscreen-court" data-court-id="${courtId}" title="Avaa kuvio koko ruudulle">⛶ Koko ruutu</button>
                         <button class="btn-xs btn-outline" data-action="open-tactical-presets" data-court-id="${courtId}" title="Käytä valmista salibandykuviota (2-2-1, 2-1-2, YV)">⚡ Valmiit kuviot</button>
                         <button class="btn-xs btn-outline" data-action="export-court-png" data-court-id="${courtId}" title="Lataa kuvio terävänä PNG-kuvatiedostona">📸 Lataa kuva</button>
                         <button class="btn-xs btn-outline" data-action="duplicate-court" data-court-id="${courtId}" title="Monista tämä kuvio suoraan alapuolelle">📋 Kopioi kuvio</button>
@@ -1723,6 +1724,7 @@
         drawCanvasLinesForInstance(courtId, canvasEl, ctxEl);
 
         setupCourtCanvasDrawing(courtId, courtContainer, canvasEl, ctxEl);
+        setCourtDrawingTool(courtId, courtDrawingTools[courtId] || 'select');
 
         // Drag & drop receiver from left roster panel
         courtContainer.ondragover = (e) => {
@@ -2356,9 +2358,15 @@
             drawPreviewPathForInstance(ctxEl, canvasEl, pathPct, tool);
         });
 
-        canvasEl.addEventListener('pointerup', () => {
+        canvasEl.addEventListener('pointerup', (e) => {
             if (!courtIsDrawingMap[courtId]) return;
             courtIsDrawingMap[courtId] = false;
+
+            try {
+                if (canvasEl.hasPointerCapture && canvasEl.hasPointerCapture(e.pointerId)) {
+                    canvasEl.releasePointerCapture(e.pointerId);
+                }
+            } catch (err) {}
 
             const tool = courtDrawingTools[courtId] || 'select';
             const courtKey = getCourtKey(courtId);
@@ -2386,7 +2394,10 @@
                     });
 
                     saveState();
-                    renderCourtBoards();
+                    drawCanvasLinesForInstance(courtId, canvasEl, ctxEl);
+                    const layersEl = document.getElementById(`court-players-layer-${courtId}`);
+                    if (layersEl) renderCourtNodesForInstance(courtId, layersEl);
+                    setCourtDrawingTool(courtId, tool);
                     showToast('Taktinen alue luotu! Työkalu pysyy aktiivisena 🔲');
                 } else {
                     let color = '#38bdf8';
@@ -2405,7 +2416,10 @@
                     });
 
                     saveState();
-                    renderCourtBoards();
+                    drawCanvasLinesForInstance(courtId, canvasEl, ctxEl);
+                    const layersEl = document.getElementById(`court-players-layer-${courtId}`);
+                    if (layersEl) renderCourtNodesForInstance(courtId, layersEl);
+                    setCourtDrawingTool(courtId, tool);
                     showToast(`${tool === 'pass' ? 'Syöttö' : (tool === 'shot' ? 'Veto' : 'Liike')} #${nextStepNum} piirretty! Työkalu pysyy aktiivisena 🏒`);
                 }
             }
@@ -2413,8 +2427,13 @@
             drawCanvasLinesForInstance(courtId, canvasEl, ctxEl);
         });
 
-        canvasEl.addEventListener('pointercancel', () => {
+        canvasEl.addEventListener('pointercancel', (e) => {
             courtIsDrawingMap[courtId] = false;
+            try {
+                if (canvasEl.hasPointerCapture && canvasEl.hasPointerCapture(e.pointerId)) {
+                    canvasEl.releasePointerCapture(e.pointerId);
+                }
+            } catch (err) {}
             courtPathPctMap[courtId] = [];
             drawCanvasLinesForInstance(courtId, canvasEl, ctxEl);
         });
@@ -5088,6 +5107,46 @@
         showToast('📸 Kenttäkuva ladattu laitteellesi (PNG)!');
     }
 
+    let activeFullscreenCourtId = null;
+
+    function toggleFullscreenCourt(courtId) {
+        const card = document.querySelector(`.court-board-card[data-court-id="${courtId}"]`);
+        if (!card) return;
+
+        const isFullscreen = card.classList.toggle('is-fullscreen-court');
+        activeFullscreenCourtId = isFullscreen ? courtId : null;
+
+        const btn = card.querySelector('[data-action="toggle-fullscreen-court"]');
+        if (btn) {
+            if (isFullscreen) {
+                btn.innerHTML = '✕ Poistu kokoruudusta (Esc)';
+                btn.className = 'btn-xs btn-primary highlight-fullscreen';
+            } else {
+                btn.innerHTML = '⛶ Koko ruutu';
+                btn.className = 'btn-xs btn-outline highlight-fullscreen';
+            }
+        }
+
+        // Re-scale canvas dimensions and re-draw lines
+        setTimeout(() => {
+            const canvasEl = document.getElementById(`tactic-canvas-${courtId}`);
+            const courtContainer = document.getElementById(`floorball-court-${courtId}`);
+            if (canvasEl && courtContainer) {
+                const rect = courtContainer.getBoundingClientRect();
+                if (rect.width > 0 && rect.height > 0) {
+                    canvasEl.width = rect.width;
+                    canvasEl.height = rect.height;
+                    const ctxEl = canvasEl.getContext('2d');
+                    if (ctxEl) drawCanvasLinesForInstance(courtId, canvasEl, ctxEl);
+                }
+            }
+        }, 60);
+
+        if (isFullscreen) {
+            showToast('Koko ruudun piirtotila aktivoitu! ⛶ (Paina Esc poistuaksesi)');
+        }
+    }
+
     function openPhotoModal() {
         const fileDropArea = document.getElementById('file-drop-area');
         const ocrStatus = document.getElementById('ocr-status');
@@ -5355,6 +5414,13 @@
             if (renameCourtBtn) {
                 e.preventDefault();
                 renameCourtBoard(renameCourtBtn.dataset.courtId);
+                return;
+            }
+
+            const toggleFullscreenBtn = e.target.closest('[data-action="toggle-fullscreen-court"]');
+            if (toggleFullscreenBtn) {
+                e.preventDefault();
+                toggleFullscreenCourt(toggleFullscreenBtn.dataset.courtId);
                 return;
             }
 
@@ -6445,6 +6511,12 @@
                     page.courts.forEach(court => {
                         initCourtBoardInstance(court.id);
                     });
+                }
+            });
+
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' && activeFullscreenCourtId) {
+                    toggleFullscreenCourt(activeFullscreenCourtId);
                 }
             });
         }
