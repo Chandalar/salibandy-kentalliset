@@ -597,25 +597,15 @@
             btn.classList.toggle('active', btn.getAttribute('data-mobile-tab') === tab);
         });
 
-        // If switching to court, re-render courts to fix canvas sizing
+        // If switching to court, re-initialize all courts properly with full canvas, tools and nodes
         if (tab === 'court') {
             requestAnimationFrame(() => {
-                document.querySelectorAll('[id^="floorball-court-"]').forEach(courtEl => {
-                    const courtId = courtEl.id.replace('floorball-court-', '');
-                    const canvasEl = document.getElementById(`tactic-canvas-${courtId}`);
-                    if (canvasEl && typeof canvasEl.getContext === 'function') {
-                        const courtContainer = courtEl;
-                        const courtRect = courtContainer.getBoundingClientRect();
-                        const dpr = window.devicePixelRatio || 1;
-                        canvasEl.width = courtRect.width * dpr;
-                        canvasEl.height = courtRect.height * dpr;
-                        canvasEl.style.width = courtRect.width + 'px';
-                        canvasEl.style.height = courtRect.height + 'px';
-                        const ctxEl = canvasEl.getContext('2d');
-                        ctxEl.setTransform(dpr, 0, 0, dpr, 0, 0);
-                        drawCanvasLinesForInstance(courtId, canvasEl, ctxEl);
-                    }
-                });
+                const page = getCurrentPage();
+                if (page && page.courts) {
+                    page.courts.forEach(court => {
+                        initCourtBoardInstance(court.id);
+                    });
+                }
             });
         }
 
@@ -2021,12 +2011,24 @@
         let courtRect = courtContainer.getBoundingClientRect();
 
         if (courtRect.width === 0 || courtRect.height === 0) {
-            setTimeout(() => initCourtBoardInstance(courtId), 60);
-            return;
+            const panelEl = courtContainer.closest('.pitch-panel');
+            if (panelEl && window.getComputedStyle(panelEl).display === 'none') {
+                // Pitch panel is currently hidden by mobile tab, skip until tab is activated
+                return;
+            }
+            const parentWidth = courtContainer.parentElement ? courtContainer.parentElement.clientWidth : 0;
+            if (parentWidth > 0) {
+                courtRect = { width: parentWidth, height: Math.round(parentWidth * (orientationMode === 'vertical' ? 1.8 : 0.5)) };
+            } else {
+                setTimeout(() => initCourtBoardInstance(courtId), 50);
+                return;
+            }
         }
 
         canvasEl.width = courtRect.width;
         canvasEl.height = courtRect.height;
+        canvasEl.style.width = courtRect.width + 'px';
+        canvasEl.style.height = courtRect.height + 'px';
 
         renderCourtNodesForInstance(courtId, layersEl);
         drawCanvasLinesForInstance(courtId, canvasEl, ctxEl);
@@ -2637,7 +2639,7 @@
                         y: yPct
                     });
                     saveState();
-                    renderCourtBoards();
+                    refreshCourtInstanceInPlace(courtId);
                     showToast('Teksti lisätty kentälle! 📝');
                 }
                 return;
@@ -3198,7 +3200,7 @@
                 if (newLabel !== null && newLabel.trim() !== '') {
                     extraObj.label = newLabel.trim();
                     saveState();
-                    renderCourtBoards();
+                    refreshCourtInstanceInPlace(courtId);
                 }
             }
         };
@@ -3352,7 +3354,19 @@
         const currentVal = (lineupGridPaper[courtKey] !== undefined) ? lineupGridPaper[courtKey] : (activeLineupKey === 'freeform');
         lineupGridPaper[courtKey] = !currentVal;
         saveState();
-        renderCourtBoards();
+        const courtContainer = document.getElementById(`floorball-court-${courtId}`);
+        const cardEl = document.querySelector(`.court-board-card[data-court-id="${courtId}"]`);
+        if (courtContainer && cardEl) {
+            courtContainer.classList.toggle('mode-grid-paper', lineupGridPaper[courtKey]);
+            const btn = cardEl.querySelector('.tool-btn.highlight-grid-paper');
+            if (btn) btn.classList.toggle('active', lineupGridPaper[courtKey]);
+            const canvasEl = document.getElementById(`tactic-canvas-${courtId}`);
+            if (canvasEl && typeof canvasEl.getContext === 'function') {
+                drawCanvasLinesForInstance(courtId, canvasEl, canvasEl.getContext('2d'));
+            }
+        } else {
+            renderCourtBoards();
+        }
         showToast(lineupGridPaper[courtKey] ? '📐 Ruutupaperipohja aktivoitu!' : '🏟️ Vakiokenttäpohja aktivoitu!');
     }
 
