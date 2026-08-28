@@ -1,9 +1,9 @@
 /* ============================================================
-   SERVICE WORKER – Kentälliset PWA v39.3
+   SERVICE WORKER – Kentälliset PWA v39.4
    Offline-first caching for installable floorball lineup app
    ============================================================ */
 
-const CACHE_NAME = 'kentalliset-v39.3';
+const CACHE_NAME = 'kentalliset-v39.4';
 const APP_SHELL = [
     '/',
     '/index.html',
@@ -23,10 +23,10 @@ const RUNTIME_CACHE = 'kentalliset-runtime-v1';
 
 // ── Install: Precache app shell ──
 self.addEventListener('install', (event) => {
+    self.skipWaiting();
     event.waitUntil(
         caches.open(CACHE_NAME)
             .then(cache => cache.addAll(APP_SHELL))
-            .then(() => self.skipWaiting())
     );
 });
 
@@ -42,7 +42,7 @@ self.addEventListener('activate', (event) => {
     );
 });
 
-// ── Fetch: Stale-while-revalidate for app shell, cache-first for fonts ──
+// ── Fetch: Network-first for HTML/Navigation, Stale-while-revalidate for assets ──
 self.addEventListener('fetch', (event) => {
     const url = new URL(event.request.url);
 
@@ -93,28 +93,35 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
-    // App shell files: Stale-while-revalidate
-    event.respondWith(
-        caches.open(CACHE_NAME).then(cache =>
-            cache.match(event.request).then(cached => {
-                const fetchPromise = fetch(event.request).then(networkResponse => {
+    // HTML / Navigation requests: Network-First with Cache fallback
+    if (event.request.mode === 'navigate' || url.pathname.endsWith('.html') || url.pathname === '/') {
+        event.respondWith(
+            fetch(event.request)
+                .then(networkResponse => {
                     if (networkResponse.ok) {
-                        cache.put(event.request, networkResponse.clone());
+                        const clone = networkResponse.clone();
+                        caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
                     }
                     return networkResponse;
-                }).catch(() => {
-                    // Network failed, return cached or fallback to index
-                    if (cached) return cached;
-                    if (event.request.mode === 'navigate') {
-                        return cache.match('/index.html');
-                    }
-                    return new Response('Offline', { status: 503 });
-                });
+                })
+                .catch(() => {
+                    return caches.match(event.request).then(cached => cached || caches.match('/index.html'));
+                })
+        );
+        return;
+    }
 
-                // Return cached immediately, update in background
-                return cached || fetchPromise;
+    // App shell static files (JS, CSS, images): Network with Cache fallback
+    event.respondWith(
+        fetch(event.request)
+            .then(networkResponse => {
+                if (networkResponse.ok) {
+                    const clone = networkResponse.clone();
+                    caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+                }
+                return networkResponse;
             })
-        )
+            .catch(() => caches.match(event.request))
     );
 });
 

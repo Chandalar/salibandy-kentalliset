@@ -2260,6 +2260,7 @@ body[data-court-color="grid"] .faceoff-dot {
     height: 100%;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
+    padding: 0.5rem 0.5rem 2.5rem 0.5rem;
 }
 
 .summary-actions {
