@@ -16,8 +16,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 
-    <!-- CSS Stylesheet (Cache Busted v39.2) -->
-    <link rel="stylesheet" href="styles.css?v=39.2">
+    <!-- CSS Stylesheet (Cache Busted v39.3) -->
+    <link rel="stylesheet" href="styles.css?v=39.3">
 
     <!-- OCR Tesseract.js (Optinen tekstintunnistus valokuvista) -->
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4.1.1/dist/tesseract.min.js"></script>
@@ -248,6 +248,32 @@
 
             <div class="summary-grid-container" id="summary-grid-container">
                 <!-- Dynamic Summary Lineup Cards -->
+            </div>
+
+            <!-- SUMMARY ROSTER PLAYER BANK (Valitse ja aseta pelaajia kentällisiin) -->
+            <div class="summary-roster-section" id="summary-roster-section">
+                <div class="summary-roster-header">
+                    <div class="summary-roster-title-wrapper">
+                        <h3>👥 Pelaajapankki (Valitse ja sijoita pelaajia kentällisiin)</h3>
+                        <span class="summary-roster-subtitle">Klikkaa pelaajaa sijoittaaksesi hänet kentälliseen, tai raahaa kortti suoraan yläpuolen ruutuun!</span>
+                    </div>
+                    <div class="summary-roster-controls">
+                        <input type="text" id="summary-roster-search" class="search-input" placeholder="Hae pelaajaa nimellä tai numerolla...">
+                        <div class="filter-pills" id="summary-filter-pills">
+                            <button class="pill-btn active" data-summary-filter="all">Kaikki</button>
+                            <button class="pill-btn highlight-unassigned" data-summary-filter="unassigned">🟡 Vapaana (Ei kentässä)</button>
+                            <button class="pill-btn pill-mv" data-summary-filter="mv">🟢 MV</button>
+                            <button class="pill-btn pill-vp" data-summary-filter="vp">VP</button>
+                            <button class="pill-btn pill-op" data-summary-filter="op">OP</button>
+                            <button class="pill-btn pill-vh" data-summary-filter="vh">VH</button>
+                            <button class="pill-btn pill-kh" data-summary-filter="kh">KH</button>
+                            <button class="pill-btn pill-oh" data-summary-filter="oh">OH</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="summary-roster-grid" id="summary-roster-grid">
+                    <!-- Dynamic Player Cards -->
+                </div>
             </div>
         </section>
 
@@ -934,6 +960,23 @@
         </div>
     </div>
 
+    <!-- ASSIGN PLAYER TO LINEUP MODAL (Yhteenvetonäkymästä) -->
+    <div class="modal-overlay" id="assign-player-modal">
+        <div class="modal-card modal-large">
+            <div class="modal-header">
+                <h3 id="assign-player-modal-title">Sijoita pelaaja kentälliseen</h3>
+                <button class="close-btn" id="btn-close-assign-player-modal">&times;</button>
+            </div>
+            <div class="assign-player-body" id="assign-player-body" style="max-height: 60vh; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;">
+                <!-- Dynamic lineup rows and position buttons -->
+            </div>
+            <div class="modal-actions" style="margin-top: 1rem; display: flex; justify-content: space-between; align-items: center;">
+                <button type="button" class="btn btn-outline danger-text" id="btn-remove-player-all-lineups">🚫 Poista kaikista kentistä</button>
+                <button type="button" class="btn btn-outline" id="btn-close-assign-player-bottom">Sulje</button>
+            </div>
+        </div>
+    </div>
+
     <!-- MOBILE BOTTOM NAVIGATION (visible only in mobile-ui mode) -->
     <nav class="mobile-bottom-nav" id="mobile-bottom-nav">
         <button class="mobile-nav-btn active" data-mobile-tab="court">
@@ -970,9 +1013,9 @@
     <!-- TOAST NOTIFICATION CONTAINER -->
     <div id="toast" class="toast-notification"></div>
 
-    <!-- Firebase Config & App Engine (Cache Busted v39.2) -->
-    <script src="firebase-config.js?v=39.2"></script>
-    <script src="app.js?v=39.2"></script>
+    <!-- Firebase Config & App Engine (Cache Busted v39.3) -->
+    <script src="firebase-config.js?v=39.3"></script>
+    <script src="app.js?v=39.3"></script>
 
 </body>
 </html>

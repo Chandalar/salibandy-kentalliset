@@ -193,6 +193,9 @@
     let tempOcrParsedPlayers = [];
     let selectedPlayerForAssignment = null;
     let selectedSlotTarget = { lineupKey: '', pos: '' };
+    let summaryRosterFilter = 'all';
+    let summaryRosterSearchQuery = '';
+    let activeAssigningPlayerId = null;
 
     function getCourtKey(courtId) {
         return `${activeLineupKey}_${activePageId}_${courtId}`;
@@ -4078,7 +4081,7 @@
     }
 
     // ==========================================
-    // SUMMARY VIEW (Kaikki kentälliset rinnakkain)
+    // SUMMARY VIEW (Kaikki kentälliset rinnakkain + Pelaajapankki)
     // ==========================================
     function renderSummaryView() {
         const summaryGridContainer = document.getElementById('summary-grid-container');
@@ -4105,7 +4108,7 @@
 
                 if (player) {
                     slotsHtml += `
-                        <div class="summary-slot-row ${rowClass}" data-lineup="${lKey}" data-pos="${pos}">
+                        <div class="summary-slot-row ${rowClass}" data-lineup="${lKey}" data-pos="${pos}" title="Klikkaa vaihtaaksesi pelaajaa, tai raahaa uusi pelaaja tähän!">
                             <span class="summary-pos-tag">${pos}</span>
                             <span class="summary-p-num">#${player.number}</span>
                             <span class="summary-p-name">${escapeHtml(player.name)}</span>
@@ -4115,7 +4118,7 @@
                     `;
                 } else {
                     slotsHtml += `
-                        <div class="summary-slot-row is-empty" data-lineup="${lKey}" data-pos="${pos}">
+                        <div class="summary-slot-row is-empty" data-lineup="${lKey}" data-pos="${pos}" title="Klikkaa valitaksesi pelaajan, tai raahaa pelaaja alapuolelta tähän!">
                             <span class="summary-pos-tag">${pos}</span>
                             <span class="summary-empty-text">+ Valitse ${pos}</span>
                         </div>
@@ -4167,6 +4170,31 @@
                 </div>
             `;
 
+            // Setup drag & drop targets on each slot row
+            col.querySelectorAll('.summary-slot-row').forEach(row => {
+                row.ondragover = (e) => {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
+                    row.style.background = 'rgba(59, 130, 246, 0.35)';
+                    row.style.borderColor = '#60a5fa';
+                };
+                row.ondragleave = () => {
+                    row.style.background = '';
+                    row.style.borderColor = '';
+                };
+                row.ondrop = (e) => {
+                    e.preventDefault();
+                    row.style.background = '';
+                    row.style.borderColor = '';
+                    const playerId = e.dataTransfer ? e.dataTransfer.getData('text/plain') : null;
+                    const lk = row.dataset.lineup;
+                    const pos = row.dataset.pos;
+                    if (playerId && lk && pos && pos !== 'general') {
+                        assignPlayerToLineupSlot(lk, pos, playerId);
+                    }
+                };
+            });
+
             summaryGridContainer.appendChild(col);
         });
 
@@ -4206,11 +4234,267 @@
                 if (lk && pos && pos !== 'general') openSlotPickerModal(lk, pos);
             });
         });
+
+        // Render lower player bank
+        renderSummaryRosterGrid();
     }
 
-    // ==========================================
-    // MODALS & PICKERS
-    // ==========================================
+    function renderSummaryRosterGrid() {
+        const grid = document.getElementById('summary-roster-grid');
+        if (!grid) return;
+        grid.innerHTML = '';
+
+        const posKeys = ['MV', 'VP', 'OP', 'VH', 'KH', 'OH'];
+        const displayConfigs = lineupConfigs.filter(c => c.id !== 'custom' && c.id !== 'freeform' && c.type !== 'drawing_only');
+
+        // Calculate player assignments across all active lineups
+        const playerAssignments = {};
+        roster.forEach(p => { playerAssignments[p.id] = []; });
+
+        displayConfigs.forEach(cConfig => {
+            const lk = cConfig.id;
+            const lName = cConfig.name;
+            const curLineup = lineups[lk] || {};
+            posKeys.forEach(pos => {
+                const pid = curLineup[pos];
+                if (pid && playerAssignments[pid]) {
+                    playerAssignments[pid].push({ lineupKey: lk, lineupName: lName, pos: pos });
+                }
+                const reserves = getPosReserves(lk, pos);
+                if (reserves && Array.isArray(reserves)) {
+                    reserves.forEach(rId => {
+                        if (playerAssignments[rId]) {
+                            playerAssignments[rId].push({ lineupKey: lk, lineupName: lName, pos: `↳${pos}` });
+                        }
+                    });
+                }
+            });
+            const genReserves = getGeneralReserves(lk);
+            if (genReserves && Array.isArray(genReserves)) {
+                genReserves.forEach(rId => {
+                    if (playerAssignments[rId]) {
+                        playerAssignments[rId].push({ lineupKey: lk, lineupName: lName, pos: '🪑VM' });
+                    }
+                });
+            }
+        });
+
+        // Filter players
+        let filtered = roster.filter(p => {
+            if (summaryRosterSearchQuery) {
+                const q = summaryRosterSearchQuery.toLowerCase();
+                const match = (p.name && p.name.toLowerCase().includes(q)) || 
+                              (String(p.number).includes(q)) ||
+                              (p.position && p.position.toLowerCase().includes(q));
+                if (!match) return false;
+            }
+
+            if (summaryRosterFilter === 'unassigned') {
+                return (playerAssignments[p.id] || []).length === 0;
+            }
+            if (summaryRosterFilter === 'mv') return p.position === 'MV';
+            if (summaryRosterFilter === 'vp') return p.position === 'VP';
+            if (summaryRosterFilter === 'op') return p.position === 'OP';
+            if (summaryRosterFilter === 'vh') return p.position === 'VH';
+            if (summaryRosterFilter === 'kh') return p.position === 'KH';
+            if (summaryRosterFilter === 'oh') return p.position === 'OH';
+            return true;
+        });
+
+        // Sort: unassigned first, then by number
+        filtered.sort((a, b) => {
+            const aUnassigned = (playerAssignments[a.id] || []).length === 0 ? 0 : 1;
+            const bUnassigned = (playerAssignments[b.id] || []).length === 0 ? 0 : 1;
+            if (aUnassigned !== bUnassigned) return aUnassigned - bUnassigned;
+            return a.number - b.number;
+        });
+
+        // Update unassigned count in filter pill
+        const unassignedCount = roster.filter(p => (playerAssignments[p.id] || []).length === 0).length;
+        const unassignedBtn = document.querySelector('[data-summary-filter="unassigned"]');
+        if (unassignedBtn) {
+            unassignedBtn.textContent = `🟡 Vapaat (${unassignedCount})`;
+        }
+
+        if (filtered.length === 0) {
+            grid.innerHTML = '<div style="grid-column: 1 / -1; padding: 1.5rem; text-align: center; color: var(--text-secondary);">Ei hakuehtoja vastaavia pelaajia.</div>';
+            return;
+        }
+
+        filtered.forEach(p => {
+            const assigns = playerAssignments[p.id] || [];
+            const isUnassigned = assigns.length === 0;
+            const isMv = p.position === 'MV';
+
+            const card = document.createElement('div');
+            card.className = `summary-player-card ${isMv ? 'is-mv' : 'is-field'} ${isUnassigned ? 'is-unassigned' : 'is-assigned'}`;
+            card.draggable = true;
+            card.dataset.playerId = p.id;
+            card.title = `Klikkaa sijoittaaksesi pelaajan kentälliseen, tai raahaa yläpuolen ruutuun!`;
+
+            let assignTagsHtml = '';
+            if (isUnassigned) {
+                assignTagsHtml = `<span class="summary-unassigned-tag">🟡 Ei kentällisessä</span>`;
+            } else {
+                assigns.forEach(a => {
+                    const shortName = a.lineupName.replace('Kenttä', 'K.').replace('Ylivoima (YV)', 'YV').replace('Alivoima (AV)', 'AV');
+                    assignTagsHtml += `<span class="summary-assign-tag" title="${escapeHtml(a.lineupName)}: ${a.pos}">${escapeHtml(shortName)}: ${a.pos}</span>`;
+                });
+            }
+
+            card.innerHTML = `
+                <div class="summary-p-badge">#${p.number}</div>
+                <div class="summary-p-details">
+                    <div class="summary-p-name-row">
+                        <span class="summary-p-name">${escapeHtml(p.name)}</span>
+                        <span class="summary-p-pos-tag">${p.position}</span>
+                        ${p.isLoan ? '<span class="loan-pill-tiny">⭐</span>' : ''}
+                    </div>
+                    <div class="summary-p-assignments">
+                        ${assignTagsHtml}
+                    </div>
+                </div>
+            `;
+
+            card.addEventListener('dragstart', (e) => {
+                e.dataTransfer.setData('text/plain', p.id);
+                card.classList.add('is-dragging');
+            });
+            card.addEventListener('dragend', () => {
+                card.classList.remove('is-dragging');
+            });
+
+            card.addEventListener('click', () => {
+                openAssignPlayerToLineupModal(p);
+            });
+
+            grid.appendChild(card);
+        });
+    }
+
+    function openAssignPlayerToLineupModal(player) {
+        activeAssigningPlayerId = player.id;
+        const modal = document.getElementById('assign-player-modal');
+        const titleEl = document.getElementById('assign-player-modal-title');
+        const bodyEl = document.getElementById('assign-player-body');
+        if (!modal || !bodyEl) return;
+
+        if (titleEl) {
+            titleEl.innerHTML = `🏒 Sijoita: <strong>#${player.number} ${escapeHtml(player.name)}</strong> <span class="pos-badge">${player.position}</span>`;
+        }
+
+        const posKeys = ['MV', 'VP', 'OP', 'VH', 'KH', 'OH'];
+        const displayConfigs = lineupConfigs.filter(c => c.id !== 'custom' && c.id !== 'freeform' && c.type !== 'drawing_only');
+
+        let html = '';
+        displayConfigs.forEach(cConfig => {
+            const lk = cConfig.id;
+            const lName = cConfig.name;
+            const curLineup = lineups[lk] || {};
+
+            let buttonsHtml = '';
+            posKeys.forEach(pos => {
+                const currentPid = curLineup[pos];
+                const isThisPlayer = (currentPid === player.id);
+                const otherPlayer = currentPid ? roster.find(p => p.id === currentPid) : null;
+                const occLabel = otherPlayer && !isThisPlayer ? ` (#${otherPlayer.number})` : '';
+
+                buttonsHtml += `
+                    <button class="assign-pos-btn ${isThisPlayer ? 'is-active' : ''}" data-lineup="${lk}" data-pos="${pos}">
+                        ${pos}${occLabel}${isThisPlayer ? ' ✓' : ''}
+                    </button>
+                `;
+            });
+
+            // Varamies button
+            const posReserves = getPosReserves(lk, player.position) || [];
+            const isReserve = posReserves.includes(player.id);
+            buttonsHtml += `
+                <button class="assign-pos-btn ${isReserve ? 'is-active' : ''}" data-lineup="${lk}" data-pos="reserve_${player.position}">
+                    ↳ VM (${player.position})${isReserve ? ' ✓' : ''}
+                </button>
+            `;
+
+            html += `
+                <div class="assign-lineup-row">
+                    <div class="assign-lineup-row-title">
+                        <span>${escapeHtml(lName)}</span>
+                    </div>
+                    <div class="assign-btn-group">
+                        ${buttonsHtml}
+                    </div>
+                </div>
+            `;
+        });
+
+        bodyEl.innerHTML = html;
+
+        bodyEl.querySelectorAll('.assign-pos-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const lk = e.currentTarget.dataset.lineup;
+                const pos = e.currentTarget.dataset.pos;
+                if (!lk || !pos) return;
+
+                if (pos.startsWith('reserve_')) {
+                    const rPos = pos.replace('reserve_', '');
+                    const curRes = getPosReserves(lk, rPos) || [];
+                    if (curRes.includes(player.id)) {
+                        removePosReserve(lk, rPos, player.id);
+                        showToast(`Pelaaja poistettu kentän ${getLineupName(lk)} varapaikalta.`);
+                    } else {
+                        addPosReserve(lk, rPos, player.id);
+                        showToast(`Pelaaja #${player.number} ${player.name} asetettu varamieheksi (${getLineupName(lk)} - ${rPos})! 👍`);
+                    }
+                } else {
+                    const curPid = (lineups[lk] || {})[pos];
+                    if (curPid === player.id) {
+                        lineups[lk][pos] = '';
+                        showToast(`Pelaaja poistettu paikalta ${getLineupName(lk)} - ${pos}.`);
+                    } else {
+                        if (!lineups[lk]) lineups[lk] = createEmptyLineupSlots();
+                        lineups[lk][pos] = player.id;
+                        showToast(`Pelaaja #${player.number} ${player.name} asetettu paikkaan ${getLineupName(lk)} - ${pos}! 🏒`);
+                    }
+                }
+
+                saveState();
+                renderSummaryView();
+                openAssignPlayerToLineupModal(player); // Refresh modal buttons
+            });
+        });
+
+        modal.classList.add('active');
+    }
+
+    function removePlayerFromAllLineups(playerId) {
+        if (!playerId) return;
+        const player = roster.find(p => p.id === playerId);
+        const pName = player ? '#' + player.number + ' ' + player.name : 'Pelaaja';
+
+        Object.keys(lineups).forEach(lk => {
+            const l = lineups[lk];
+            if (l && typeof l === 'object') {
+                Object.keys(l).forEach(pos => {
+                    if (l[pos] === playerId) {
+                        l[pos] = '';
+                    }
+                });
+            }
+        });
+
+        // Also remove from reserves
+        Object.keys(lineupReserves).forEach(k => {
+            if (Array.isArray(lineupReserves[k])) {
+                lineupReserves[k] = lineupReserves[k].filter(id => id !== playerId);
+            }
+        });
+
+        saveState();
+        renderSummaryView();
+        document.getElementById('assign-player-modal')?.classList.remove('active');
+        showToast(`${pName} poistettu kaikista kentällisistä!`);
+    }
+
     function openImportPlayersModal() {
         const otherTeams = teams.filter(t => t.id !== currentTeamId);
 
@@ -6271,6 +6555,35 @@
 
         document.getElementById('btn-add-lineup-summary')?.addEventListener('click', () => openLineupConfigModal());
         document.getElementById('btn-manage-lineups-summary')?.addEventListener('click', () => openManageLineupsModal());
+
+        // Summary Roster Search
+        document.getElementById('summary-roster-search')?.addEventListener('input', (e) => {
+            summaryRosterSearchQuery = e.target.value || '';
+            renderSummaryRosterGrid();
+        });
+
+        // Summary Roster Filter Pills
+        document.getElementById('summary-filter-pills')?.addEventListener('click', (e) => {
+            const btn = e.target.closest('.pill-btn');
+            if (!btn) return;
+            document.querySelectorAll('#summary-filter-pills .pill-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            summaryRosterFilter = btn.dataset.summaryFilter || 'all';
+            renderSummaryRosterGrid();
+        });
+
+        // Assign Player Modal Close & Remove
+        document.getElementById('btn-close-assign-player-modal')?.addEventListener('click', () => {
+            document.getElementById('assign-player-modal')?.classList.remove('active');
+        });
+        document.getElementById('btn-close-assign-player-bottom')?.addEventListener('click', () => {
+            document.getElementById('assign-player-modal')?.classList.remove('active');
+        });
+        document.getElementById('btn-remove-player-all-lineups')?.addEventListener('click', () => {
+            if (activeAssigningPlayerId) {
+                removePlayerFromAllLineups(activeAssigningPlayerId);
+            }
+        });
         
         document.getElementById('btn-edit-active-lineup-name')?.addEventListener('click', () => {
             const config = lineupConfigs.find(c => c.id === activeLineupKey);

@@ -1,9 +1,9 @@
 /* ============================================================
-   SERVICE WORKER – Kentälliset PWA v39.2
+   SERVICE WORKER – Kentälliset PWA v39.3
    Offline-first caching for installable floorball lineup app
    ============================================================ */
 
-const CACHE_NAME = 'kentalliset-v39.2';
+const CACHE_NAME = 'kentalliset-v39.3';
 const APP_SHELL = [
     '/',
     '/index.html',
