@@ -552,21 +552,42 @@
     }
 
     // ==========================================
-    // MOBILE UI MODE (v39.0)
+    // MOBILE UI MODE (v39.2)
     // ==========================================
     function initMobileUI() {
-        // Auto-detect mobile on first visit
+        // Auto-detect mobile only on very small phone screens (< 600px width), else default to desktop
         if (currentUIMode === 'auto') {
-            const isMobileDevice = (typeof window !== 'undefined') &&
-                (window.innerWidth <= 768 || 
-                 ('ontouchstart' in window && window.innerWidth <= 1024) ||
-                 (navigator.maxTouchPoints > 0 && window.innerWidth <= 1024));
-            currentUIMode = isMobileDevice ? 'mobile' : 'desktop';
+            const isPhone = (typeof window !== 'undefined') && (window.innerWidth < 600);
+            currentUIMode = isPhone ? 'mobile' : 'desktop';
             localStorage.setItem('salibandy_ui_mode', JSON.stringify(currentUIMode));
         }
 
         applyUIMode(currentUIMode);
         bindMobileNavEvents();
+        bindTabsScrollArrows();
+
+        const headerToggleBtn = document.getElementById('btn-header-ui-mode');
+        if (headerToggleBtn) {
+            headerToggleBtn.addEventListener('click', toggleUIMode);
+        }
+    }
+
+    function bindTabsScrollArrows() {
+        const leftBtn = document.getElementById('btn-scroll-tabs-left');
+        const rightBtn = document.getElementById('btn-scroll-tabs-right');
+        const container = document.getElementById('tabs-scroll-container');
+        if (!container) return;
+
+        if (leftBtn) {
+            leftBtn.onclick = () => {
+                container.scrollBy({ left: -200, behavior: 'smooth' });
+            };
+        }
+        if (rightBtn) {
+            rightBtn.onclick = () => {
+                container.scrollBy({ left: 200, behavior: 'smooth' });
+            };
+        }
     }
 
     function applyUIMode(mode) {
@@ -581,11 +602,28 @@
             document.body.removeAttribute('data-mobile-tab');
         }
 
+        // Update header button text
+        const headerToggleBtn = document.getElementById('btn-header-ui-mode');
+        if (headerToggleBtn) {
+            headerToggleBtn.innerHTML = (mode === 'mobile') ? '🖥️ Työpöytätila' : '📱 Mobiilitila';
+            headerToggleBtn.title = (mode === 'mobile') ? 'Vaihda laajaan 3-sarakkeen työpöytänäkymään' : 'Vaihda optimoituun mobiilinäkymään';
+        }
+
         // Update the UI mode toggle switch if present
         const toggleSwitch = document.querySelector('.ui-mode-switch');
         if (toggleSwitch) {
             toggleSwitch.classList.toggle('is-mobile', mode === 'mobile');
         }
+
+        // Re-measure courts
+        requestAnimationFrame(() => {
+            const page = getCurrentPage();
+            if (page && page.courts) {
+                page.courts.forEach(court => {
+                    initCourtBoardInstance(court.id);
+                });
+            }
+        });
     }
 
     function switchMobileTab(tab) {
@@ -618,7 +656,7 @@
     function toggleUIMode() {
         const newMode = currentUIMode === 'mobile' ? 'desktop' : 'mobile';
         applyUIMode(newMode);
-        showToast(newMode === 'mobile' ? '📱 Mobiili-tila käytössä' : '🖥️ Työpöytä-tila käytössä');
+        showToast(newMode === 'mobile' ? '📱 Mobiili-tila aktivoitu' : '🖥️ Työpöytä-tila aktivoitu');
     }
 
     function bindMobileNavEvents() {
@@ -1510,6 +1548,13 @@
         manageBtn.innerHTML = '⚙️ Hallitse kentällisiä';
         manageBtn.addEventListener('click', () => openManageLineupsModal());
         tabsScrollContainer.appendChild(manageBtn);
+
+        requestAnimationFrame(() => {
+            const activeBtn = tabsScrollContainer.querySelector('.tab-btn.active');
+            if (activeBtn && activeBtn.scrollIntoView) {
+                activeBtn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+            }
+        });
     }
 
     function switchTab(key) {

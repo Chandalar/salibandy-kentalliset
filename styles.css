@@ -292,16 +292,59 @@ body {
 .lineup-tabs-bar {
     background: var(--bg-card);
     border-bottom: 1px solid var(--border-color);
-    padding: 0.3rem 0.8rem 0;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
+    padding: 0.3rem 0.4rem 0;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    position: relative;
+    overflow: hidden;
     flex-shrink: 0;
+}
+
+.tabs-scroll-arrow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 32px;
+    background: rgba(30, 41, 59, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 6px;
+    color: #93c5fd;
+    cursor: pointer;
+    font-size: 0.75rem;
+    flex-shrink: 0;
+    transition: all 0.15s ease;
+    z-index: 5;
+    touch-action: manipulation;
+}
+
+.tabs-scroll-arrow:hover, .tabs-scroll-arrow:active {
+    background: #3b82f6;
+    color: #ffffff;
+    border-color: #60a5fa;
 }
 
 .tabs-scroll {
     display: flex;
     gap: 0.3rem;
-    min-width: max-content;
+    overflow-x: auto;
+    white-space: nowrap;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+    padding-bottom: 2px;
+    flex: 1;
+    scroll-behavior: smooth;
+}
+
+.tabs-scroll::-webkit-scrollbar {
+    height: 4px;
+}
+
+.tabs-scroll::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 2px;
 }
 
 .tab-btn {
@@ -4582,13 +4625,14 @@ body.mobile-ui .pwa-install-banner {
 
 /* ── Mobile UI Mode: Layout Overrides ── */
 body.mobile-ui .app-header {
-    padding: 8px 12px;
+    padding: 8px 10px;
     flex-wrap: nowrap;
-    gap: 8px;
+    gap: 6px;
+    justify-content: space-between;
 }
 
 body.mobile-ui .header-brand h1 {
-    font-size: 0.95rem;
+    font-size: 0.88rem;
 }
 
 body.mobile-ui .header-stats {
@@ -4596,7 +4640,22 @@ body.mobile-ui .header-stats {
 }
 
 body.mobile-ui .header-actions {
-    display: none;
+    display: flex !important;
+    gap: 4px;
+    align-items: center;
+}
+
+body.mobile-ui .header-actions .btn {
+    display: none !important;
+}
+
+body.mobile-ui .header-actions #btn-header-ui-mode,
+body.mobile-ui .header-actions #btn-open-settings-modal {
+    display: inline-flex !important;
+    padding: 4px 8px !important;
+    font-size: 0.72rem !important;
+    height: 32px !important;
+    white-space: nowrap !important;
 }
 
 body.mobile-ui .team-selector-wrapper {
@@ -4608,31 +4667,35 @@ body.mobile-ui .team-selector-wrapper .btn-xs {
 }
 
 body.mobile-ui .team-dropdown {
-    max-width: 140px;
-    font-size: 0.8rem;
+    max-width: 120px;
+    font-size: 0.78rem;
+    padding: 2px 4px;
 }
 
-/* Mobile UI: Lineup tabs become compact horizontal scroll */
+/* Mobile UI: Lineup tabs become compact horizontal scroll with arrows */
 body.mobile-ui .lineup-tabs-bar {
-    padding: 4px 8px;
-    gap: 4px;
+    padding: 2px 4px 0;
+    gap: 2px;
 }
 
 body.mobile-ui .tab-btn {
-    padding: 6px 10px;
+    padding: 6px 8px;
     font-size: 0.72rem;
     white-space: nowrap;
     min-width: unset;
 }
 
-/* Mobile UI: Main workspace shows one panel at a time */
+/* Mobile UI: Main workspace shows one panel at a time, scrollable */
 body.mobile-ui .main-workspace {
     display: flex !important;
     flex-direction: column !important;
-    height: calc(100vh - 140px) !important;
-    height: calc(100dvh - 140px) !important;
-    overflow: hidden !important;
-    padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px)) !important;
+    height: auto !important;
+    min-height: calc(100vh - 110px) !important;
+    min-height: calc(100dvh - 110px) !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    padding: 4px 4px calc(64px + env(safe-area-inset-bottom, 0px)) 4px !important;
+    background: #0f172a !important;
 }
 
 body.mobile-ui .roster-panel,
@@ -4641,22 +4704,25 @@ body.mobile-ui .pitch-panel {
     display: none !important;
     width: 100% !important;
     max-width: 100% !important;
-    height: 100% !important;
-    overflow-y: auto !important;
+    height: auto !important;
+    overflow-y: visible !important;
     order: 1 !important;
 }
 
 /* Show active mobile tab panel */
 body.mobile-ui[data-mobile-tab="court"] .pitch-panel {
     display: flex !important;
+    flex-direction: column !important;
 }
 
 body.mobile-ui[data-mobile-tab="roster"] .roster-panel {
     display: flex !important;
+    flex-direction: column !important;
 }
 
 body.mobile-ui[data-mobile-tab="lineup"] .lineup-panel {
     display: flex !important;
+    flex-direction: column !important;
 }
 
 /* 'More' tab: show header actions inline as a grid */
@@ -4665,7 +4731,7 @@ body.mobile-ui[data-mobile-tab="more"] .main-workspace::before {
     display: block;
 }
 
-/* Mobile UI: Court view takes full width */
+/* Mobile UI: Court view takes full width without black borders */
 body.mobile-ui .pitch-panel {
     padding: 0 !important;
 }
@@ -4674,22 +4740,33 @@ body.mobile-ui .pitch-outer-wrapper {
     height: auto !important;
     max-height: none !important;
     overflow: visible !important;
+    padding: 4px !important;
+    background: #111827 !important;
 }
 
 body.mobile-ui .pitch-container {
+    width: 100% !important;
     max-width: 100% !important;
-    margin: 0 !important;
+    margin: 0 auto !important;
     padding: 0 !important;
+    border-radius: 14px !important;
 }
 
 body.mobile-ui .pitch-container.mode-vertical {
-    max-height: calc(100vh - 210px) !important;
-    max-height: calc(100dvh - 210px) !important;
+    width: 100% !important;
+    max-width: 480px !important;
+    aspect-ratio: 1 / 1.75 !important;
+    height: auto !important;
+    max-height: none !important;
+    margin: 0 auto !important;
 }
 
 body.mobile-ui .pitch-container.mode-horizontal {
-    max-height: calc(100vh - 210px) !important;
-    max-height: calc(100dvh - 210px) !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    aspect-ratio: 1.8 / 1 !important;
+    height: auto !important;
+    max-height: none !important;
 }
 
 /* Mobile UI: Roster panel full width with bigger touch targets */
@@ -4966,11 +5043,4 @@ body.mobile-ui .court-notes-textarea {
 /* Safe area spacing for notched phones */
 body.mobile-ui {
     padding-bottom: env(safe-area-inset-bottom, 0px);
-}
-
-/* Prevent body scroll when mobile-ui */
-body.mobile-ui {
-    overflow: hidden;
-    height: 100vh;
-    height: 100dvh;
 }

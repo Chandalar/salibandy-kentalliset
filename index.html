@@ -16,8 +16,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 
-    <!-- CSS Stylesheet (Cache Busted v39.1) -->
-    <link rel="stylesheet" href="styles.css?v=39.1">
+    <!-- CSS Stylesheet (Cache Busted v39.2) -->
+    <link rel="stylesheet" href="styles.css?v=39.2">
 
     <!-- OCR Tesseract.js (Optinen tekstintunnistus valokuvista) -->
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4.1.1/dist/tesseract.min.js"></script>
@@ -84,6 +84,9 @@
                 </button>
             </div>
 
+            <button class="btn btn-outline highlight-ui-mode" id="btn-header-ui-mode" title="Vaihda Mobiili- / Työpöytä-näkymä">
+                📱 Mobiilitila
+            </button>
             <button class="btn btn-secondary" id="btn-open-share-modal" title="Jaa joukkue linkillä">
                 🔗 Jaa
             </button>
@@ -102,8 +105,9 @@
         </div>
     </header>
 
-    <!-- LINEUP TABS BAR (GUARANTEED STATIC FALLBACK HTML) -->
+    <!-- LINEUP TABS BAR (WITH SMOOTH SCROLL ARROWS) -->
     <div class="lineup-tabs-bar">
+        <button class="tabs-scroll-arrow arrow-left" id="btn-scroll-tabs-left" title="Vieritä vasemmalle">◀</button>
         <div class="tabs-scroll" id="tabs-scroll-container">
             <button class="tab-btn active" data-lineup="1"><span>1. Kenttä</span></button>
             <button class="tab-btn" data-lineup="2"><span>2. Kenttä</span></button>
@@ -117,6 +121,7 @@
             <button class="tab-btn highlight-summary" data-lineup="summary">📊 Yhteenveto (Kaikki kentälliset)</button>
             <button class="tab-btn btn-manage-tab" id="btn-manage-tab-fallback">⚙️ Hallitse kentällisiä</button>
         </div>
+        <button class="tabs-scroll-arrow arrow-right" id="btn-scroll-tabs-right" title="Vieritä oikealle">▶</button>
     </div>
 
     <!-- MAIN WORKSPACE -->
@@ -965,9 +970,9 @@
     <!-- TOAST NOTIFICATION CONTAINER -->
     <div id="toast" class="toast-notification"></div>
 
-    <!-- Firebase Config & App Engine (Cache Busted v39.1) -->
-    <script src="firebase-config.js?v=39.1"></script>
-    <script src="app.js?v=39.1"></script>
+    <!-- Firebase Config & App Engine (Cache Busted v39.2) -->
+    <script src="firebase-config.js?v=39.2"></script>
+    <script src="app.js?v=39.2"></script>
 
 </body>
 </html>
