@@ -5,15 +5,67 @@
     "ignore": [
       "firebase.json",
       "**/.*",
-      "**/node_modules/**"
+      "**/node_modules/**",
+      "gen_icons.js",
+      "create_ball.py",
+      "deploy.ps1"
     ],
     "headers": [
       {
-        "source": "**",
+        "source": "sw.js",
         "headers": [
           {
             "key": "Cache-Control",
             "value": "no-cache, no-store, must-revalidate"
+          },
+          {
+            "key": "Service-Worker-Allowed",
+            "value": "/"
+          }
+        ]
+      },
+      {
+        "source": "manifest.json",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, no-store, must-revalidate"
+          }
+        ]
+      },
+      {
+        "source": "**/*.html",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, no-store, must-revalidate"
+          }
+        ]
+      },
+      {
+        "source": "**/*.js",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, must-revalidate"
+          }
+        ]
+      },
+      {
+        "source": "**/*.css",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, must-revalidate"
+          }
+        ]
+      },
+      {
+        "source": "icons/**",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=86400"
           }
         ]
       }

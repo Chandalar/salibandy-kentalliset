@@ -179,6 +179,12 @@
     let currentSharedTeamId = null;
     let unsubscribeSharedTeam = null;
 
+    // ── Mobile UI & PWA State (v39.0) ──
+    let currentUIMode = loadFromStorage('salibandy_ui_mode', 'auto'); // 'auto', 'desktop', 'mobile'
+    let activeMobileTab = 'court'; // 'court', 'roster', 'lineup', 'more'
+    let deferredInstallPrompt = null; // PWA install prompt event
+    let isAppOnline = (typeof navigator !== 'undefined') ? navigator.onLine : true;
+
     // Per-court state maps
     let courtDrawingTools = {};
     let courtIsDrawingMap = {};
@@ -537,6 +543,271 @@
         renderRoster();
         renderActiveLineupSlots();
         renderCourtBoards();
+
+        // v39.0: Mobile UI, PWA & Network
+        initMobileUI();
+        initNetworkStatus();
+        initPWAInstall();
+        initMobileMorePanel();
+    }
+
+    // ==========================================
+    // MOBILE UI MODE (v39.0)
+    // ==========================================
+    function initMobileUI() {
+        // Auto-detect mobile on first visit
+        if (currentUIMode === 'auto') {
+            const isMobileDevice = (typeof window !== 'undefined') &&
+                (window.innerWidth <= 768 || 
+                 ('ontouchstart' in window && window.innerWidth <= 1024) ||
+                 (navigator.maxTouchPoints > 0 && window.innerWidth <= 1024));
+            currentUIMode = isMobileDevice ? 'mobile' : 'desktop';
+            localStorage.setItem('salibandy_ui_mode', JSON.stringify(currentUIMode));
+        }
+
+        applyUIMode(currentUIMode);
+        bindMobileNavEvents();
+    }
+
+    function applyUIMode(mode) {
+        currentUIMode = mode;
+        localStorage.setItem('salibandy_ui_mode', JSON.stringify(mode));
+
+        if (mode === 'mobile') {
+            document.body.classList.add('mobile-ui');
+            document.body.setAttribute('data-mobile-tab', activeMobileTab);
+        } else {
+            document.body.classList.remove('mobile-ui');
+            document.body.removeAttribute('data-mobile-tab');
+        }
+
+        // Update the UI mode toggle switch if present
+        const toggleSwitch = document.querySelector('.ui-mode-switch');
+        if (toggleSwitch) {
+            toggleSwitch.classList.toggle('is-mobile', mode === 'mobile');
+        }
+    }
+
+    function switchMobileTab(tab) {
+        activeMobileTab = tab;
+        document.body.setAttribute('data-mobile-tab', tab);
+
+        // Update bottom nav active state
+        document.querySelectorAll('.mobile-nav-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.getAttribute('data-mobile-tab') === tab);
+        });
+
+        // If switching to court, re-render courts to fix canvas sizing
+        if (tab === 'court') {
+            requestAnimationFrame(() => {
+                document.querySelectorAll('[id^="floorball-court-"]').forEach(courtEl => {
+                    const courtId = courtEl.id.replace('floorball-court-', '');
+                    const canvasEl = document.getElementById(`tactic-canvas-${courtId}`);
+                    if (canvasEl && typeof canvasEl.getContext === 'function') {
+                        const courtContainer = courtEl;
+                        const courtRect = courtContainer.getBoundingClientRect();
+                        const dpr = window.devicePixelRatio || 1;
+                        canvasEl.width = courtRect.width * dpr;
+                        canvasEl.height = courtRect.height * dpr;
+                        canvasEl.style.width = courtRect.width + 'px';
+                        canvasEl.style.height = courtRect.height + 'px';
+                        const ctxEl = canvasEl.getContext('2d');
+                        ctxEl.setTransform(dpr, 0, 0, dpr, 0, 0);
+                        drawCanvasLinesForInstance(courtId, canvasEl, ctxEl);
+                    }
+                });
+            });
+        }
+
+        // If more tab, make sure more panel is built
+        if (tab === 'more') {
+            initMobileMorePanel();
+        }
+    }
+
+    function toggleUIMode() {
+        const newMode = currentUIMode === 'mobile' ? 'desktop' : 'mobile';
+        applyUIMode(newMode);
+        showToast(newMode === 'mobile' ? '📱 Mobiili-tila käytössä' : '🖥️ Työpöytä-tila käytössä');
+    }
+
+    function bindMobileNavEvents() {
+        const bottomNav = document.getElementById('mobile-bottom-nav');
+        if (!bottomNav) return;
+
+        bottomNav.addEventListener('click', (e) => {
+            const btn = e.target.closest('.mobile-nav-btn');
+            if (!btn) return;
+            const tab = btn.getAttribute('data-mobile-tab');
+            if (tab) switchMobileTab(tab);
+        });
+    }
+
+    function initMobileMorePanel() {
+        // Build the "More" panel inside workspace if not already present
+        const workspace = document.querySelector('.main-workspace');
+        if (!workspace) return;
+        let morePanel = document.getElementById('mobile-more-panel');
+        if (morePanel) return; // Already built
+
+        morePanel = document.createElement('div');
+        morePanel.id = 'mobile-more-panel';
+        morePanel.className = 'mobile-more-panel';
+        morePanel.innerHTML = `
+            <div class="ui-mode-toggle">
+                <span class="ui-mode-toggle-label">📱 Mobiili-käyttöliittymä</span>
+                <button class="ui-mode-switch ${currentUIMode === 'mobile' ? 'is-mobile' : ''}" id="btn-ui-mode-toggle" title="Vaihda Desktop / Mobiili"></button>
+            </div>
+            <button class="mobile-action-btn" data-action="open-settings-modal">
+                <span class="mobile-action-icon">⚙️</span> Asetukset
+            </button>
+            <button class="mobile-action-btn" data-action="open-auth-modal">
+                <span class="mobile-action-icon">🔑</span> Kirjaudu pilveen
+            </button>
+            <button class="mobile-action-btn" data-action="open-share-modal">
+                <span class="mobile-action-icon">🔗</span> Jaa joukkue
+            </button>
+            <button class="mobile-action-btn" data-action="add-player">
+                <span class="mobile-action-icon">➕</span> Lisää pelaaja
+            </button>
+            <button class="mobile-action-btn" data-action="export-text">
+                <span class="mobile-action-icon">📋</span> Kopioi kokoonpano
+            </button>
+            <button class="mobile-action-btn" data-action="import-photo">
+                <span class="mobile-action-icon">📷</span> Lue kuvasta
+            </button>
+            <button class="mobile-action-btn" data-action="customize-team">
+                <span class="mobile-action-icon">🎨</span> Kustomoi joukkuetta
+            </button>
+            <button class="mobile-action-btn" data-action="new-team">
+                <span class="mobile-action-icon">🏑</span> Uusi joukkue
+            </button>
+            <div style="padding: 12px 0; text-align: center; opacity: 0.4; font-size: 0.72rem; font-family: var(--font-heading);">
+                Kentälliset v39.0 – PWA Offline
+            </div>
+        `;
+        workspace.appendChild(morePanel);
+
+        // Bind events
+        morePanel.addEventListener('click', (e) => {
+            const btn = e.target.closest('.mobile-action-btn');
+            if (!btn) return;
+            const action = btn.getAttribute('data-action');
+            if (action === 'open-settings-modal') {
+                document.getElementById('settings-modal')?.classList.add('show');
+            } else if (action === 'open-auth-modal') {
+                document.getElementById('auth-modal')?.classList.add('show');
+            } else if (action === 'open-share-modal') {
+                document.getElementById('share-modal')?.classList.add('show');
+            } else if (action === 'add-player') {
+                document.getElementById('btn-add-player')?.click();
+            } else if (action === 'export-text') {
+                document.getElementById('btn-export-text')?.click();
+            } else if (action === 'import-photo') {
+                document.getElementById('btn-import-photo')?.click();
+            } else if (action === 'customize-team') {
+                document.getElementById('btn-customize-team')?.click();
+            } else if (action === 'new-team') {
+                document.getElementById('btn-new-team')?.click();
+            }
+        });
+
+        const uiToggle = document.getElementById('btn-ui-mode-toggle');
+        if (uiToggle) {
+            uiToggle.addEventListener('click', toggleUIMode);
+        }
+    }
+
+    // ==========================================
+    // NETWORK STATUS & PWA INSTALL (v39.0)
+    // ==========================================
+    function initNetworkStatus() {
+        if (typeof window === 'undefined') return;
+
+        const banner = document.getElementById('network-status-banner');
+
+        function updateNetworkBanner() {
+            if (!banner) return;
+            isAppOnline = navigator.onLine;
+
+            banner.classList.remove('is-offline', 'is-syncing', 'is-synced');
+            
+            if (!isAppOnline) {
+                banner.classList.add('is-offline');
+                banner.querySelector('.network-status-icon').textContent = '✈️';
+                banner.querySelector('.network-status-text').textContent = 'Offline-tila – muutokset tallennetaan paikallisesti';
+            }
+        }
+
+        window.addEventListener('online', () => {
+            isAppOnline = true;
+            if (banner) {
+                banner.classList.remove('is-offline');
+                banner.classList.add('is-synced');
+                banner.querySelector('.network-status-icon').textContent = '✅';
+                banner.querySelector('.network-status-text').textContent = 'Verkko palasi – synkronoidaan...';
+                setTimeout(() => {
+                    banner.classList.remove('is-synced');
+                }, 3000);
+            }
+            showToast('🌐 Verkko palasi! Tiedot synkronoidaan.');
+            updateCloudSyncBadge(!!currentUser);
+        });
+
+        window.addEventListener('offline', () => {
+            isAppOnline = false;
+            updateNetworkBanner();
+            showToast('✈️ Offline-tila – muutokset tallentuvat paikallisesti');
+        });
+
+        updateNetworkBanner();
+    }
+
+    function initPWAInstall() {
+        if (typeof window === 'undefined') return;
+
+        // Capture the install prompt
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredInstallPrompt = e;
+
+            // Show our custom install banner
+            const banner = document.getElementById('pwa-install-banner');
+            if (banner) {
+                banner.style.display = 'flex';
+            }
+        });
+
+        // Install button click
+        const installBtn = document.getElementById('btn-pwa-install');
+        if (installBtn) {
+            installBtn.addEventListener('click', async () => {
+                if (!deferredInstallPrompt) return;
+                deferredInstallPrompt.prompt();
+                const result = await deferredInstallPrompt.userChoice;
+                if (result.outcome === 'accepted') {
+                    showToast('📲 Kentälliset asennettu! Löydät sen aloitusnäytöltäsi.');
+                }
+                deferredInstallPrompt = null;
+                const banner = document.getElementById('pwa-install-banner');
+                if (banner) banner.style.display = 'none';
+            });
+        }
+
+        // Dismiss button
+        const dismissBtn = document.getElementById('btn-pwa-dismiss');
+        if (dismissBtn) {
+            dismissBtn.addEventListener('click', () => {
+                const banner = document.getElementById('pwa-install-banner');
+                if (banner) banner.style.display = 'none';
+                deferredInstallPrompt = null;
+            });
+        }
+
+        // Detect if already running as PWA
+        if (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) {
+            console.log('[PWA] Running in standalone mode (installed).');
+        }
     }
 
     function sanitizeDrawings(drawingsObj) {

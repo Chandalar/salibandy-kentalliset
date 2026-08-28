@@ -3,6 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#1e3a8a">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Kentälliset">
+    <link rel="apple-touch-icon" href="icons/icon-192.svg">
+    <link rel="manifest" href="manifest.json">
     <title>Salibandyn Kentälliset & Taktiikkataulu</title>
 
     <!-- Google Fonts -->
@@ -10,8 +16,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 
-    <!-- CSS Stylesheet (Cache Busted v38.7) -->
-    <link rel="stylesheet" href="styles.css?v=38.7">
+    <!-- CSS Stylesheet (Cache Busted v39.0) -->
+    <link rel="stylesheet" href="styles.css?v=39.0">
 
     <!-- OCR Tesseract.js (Optinen tekstintunnistus valokuvista) -->
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4.1.1/dist/tesseract.min.js"></script>
@@ -20,6 +26,17 @@
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+
+    <!-- Service Worker Registration -->
+    <script>
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('/sw.js')
+                .then(reg => console.log('[SW] Registered:', reg.scope))
+                .catch(err => console.warn('[SW] Registration failed:', err));
+        });
+    }
+    </script>
 </head>
 <body>
 
@@ -912,12 +929,45 @@
         </div>
     </div>
 
+    <!-- MOBILE BOTTOM NAVIGATION (visible only in mobile-ui mode) -->
+    <nav class="mobile-bottom-nav" id="mobile-bottom-nav">
+        <button class="mobile-nav-btn active" data-mobile-tab="court">
+            <span class="mobile-nav-icon">🏟️</span>
+            <span class="mobile-nav-label">Kenttä</span>
+        </button>
+        <button class="mobile-nav-btn" data-mobile-tab="roster">
+            <span class="mobile-nav-icon">👥</span>
+            <span class="mobile-nav-label">Pelaajat</span>
+        </button>
+        <button class="mobile-nav-btn" data-mobile-tab="lineup">
+            <span class="mobile-nav-icon">📋</span>
+            <span class="mobile-nav-label">Kokoonpano</span>
+        </button>
+        <button class="mobile-nav-btn" data-mobile-tab="more">
+            <span class="mobile-nav-icon">⚙️</span>
+            <span class="mobile-nav-label">Lisää</span>
+        </button>
+    </nav>
+
+    <!-- NETWORK STATUS BANNER (offline/online indicator) -->
+    <div class="network-status-banner" id="network-status-banner">
+        <span class="network-status-icon">✈️</span>
+        <span class="network-status-text">Offline-tila – muutokset tallennetaan paikallisesti</span>
+    </div>
+
+    <!-- PWA INSTALL PROMPT BANNER -->
+    <div class="pwa-install-banner" id="pwa-install-banner" style="display:none;">
+        <span>📲 Asenna Kentälliset puhelimeesi!</span>
+        <button class="btn btn-sm btn-primary" id="btn-pwa-install">Asenna</button>
+        <button class="btn btn-sm btn-outline" id="btn-pwa-dismiss">Ei nyt</button>
+    </div>
+
     <!-- TOAST NOTIFICATION CONTAINER -->
     <div id="toast" class="toast-notification"></div>
 
-    <!-- Firebase Config & App Engine (Cache Busted v38.7) -->
-    <script src="firebase-config.js?v=38.7"></script>
-    <script src="app.js?v=38.7"></script>
+    <!-- Firebase Config & App Engine (Cache Busted v39.0) -->
+    <script src="firebase-config.js?v=39.0"></script>
+    <script src="app.js?v=39.0"></script>
 
 </body>
 </html>

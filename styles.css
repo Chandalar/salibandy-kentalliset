@@ -4419,6 +4419,469 @@ body[data-court-color="grid"] .pitch-container .court-surface,
     margin: 0;
 }
 
+/* ============================================================
+   MOBILE UI MODE (v39.0)
+   Activated when body has class 'mobile-ui'
+   Bottom navigation, single-view tabs, full-width panels
+   ============================================================ */
 
+/* ── Mobile Bottom Navigation Bar ── */
+.mobile-bottom-nav {
+    display: none; /* Hidden by default (desktop mode) */
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 9999;
+    background: linear-gradient(to top, #0a0e1a 0%, #111827 100%);
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 0;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+}
 
+body.mobile-ui .mobile-bottom-nav {
+    display: flex;
+    justify-content: space-around;
+    align-items: stretch;
+}
 
+.mobile-nav-btn {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    padding: 8px 4px 6px;
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.5);
+    cursor: pointer;
+    transition: color 0.2s ease, transform 0.1s ease;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    position: relative;
+}
+
+.mobile-nav-btn.active {
+    color: #60a5fa;
+}
+
+.mobile-nav-btn.active::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 25%;
+    right: 25%;
+    height: 3px;
+    background: #60a5fa;
+    border-radius: 0 0 3px 3px;
+}
+
+.mobile-nav-btn:active {
+    transform: scale(0.92);
+}
+
+.mobile-nav-icon {
+    font-size: 1.4rem;
+    line-height: 1;
+}
+
+.mobile-nav-label {
+    font-size: 0.65rem;
+    font-weight: 600;
+    font-family: var(--font-heading);
+    letter-spacing: 0.02em;
+}
+
+/* ── Network Status Banner ── */
+.network-status-banner {
+    display: none; /* Shown via JS when offline */
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 10000;
+    background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%);
+    color: #fff;
+    padding: 6px 16px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    font-family: var(--font-heading);
+    text-align: center;
+    gap: 6px;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
+    animation: slideDown 0.3s ease;
+}
+
+.network-status-banner.is-offline {
+    display: flex;
+}
+
+.network-status-banner.is-syncing {
+    display: flex;
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+}
+
+.network-status-banner.is-synced {
+    display: flex;
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    animation: slideDown 0.3s ease, fadeOut 0.5s ease 2s forwards;
+}
+
+@keyframes slideDown {
+    from { transform: translateY(-100%); }
+    to { transform: translateY(0); }
+}
+
+@keyframes fadeOut {
+    to { opacity: 0; transform: translateY(-100%); }
+}
+
+.network-status-icon {
+    font-size: 1rem;
+}
+
+/* ── PWA Install Banner ── */
+.pwa-install-banner {
+    position: fixed;
+    bottom: 80px;
+    left: 12px;
+    right: 12px;
+    z-index: 9998;
+    background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%);
+    color: #fff;
+    padding: 12px 16px;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    font-family: var(--font-heading);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    animation: slideUp 0.4s ease;
+}
+
+body.mobile-ui .pwa-install-banner {
+    bottom: calc(70px + env(safe-area-inset-bottom, 0px));
+}
+
+.pwa-install-banner span:first-child {
+    flex: 1;
+}
+
+@keyframes slideUp {
+    from { transform: translateY(100px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}
+
+/* ── Mobile UI Mode: Layout Overrides ── */
+body.mobile-ui .app-header {
+    padding: 8px 12px;
+    flex-wrap: nowrap;
+    gap: 8px;
+}
+
+body.mobile-ui .header-brand h1 {
+    font-size: 0.95rem;
+}
+
+body.mobile-ui .header-stats {
+    display: none;
+}
+
+body.mobile-ui .header-actions {
+    display: none;
+}
+
+body.mobile-ui .team-selector-wrapper {
+    gap: 4px;
+}
+
+body.mobile-ui .team-selector-wrapper .btn-xs {
+    display: none;
+}
+
+body.mobile-ui .team-dropdown {
+    max-width: 140px;
+    font-size: 0.8rem;
+}
+
+/* Mobile UI: Lineup tabs become compact horizontal scroll */
+body.mobile-ui .lineup-tabs-bar {
+    padding: 4px 8px;
+    gap: 4px;
+}
+
+body.mobile-ui .tab-btn {
+    padding: 6px 10px;
+    font-size: 0.72rem;
+    white-space: nowrap;
+    min-width: unset;
+}
+
+/* Mobile UI: Main workspace shows one panel at a time */
+body.mobile-ui .main-workspace {
+    display: flex !important;
+    flex-direction: column !important;
+    height: calc(100vh - 140px) !important;
+    height: calc(100dvh - 140px) !important;
+    overflow: hidden !important;
+    padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px)) !important;
+}
+
+body.mobile-ui .roster-panel,
+body.mobile-ui .lineup-panel,
+body.mobile-ui .pitch-panel {
+    display: none !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: 100% !important;
+    overflow-y: auto !important;
+    order: 1 !important;
+}
+
+/* Show active mobile tab panel */
+body.mobile-ui[data-mobile-tab="court"] .pitch-panel {
+    display: flex !important;
+}
+
+body.mobile-ui[data-mobile-tab="roster"] .roster-panel {
+    display: flex !important;
+}
+
+body.mobile-ui[data-mobile-tab="lineup"] .lineup-panel {
+    display: flex !important;
+}
+
+/* 'More' tab: show header actions inline as a grid */
+body.mobile-ui[data-mobile-tab="more"] .main-workspace::before {
+    content: '';
+    display: block;
+}
+
+/* Mobile UI: Court view takes full width */
+body.mobile-ui .pitch-panel {
+    padding: 0 !important;
+}
+
+body.mobile-ui .pitch-outer-wrapper {
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+}
+
+body.mobile-ui .pitch-container {
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+body.mobile-ui .pitch-container.mode-vertical {
+    max-height: calc(100vh - 210px) !important;
+    max-height: calc(100dvh - 210px) !important;
+}
+
+body.mobile-ui .pitch-container.mode-horizontal {
+    max-height: calc(100vh - 210px) !important;
+    max-height: calc(100dvh - 210px) !important;
+}
+
+/* Mobile UI: Roster panel full width with bigger touch targets */
+body.mobile-ui .roster-panel {
+    padding: 8px !important;
+}
+
+body.mobile-ui .roster-panel .panel-header {
+    padding: 6px 8px;
+}
+
+body.mobile-ui .player-card {
+    padding: 10px 12px !important;
+    min-height: 50px !important;
+}
+
+body.mobile-ui .player-card .player-name {
+    font-size: 0.95rem !important;
+}
+
+body.mobile-ui .player-card .player-number {
+    font-size: 1rem !important;
+    min-width: 32px;
+}
+
+/* Mobile UI: Player nodes bigger on court */
+body.mobile-ui .node-circle {
+    width: 40px !important;
+    height: 40px !important;
+    font-size: 0.9rem !important;
+}
+
+body.mobile-ui .node-label-text {
+    font-size: 0.62rem !important;
+}
+
+body.mobile-ui .court-ball-node .ball-circle {
+    width: 38px !important;
+    height: 38px !important;
+}
+
+/* Mobile UI: Drawing toolbar bigger buttons */
+body.mobile-ui .court-toolbar-wrapper {
+    gap: 4px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+body.mobile-ui .court-toolbar-wrapper .toolbar-btn {
+    min-width: 44px;
+    min-height: 44px;
+    padding: 8px;
+    font-size: 0.75rem;
+}
+
+/* Mobile UI: Lineup panel full width with bigger slots */
+body.mobile-ui .lineup-panel {
+    padding: 8px !important;
+}
+
+body.mobile-ui .lineup-slot {
+    padding: 10px 12px !important;
+    min-height: 48px !important;
+}
+
+body.mobile-ui .lineup-slot .slot-position-label {
+    font-size: 0.85rem !important;
+    min-width: 36px;
+}
+
+body.mobile-ui .lineup-slot .slot-player-name {
+    font-size: 0.9rem !important;
+}
+
+/* Mobile UI: Summary view stacks vertically */
+body.mobile-ui .summary-grid-container {
+    grid-template-columns: 1fr !important;
+}
+
+/* Mobile UI: More tab shows actions as fullscreen panel */
+.mobile-more-panel {
+    display: none;
+    flex-direction: column;
+    gap: 8px;
+    padding: 16px;
+    width: 100%;
+    height: 100%;
+    overflow-y: auto;
+}
+
+body.mobile-ui[data-mobile-tab="more"] .mobile-more-panel {
+    display: flex !important;
+}
+
+.mobile-more-panel .mobile-action-btn {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    color: #e2e8f0;
+    font-size: 0.9rem;
+    font-weight: 600;
+    font-family: var(--font-heading);
+    cursor: pointer;
+    transition: background 0.2s ease;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.mobile-more-panel .mobile-action-btn:active {
+    background: rgba(255, 255, 255, 0.12);
+}
+
+.mobile-more-panel .mobile-action-icon {
+    font-size: 1.3rem;
+    min-width: 28px;
+    text-align: center;
+}
+
+/* Mobile UI: UI Mode Toggle */
+.ui-mode-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    background: rgba(96, 165, 250, 0.1);
+    border: 1px solid rgba(96, 165, 250, 0.3);
+    border-radius: 12px;
+    margin: 8px 0;
+}
+
+.ui-mode-toggle-label {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #93c5fd;
+    font-family: var(--font-heading);
+}
+
+.ui-mode-switch {
+    position: relative;
+    width: 48px;
+    height: 26px;
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 13px;
+    cursor: pointer;
+    transition: background 0.2s ease;
+    border: none;
+    padding: 0;
+}
+
+.ui-mode-switch.is-mobile {
+    background: #3b82f6;
+}
+
+.ui-mode-switch::after {
+    content: '';
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 20px;
+    height: 20px;
+    background: white;
+    border-radius: 50%;
+    transition: transform 0.2s ease;
+}
+
+.ui-mode-switch.is-mobile::after {
+    transform: translateX(22px);
+}
+
+/* Hide summary view panel controls in mobile */
+body.mobile-ui .summary-view-panel {
+    padding: 8px !important;
+}
+
+/* Mobile UI: Court description textarea bigger */
+body.mobile-ui .court-notes-textarea {
+    font-size: 0.85rem !important;
+    min-height: 60px !important;
+}
+
+/* Safe area spacing for notched phones */
+body.mobile-ui {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Prevent body scroll when mobile-ui */
+body.mobile-ui {
+    overflow: hidden;
+    height: 100vh;
+    height: 100dvh;
+}
