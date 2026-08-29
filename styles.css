@@ -5079,18 +5079,44 @@ body.mobile-ui .pitch-panel {
     order: 1 !important;
 }
 
-/* Show active mobile tab panel */
-body.mobile-ui[data-mobile-tab="court"] .pitch-panel {
+/* Mobile UI: In summary or live views, hide the 3-panel split and show full-width view */
+body.mobile-ui.is-summary-view .roster-panel,
+body.mobile-ui.is-summary-view .lineup-panel,
+body.mobile-ui.is-summary-view .pitch-panel,
+body.mobile-ui.is-live-view .roster-panel,
+body.mobile-ui.is-live-view .lineup-panel,
+body.mobile-ui.is-live-view .pitch-panel {
+    display: none !important;
+}
+
+body.mobile-ui.is-summary-view #summary-view-panel {
+    display: flex !important;
+    flex-direction: column !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 100% !important;
+}
+
+body.mobile-ui.is-live-view #live-view-panel {
+    display: flex !important;
+    flex-direction: column !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 100% !important;
+}
+
+/* Show active mobile tab panel when on specific lineup tabs */
+body.mobile-ui:not(.is-summary-view):not(.is-live-view)[data-mobile-tab="court"] .pitch-panel {
     display: flex !important;
     flex-direction: column !important;
 }
 
-body.mobile-ui[data-mobile-tab="roster"] .roster-panel {
+body.mobile-ui:not(.is-summary-view):not(.is-live-view)[data-mobile-tab="roster"] .roster-panel {
     display: flex !important;
     flex-direction: column !important;
 }
 
-body.mobile-ui[data-mobile-tab="lineup"] .lineup-panel {
+body.mobile-ui:not(.is-summary-view):not(.is-live-view)[data-mobile-tab="lineup"] .lineup-panel {
     display: flex !important;
     flex-direction: column !important;
 }

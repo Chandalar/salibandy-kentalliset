@@ -16,8 +16,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 
-    <!-- CSS Stylesheet (Cache Busted v39.7) -->
-    <link rel="stylesheet" href="styles.css?v=39.7">
+    <!-- CSS Stylesheet (Cache Busted v40.0) -->
+    <link rel="stylesheet" href="styles.css?v=40.0">
 
     <!-- OCR Tesseract.js (Optinen tekstintunnistus valokuvista) -->
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4.1.1/dist/tesseract.min.js"></script>
@@ -31,16 +31,24 @@
     <script>
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-            navigator.serviceWorker.register('/sw.js')
+            navigator.serviceWorker.register('./sw.js')
                 .then(reg => {
                     console.log('[SW] Registered:', reg.scope);
                     reg.update();
+                    
+                    // Check for updates whenever window regains focus or visibility
+                    document.addEventListener('visibilitychange', () => {
+                        if (document.visibilityState === 'visible') {
+                            reg.update();
+                        }
+                    });
+
                     reg.onupdatefound = () => {
                         const newWorker = reg.installing;
                         if (newWorker) {
                             newWorker.onstatechange = () => {
                                 if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                                    console.log('[SW] New version activated!');
+                                    console.log('[SW] New version ready!');
                                     newWorker.postMessage({ type: 'SKIP_WAITING' });
                                 }
                             };
@@ -74,6 +82,7 @@
                     <select id="team-select" class="team-dropdown"></select>
                     <button class="btn-xs btn-outline highlight-customize" id="btn-customize-team" title="Muokkaa joukkueen logoa, värejä, areenaa ja asetuksia">🎨 Kustomoi</button>
                     <button class="btn-xs btn-outline" id="btn-new-team" title="Uusi joukkue">+ Uusi</button>
+                    <button class="btn-xs btn-outline" id="btn-quick-refresh" title="Päivitä sovellus ja lataa uusin versio">🔄</button>
                     <button class="btn-xs btn-outline danger-text" id="btn-delete-team" title="Poista nykyinen joukkue">🗑️</button>
                 </div>
             </div>
@@ -1238,9 +1247,9 @@ Out:
     <!-- TOAST NOTIFICATION CONTAINER -->
     <div id="toast" class="toast-notification"></div>
 
-    <!-- Firebase Config & App Engine (Cache Busted v39.7) -->
-    <script src="firebase-config.js?v=39.7"></script>
-    <script src="app.js?v=39.7"></script>
+    <!-- Firebase Config & App Engine (Cache Busted v40.0) -->
+    <script src="firebase-config.js?v=40.0"></script>
+    <script src="app.js?v=40.0"></script>
 
 </body>
 </html>

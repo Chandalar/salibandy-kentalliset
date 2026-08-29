@@ -640,6 +640,11 @@
         activeMobileTab = tab;
         document.body.setAttribute('data-mobile-tab', tab);
 
+        // If user taps Court, Roster or Lineup while in Summary or Live view, switch to 1. Kenttä
+        if ((tab === 'court' || tab === 'roster' || tab === 'lineup') && (activeLineupKey === 'summary' || activeLineupKey === 'live')) {
+            switchTab('1');
+        }
+
         // Update bottom nav active state
         document.querySelectorAll('.mobile-nav-btn').forEach(btn => {
             btn.classList.toggle('active', btn.getAttribute('data-mobile-tab') === tab);
@@ -681,12 +686,38 @@
         });
     }
 
+    async function forceAppRefreshAndSync() {
+        showToast('Päivitetään ja ladataan uusin versio... 🔄');
+        try {
+            if ('serviceWorker' in navigator) {
+                const regs = await navigator.serviceWorker.getRegistrations();
+                for (const reg of regs) {
+                    await reg.update();
+                    if (reg.waiting) {
+                        reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+                    }
+                }
+            }
+            if ('caches' in window) {
+                const keys = await caches.keys();
+                for (const key of keys) {
+                    await caches.delete(key);
+                }
+            }
+        } catch (err) {
+            console.warn('Cache refresh error:', err);
+        }
+
+        setTimeout(() => {
+            window.location.reload();
+        }, 200);
+    }
+
     function initMobileMorePanel() {
-        // Build the "More" panel inside workspace if not already present
         const workspace = document.querySelector('.main-workspace');
         if (!workspace) return;
         let morePanel = document.getElementById('mobile-more-panel');
-        if (morePanel) return; // Already built
+        if (morePanel) return;
 
         morePanel = document.createElement('div');
         morePanel.id = 'mobile-more-panel';
@@ -696,32 +727,38 @@
                 <span class="ui-mode-toggle-label">📱 Mobiili-käyttöliittymä</span>
                 <button class="ui-mode-switch ${currentUIMode === 'mobile' ? 'is-mobile' : ''}" id="btn-ui-mode-toggle" title="Vaihda Desktop / Mobiili"></button>
             </div>
+            <button class="mobile-action-btn highlight-refresh" data-action="force-refresh" style="background: rgba(59, 130, 246, 0.18); border-color: rgba(59, 130, 246, 0.4); color: #93c5fd;">
+                <span class="mobile-action-icon">🔄</span> Päivitä ja lataa uusin versio
+            </button>
+            <button class="mobile-action-btn" data-action="sync-cloud">
+                <span class="mobile-action-icon">☁️</span> Synkronoi pilveen heti
+            </button>
             <button class="mobile-action-btn" data-action="open-settings-modal">
-                <span class="mobile-action-icon">⚙️</span> Asetukset
+                <span class="mobile-action-icon">⚙️</span> Asetukset & Varmuuskopiot
             </button>
             <button class="mobile-action-btn" data-action="open-auth-modal">
                 <span class="mobile-action-icon">🔑</span> Kirjaudu pilveen
             </button>
             <button class="mobile-action-btn" data-action="open-share-modal">
-                <span class="mobile-action-icon">🔗</span> Jaa joukkue
+                <span class="mobile-action-icon">🔗</span> Jaa joukkue linkillä
             </button>
             <button class="mobile-action-btn" data-action="add-player">
-                <span class="mobile-action-icon">➕</span> Lisää pelaaja
+                <span class="mobile-action-icon">➕</span> Lisää uusi pelaaja
             </button>
             <button class="mobile-action-btn" data-action="export-text">
-                <span class="mobile-action-icon">📋</span> Kopioi kokoonpano
+                <span class="mobile-action-icon">📋</span> Kopioi kokoonpanoteksti
             </button>
             <button class="mobile-action-btn" data-action="import-photo">
-                <span class="mobile-action-icon">📷</span> Lue kuvasta
+                <span class="mobile-action-icon">📷</span> Lue nimilista kuvasta
             </button>
             <button class="mobile-action-btn" data-action="customize-team">
-                <span class="mobile-action-icon">🎨</span> Kustomoi joukkuetta
+                <span class="mobile-action-icon">🎨</span> Kustomoi joukkueen värejä
             </button>
             <button class="mobile-action-btn" data-action="new-team">
-                <span class="mobile-action-icon">🏑</span> Uusi joukkue
+                <span class="mobile-action-icon">🏑</span> Luo uusi joukkue
             </button>
-            <div style="padding: 12px 0; text-align: center; opacity: 0.4; font-size: 0.72rem; font-family: var(--font-heading);">
-                Kentälliset v39.0 – PWA Offline
+            <div style="padding: 12px 0; text-align: center; opacity: 0.5; font-size: 0.72rem; font-family: var(--font-heading);">
+                Kentälliset v40.0 – PWA Offline Ready 🏑
             </div>
         `;
         workspace.appendChild(morePanel);
@@ -731,12 +768,17 @@
             const btn = e.target.closest('.mobile-action-btn');
             if (!btn) return;
             const action = btn.getAttribute('data-action');
-            if (action === 'open-settings-modal') {
-                document.getElementById('settings-modal')?.classList.add('show');
+            if (action === 'force-refresh') {
+                forceAppRefreshAndSync();
+            } else if (action === 'sync-cloud') {
+                if (typeof triggerFullCloudSync === 'function') triggerFullCloudSync();
+                else showToast('Synkronoidaan pilveen... ☁️');
+            } else if (action === 'open-settings-modal') {
+                document.getElementById('settings-modal')?.classList.add('active');
             } else if (action === 'open-auth-modal') {
-                document.getElementById('auth-modal')?.classList.add('show');
+                document.getElementById('auth-modal')?.classList.add('active');
             } else if (action === 'open-share-modal') {
-                document.getElementById('share-modal')?.classList.add('show');
+                document.getElementById('share-modal')?.classList.add('active');
             } else if (action === 'add-player') {
                 document.getElementById('btn-add-player')?.click();
             } else if (action === 'export-text') {
@@ -1602,6 +1644,8 @@
         const isDrawingOnlyTab = (activeLineupKey === 'custom' || activeLineupKey === 'freeform');
 
         if (activeLineupKey === 'summary') {
+            document.body.classList.add('is-summary-view');
+            document.body.classList.remove('is-live-view');
             if (rosterPanelSection) rosterPanelSection.style.display = 'none';
             if (pitchPanelSection) pitchPanelSection.style.display = 'none';
             if (lineupPanelSection) lineupPanelSection.style.display = 'none';
@@ -1610,6 +1654,8 @@
             if (mainWorkspace) mainWorkspace.classList.remove('no-right-panel');
             renderSummaryView();
         } else if (activeLineupKey === 'live') {
+            document.body.classList.add('is-live-view');
+            document.body.classList.remove('is-summary-view');
             if (rosterPanelSection) rosterPanelSection.style.display = 'none';
             if (pitchPanelSection) pitchPanelSection.style.display = 'none';
             if (lineupPanelSection) lineupPanelSection.style.display = 'none';
@@ -1618,6 +1664,7 @@
             if (mainWorkspace) mainWorkspace.classList.remove('no-right-panel');
             renderLiveView();
         } else {
+            document.body.classList.remove('is-summary-view', 'is-live-view');
             if (rosterPanelSection) rosterPanelSection.style.display = 'flex';
             if (pitchPanelSection) pitchPanelSection.style.display = 'flex';
             if (summaryViewPanel) summaryViewPanel.style.display = 'none';
@@ -7428,6 +7475,10 @@
             const teamNameInput = document.getElementById('team-name-input');
             if (teamNameInput) teamNameInput.value = '';
             document.getElementById('team-modal')?.classList.add('active');
+        });
+
+        document.getElementById('btn-quick-refresh')?.addEventListener('click', () => {
+            forceAppRefreshAndSync();
         });
 
         document.querySelectorAll('.close-btn, [data-action="close-modal"]').forEach(btn => {
