@@ -4535,6 +4535,184 @@
     // ==========================================
     // LIVE-OSALLISTUJAT (NIMENHUUTO & MYCLUB INTEGRAATIO)
     // ==========================================
+    function matchPlayerFromRoster(rawText) {
+        if (!rawText || !rawText.trim()) return null;
+        const text = rawText.trim();
+
+        // 1. Match by jersey number: e.g. #23 Matias V -> 23
+        const numMatch = text.match(/#(\d+)/);
+        if (numMatch) {
+            const num = parseInt(numMatch[1], 10);
+            const found = roster.find(p => p.number === num);
+            if (found) return found;
+        }
+
+        // 2. Match by full or partial name
+        const cleanName = text.replace(/^[#\d\.\-\*\•\s]+/, '').replace(/\(.*?\)/, '').trim().toLowerCase();
+        if (cleanName.length >= 2) {
+            const found = roster.find(p => {
+                const pName = (p.name || '').toLowerCase();
+                return pName && (cleanName.includes(pName) || pName.includes(cleanName) || cleanName.split(' ').some(part => part.length >= 3 && pName.includes(part)));
+            });
+            if (found) return found;
+        }
+
+        return null;
+    }
+
+    function parseNimenhuutoEventsHtml(htmlText) {
+        const events = [];
+        const eventBlocks = htmlText.split(/id=["'](event_\d+)["']/g);
+        
+        for (let i = 1; i < eventBlocks.length; i += 2) {
+            const id = eventBlocks[i];
+            const block = eventBlocks[i + 1] || '';
+
+            // Extract title
+            let title = 'Tapahtuma';
+            const titleMatch = block.match(/class=["']event-title-link["'][^>]*>([\s\S]*?)<\/a>/i);
+            if (titleMatch) {
+                title = titleMatch[1].replace(/<[^>]+>/g, '').replace(/&middot;/g, '·').replace(/\s+/g, ' ').trim();
+            }
+
+            // Extract Date / Time (e.g. <h4>Ma 31.8. klo 21:00</h4>)
+            let dateStr = '';
+            const dateMatch = block.match(/<h4[^>]*>([\s\S]*?)<\/h4>/i);
+            if (dateMatch) {
+                dateStr = dateMatch[1].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+            }
+
+            // Extract Location
+            let location = '';
+            const locMatch = block.match(/<\/h4>[\s\r\n]*<div>(.*?)<\/div>/i);
+            if (locMatch) {
+                location = locMatch[1].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+            }
+
+            // Extract IN players
+            const inPlayerNames = [];
+            const inMatch = block.match(/id=["']tab_in_\d+["'][^>]*>([\s\S]*?)<\/div>/i);
+            if (inMatch) {
+                const pMatches = inMatch[1].matchAll(/class=["']player_label[^"']*["'][^>]*>([\s\S]*?)<\/span>/gi);
+                for (const pm of pMatches) {
+                    const pText = pm[1].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+                    if (pText) inPlayerNames.push(pText);
+                }
+            }
+
+            // Extract OUT players
+            const outPlayerNames = [];
+            const outMatch = block.match(/id=["']tab_out_\d+["'][^>]*>([\s\S]*?)<\/div>/i);
+            if (outMatch) {
+                const pMatches = outMatch[1].matchAll(/class=["']player_label[^"']*["'][^>]*>([\s\S]*?)<\/span>/gi);
+                for (const pm of pMatches) {
+                    const pText = pm[1].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+                    if (pText) outPlayerNames.push(pText);
+                }
+            }
+
+            // Map to team roster
+            const attendees = {};
+            roster.forEach(p => {
+                attendees[p.id] = { status: 'unanswered', reason: '' };
+            });
+
+            inPlayerNames.forEach(rawName => {
+                const matched = matchPlayerFromRoster(rawName);
+                if (matched) {
+                    attendees[matched.id] = { status: 'in', reason: '' };
+                }
+            });
+
+            outPlayerNames.forEach(rawName => {
+                const matched = matchPlayerFromRoster(rawName);
+                if (matched) {
+                    attendees[matched.id] = { status: 'out', reason: '' };
+                }
+            });
+
+            events.push({
+                id: id,
+                title: title,
+                date: dateStr,
+                location: location,
+                source: 'nimenhuuto',
+                attendees: attendees
+            });
+        }
+
+        return events;
+    }
+
+    async function fetchAndSyncNimenhuutoEvents(targetUrl = null) {
+        if (!targetUrl) {
+            const curTeam = teams.find(t => t.id === currentTeamId);
+            targetUrl = (curTeam && curTeam.nimenhuutoUrl) ? curTeam.nimenhuutoUrl : 'https://sekta.nimenhuuto.com/events';
+        }
+
+        targetUrl = targetUrl.trim();
+        if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
+            if (targetUrl.includes('.')) {
+                targetUrl = 'https://' + targetUrl;
+            } else {
+                targetUrl = `https://${targetUrl}.nimenhuuto.com/events`;
+            }
+        }
+        if (!targetUrl.includes('/events') && targetUrl.includes('nimenhuuto.com')) {
+            targetUrl = targetUrl.replace(/\/+$/, '') + '/events';
+        }
+
+        showToast(`Haetaan tapahtumia: ${targetUrl}... ⏳`);
+
+        const proxyUrls = [
+            `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`,
+            `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`,
+            targetUrl
+        ];
+
+        let htmlText = '';
+        let fetchSuccess = false;
+
+        for (const pUrl of proxyUrls) {
+            try {
+                const res = await fetch(pUrl, { cache: 'no-cache' });
+                if (res.ok) {
+                    htmlText = await res.text();
+                    if (htmlText && (htmlText.includes('event-detailed-container') || htmlText.includes('event_') || htmlText.includes('Nimenhuuto'))) {
+                        fetchSuccess = true;
+                        break;
+                    }
+                }
+            } catch (err) {
+                console.warn('Proxy fetch attempt failed:', pUrl, err);
+            }
+        }
+
+        if (!fetchSuccess || !htmlText) {
+            showToast('Verkkohaku epäonnistui. Voit liittää osallistujat myös tekstinä.');
+            return false;
+        }
+
+        const parsedEvents = parseNimenhuutoEventsHtml(htmlText);
+        if (parsedEvents.length === 0) {
+            showToast('Sivulta ei löytynyt tapahtumia.');
+            return false;
+        }
+
+        teamEvents = parsedEvents;
+        activeEventId = teamEvents[0] ? teamEvents[0].id : null;
+
+        // Remember URL on team
+        const curTeam = teams.find(t => t.id === currentTeamId);
+        if (curTeam) curTeam.nimenhuutoUrl = targetUrl;
+
+        saveState();
+        renderLiveView();
+        document.getElementById('attendance-import-modal')?.classList.remove('active');
+        showToast(`Haettu onnistuneesti ${teamEvents.length} tapahtumaa Nimenhuudosta! 🎉`);
+        return true;
+    }
+
     function loadTeamEvents(teamId) {
         let stored = loadFromStorage(`salibandy_events_${teamId}`, null);
         if (!stored || !Array.isArray(stored) || stored.length === 0) {
@@ -4542,29 +4720,133 @@
             const teamName = team ? team.name : 'SekTa';
             const curRoster = loadRosterForTeam(teamId);
 
-            const initialEvent = {
-                id: 'ev_' + Date.now(),
-                title: `${teamName} - SB Kauhava (Ottelu)`,
-                date: 'Su 30.8. klo 15:00',
-                location: 'Qmax Arena',
-                source: 'nimenhuuto',
-                attendees: {}
-            };
+            if (teamName.toLowerCase().includes('sekta')) {
+                // Real initial events directly from sekta.nimenhuuto.com/events
+                stored = [
+                    {
+                        id: 'event_20207053',
+                        title: 'Harkka · Omat harkat',
+                        date: 'Ma 31.8. klo 21:00',
+                        location: 'Kupittaan palloiluhalli kenttä 3',
+                        source: 'nimenhuuto',
+                        attendees: {}
+                    },
+                    {
+                        id: 'event_20106914',
+                        title: 'Harkka · SekTa - TVV',
+                        date: 'Ke 2.9. klo 20:00',
+                        location: 'leaf areena, turku (Kenttä 1. Valkoinen paita)',
+                        source: 'nimenhuuto',
+                        attendees: {}
+                    },
+                    {
+                        id: 'event_20207054',
+                        title: 'Harkka · Omat harkat',
+                        date: 'Ma 7.9. klo 21:00',
+                        location: 'Kupittaan palloiluhalli kenttä 3',
+                        source: 'nimenhuuto',
+                        attendees: {}
+                    },
+                    {
+                        id: 'event_20106915',
+                        title: 'Harkka · SekTa - TVV',
+                        date: 'Ke 9.9. klo 20:00',
+                        location: 'leaf areena, turku',
+                        source: 'nimenhuuto',
+                        attendees: {}
+                    },
+                    {
+                        id: 'event_20042456',
+                        title: 'Matsi · SekTa - TBS',
+                        date: 'La 12.9. klo 11:30',
+                        location: 'Hani-Halli Oy, Keskuskatu 35, Mynämäki',
+                        source: 'nimenhuuto',
+                        attendees: {}
+                    },
+                    {
+                        id: 'event_20042457',
+                        title: 'Matsi · SBS Masku II - SekTa',
+                        date: 'La 12.9. klo 14:00',
+                        location: 'Hani-Halli Oy, Keskuskatu 35, Mynämäki',
+                        source: 'nimenhuuto',
+                        attendees: {}
+                    },
+                    {
+                        id: 'event_20207055',
+                        title: 'Harkka · Omat harkat',
+                        date: 'Ma 14.9. klo 21:00',
+                        location: 'Kupittaan palloiluhalli kenttä 3',
+                        source: 'nimenhuuto',
+                        attendees: {}
+                    },
+                    {
+                        id: 'event_20106916',
+                        title: 'Harkka · SekTa - TVV',
+                        date: 'Ke 16.9. klo 20:00',
+                        location: 'leaf areena, turku',
+                        source: 'nimenhuuto',
+                        attendees: {}
+                    },
+                    {
+                        id: 'event_20207056',
+                        title: 'Harkka · Omat harkat',
+                        date: 'Ma 21.9. klo 21:00',
+                        location: 'Kupittaan palloiluhalli kenttä 3',
+                        source: 'nimenhuuto',
+                        attendees: {}
+                    },
+                    {
+                        id: 'event_20106917',
+                        title: 'Harkka · SekTa - TVV',
+                        date: 'Ke 23.9. klo 20:00',
+                        location: 'leaf areena, turku',
+                        source: 'nimenhuuto',
+                        attendees: {}
+                    }
+                ];
 
-            // Populate initial attendance realistically for the squad
-            curRoster.forEach((p, idx) => {
-                if (idx < 14) {
-                    initialEvent.attendees[p.id] = { status: 'in', reason: '' };
-                } else if (idx < 17) {
-                    initialEvent.attendees[p.id] = { status: 'out', reason: (idx === 14 ? 'Sairas' : idx === 15 ? 'Työvuoro' : 'Muu este') };
-                } else if (idx < 18) {
-                    initialEvent.attendees[p.id] = { status: 'maybe', reason: 'Epävarma' };
-                } else {
-                    initialEvent.attendees[p.id] = { status: 'unanswered', reason: '' };
-                }
-            });
+                // Seed Event 1 attendees (Ma 31.8.)
+                const inNums1 = [23, 19, 20, 22, 42, 13, 64, 15, 11, 66, 4];
+                const outNums1 = [7, 87];
+                curRoster.forEach(p => {
+                    if (inNums1.includes(p.number)) stored[0].attendees[p.id] = { status: 'in', reason: '' };
+                    else if (outNums1.includes(p.number)) stored[0].attendees[p.id] = { status: 'out', reason: '' };
+                    else stored[0].attendees[p.id] = { status: 'unanswered', reason: '' };
+                });
 
-            stored = [initialEvent];
+                // Seed Event 2 attendees (Ke 2.9.)
+                const inNums2 = [23, 20, 42, 13, 19];
+                const outNums2 = [7, 21];
+                curRoster.forEach(p => {
+                    if (inNums2.includes(p.number)) stored[1].attendees[p.id] = { status: 'in', reason: '' };
+                    else if (outNums2.includes(p.number)) stored[1].attendees[p.id] = { status: 'out', reason: '' };
+                    else stored[1].attendees[p.id] = { status: 'unanswered', reason: '' };
+                });
+            } else {
+                const initialEvent = {
+                    id: 'ev_' + Date.now(),
+                    title: `${teamName} - Ottelu`,
+                    date: 'Su 30.8. klo 15:00',
+                    location: 'Peliareena',
+                    source: 'nimenhuuto',
+                    attendees: {}
+                };
+
+                curRoster.forEach((p, idx) => {
+                    if (idx < 14) {
+                        initialEvent.attendees[p.id] = { status: 'in', reason: '' };
+                    } else if (idx < 17) {
+                        initialEvent.attendees[p.id] = { status: 'out', reason: (idx === 14 ? 'Sairas' : idx === 15 ? 'Työvuoro' : 'Muu este') };
+                    } else if (idx < 18) {
+                        initialEvent.attendees[p.id] = { status: 'maybe', reason: 'Epävarma' };
+                    } else {
+                        initialEvent.attendees[p.id] = { status: 'unanswered', reason: '' };
+                    }
+                });
+
+                stored = [initialEvent];
+            }
+
             localStorage.setItem(`salibandy_events_${teamId}`, JSON.stringify(stored));
         }
 
@@ -5014,9 +5296,13 @@
         renderLiveEventSelect();
         const modal = document.getElementById('attendance-import-modal');
         const textarea = document.getElementById('import-attendance-text');
-        const preview = document.getElementById('import-parse-preview');
+        const urlInput = document.getElementById('import-web-url');
+        const curTeam = teams.find(t => t.id === currentTeamId);
+
+        if (urlInput) {
+            urlInput.value = (curTeam && curTeam.nimenhuutoUrl) ? curTeam.nimenhuutoUrl : 'https://sekta.nimenhuuto.com/events';
+        }
         if (textarea) textarea.value = '';
-        if (preview) { preview.style.display = 'none'; preview.innerHTML = ''; }
         if (modal) modal.classList.add('active');
     }
 
@@ -7327,6 +7613,22 @@
             btn.classList.add('active');
             liveRosterFilter = btn.dataset.liveFilter || 'all';
             renderLiveRosterGrid();
+        });
+
+        document.getElementById('btn-live-fetch-web')?.addEventListener('click', () => {
+            const curTeam = teams.find(t => t.id === currentTeamId);
+            const url = (curTeam && curTeam.nimenhuutoUrl) ? curTeam.nimenhuutoUrl : 'https://sekta.nimenhuuto.com/events';
+            fetchAndSyncNimenhuutoEvents(url);
+        });
+
+        document.getElementById('btn-execute-web-fetch')?.addEventListener('click', () => {
+            const urlInput = document.getElementById('import-web-url');
+            const url = urlInput ? urlInput.value.trim() : '';
+            if (!url) {
+                showToast('Syötä ensin Nimenhuuto- tai myClub -osoite!');
+                return;
+            }
+            fetchAndSyncNimenhuutoEvents(url);
         });
 
         document.getElementById('btn-live-import-attendance')?.addEventListener('click', openAttendanceImportModal);

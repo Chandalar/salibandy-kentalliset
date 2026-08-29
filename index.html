@@ -16,8 +16,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 
-    <!-- CSS Stylesheet (Cache Busted v39.4) -->
-    <link rel="stylesheet" href="styles.css?v=39.5">
+    <!-- CSS Stylesheet (Cache Busted v39.6) -->
+    <link rel="stylesheet" href="styles.css?v=39.6">
 
     <!-- OCR Tesseract.js (Optinen tekstintunnistus valokuvista) -->
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4.1.1/dist/tesseract.min.js"></script>
@@ -304,10 +304,11 @@
             <div class="panel-header">
                 <h2>🟢 Live-osallistujat (Nimenhuuto & myClub)</h2>
                 <div class="summary-actions">
-                    <button class="btn-xs btn-outline highlight-customize" id="btn-live-import-attendance">📋 Tuo Nimenhuuto/myClub</button>
+                    <button class="btn-xs btn-primary highlight-live" id="btn-live-fetch-web">🔄 Hae tapahtumat verkosta</button>
+                    <button class="btn-xs btn-outline highlight-customize" id="btn-live-import-attendance">📋 Liitä lista</button>
                     <button class="btn-xs btn-outline" id="btn-live-new-event">+ Uusi tapahtuma</button>
                     <button class="btn-xs btn-outline" id="btn-live-config-integration">⚙️ Linkit</button>
-                    <button class="btn-xs btn-primary" id="btn-copy-all-live">📋 Kopioi kentät</button>
+                    <button class="btn-xs btn-outline" id="btn-copy-all-live">📋 Kopioi</button>
                 </div>
             </div>
 
@@ -1051,46 +1052,62 @@
     <div class="modal-overlay" id="attendance-import-modal">
         <div class="modal-card modal-large">
             <div class="modal-header">
-                <h3>📋 Tuo osallistujat (Nimenhuuto / myClub)</h3>
+                <h3>📋 Tuo tapahtumat & osallistujat (Nimenhuuto / myClub)</h3>
                 <button class="close-btn" id="btn-close-attendance-import-modal">&times;</button>
             </div>
-            <div class="modal-body" style="display: flex; flex-direction: column; gap: 0.8rem;">
-                <p style="font-size: 0.82rem; color: var(--text-secondary); margin: 0;">
-                    Kopioi ja liitä Nimenhuudon tai myClubin osallistujalista tähän. Jäsennin tunnistaa automaattisesti pelaajat ja heidän statuksensa (IN 👍 / OUT 👎 / EHKÄ ❓).
-                </p>
+            <div class="modal-body" style="display: flex; flex-direction: column; gap: 1rem;">
+                
+                <!-- SECTION 1: DIRECT WEB URL FETCH -->
+                <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: var(--radius-md); padding: 12px; display: flex; flex-direction: column; gap: 8px;">
+                    <div style="display: flex; align-items: center; justify-content: space-between;">
+                        <label for="import-web-url" style="font-size: 0.85rem; font-weight: 700; color: #6ee7b7;">🌐 1. Hae suoraan verkko-osoitteesta:</label>
+                        <span style="font-size: 0.72rem; color: #a7f3d0;">Automaattinen synkkaus</span>
+                    </div>
+                    <div style="display: flex; gap: 6px;">
+                        <input type="text" id="import-web-url" class="search-input" style="flex: 1; font-size: 0.85rem;" placeholder="https://sekta.nimenhuuto.com/events">
+                        <button type="button" class="btn btn-primary" id="btn-execute-web-fetch" style="white-space: nowrap;">
+                            🔄 Hae tapahtumat
+                        </button>
+                    </div>
+                    <span style="font-size: 0.72rem; color: var(--text-secondary);">
+                        Hakee automaattisesti kaikki tulevat pelit, treenit ja pelaajien IN/OUT -ilmoittautumiset suoraan Nimenhuudosta tai myClubista.
+                    </span>
+                </div>
 
-                <div class="form-group" style="margin: 0;">
-                    <label style="font-size: 0.8rem; font-weight: 700; color: #93c5fd;">Valitse tai luo tapahtuma:</label>
-                    <div style="display: flex; gap: 0.5rem;">
-                        <select id="import-target-event-select" class="team-dropdown" style="flex: 1;"></select>
-                        <button type="button" class="btn btn-sm btn-outline" id="btn-import-create-event-quick">+ Uusi</button>
+                <div style="text-align: center; color: var(--text-muted); font-size: 0.75rem; font-weight: 700; position: relative;">
+                    <span>── TAI LIITÄ KÄSIN ──</span>
+                </div>
+
+                <!-- SECTION 2: PASTE TEXT -->
+                <div style="display: flex; flex-direction: column; gap: 8px;">
+                    <div class="form-group" style="margin: 0;">
+                        <label style="font-size: 0.8rem; font-weight: 700; color: #93c5fd;">2. Valitse kohdetapahtuma:</label>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <select id="import-target-event-select" class="team-dropdown" style="flex: 1;"></select>
+                            <button type="button" class="btn btn-sm btn-outline" id="btn-import-create-event-quick">+ Uusi tapahtuma</button>
+                        </div>
+                    </div>
+
+                    <div class="form-group" style="margin: 0;">
+                        <label style="font-size: 0.8rem; font-weight: 700; color: #93c5fd;">Liitä Nimenhuuto / myClub -teksti tai osallistujalista:</label>
+                        <textarea id="import-attendance-text" class="search-input" style="height: 130px; font-family: monospace; font-size: 0.82rem; resize: vertical; line-height: 1.4;" placeholder="Esimerkiksi:
+In:
+#23 Matias V
+#19 Aaltonen
+#20 Veikka
+#22 Petri V
+#42 Henri K
+
+Out:
+#7 Sami P
+#87 Heikki H"></textarea>
                     </div>
                 </div>
 
-                <div class="form-group" style="margin: 0;">
-                    <label style="font-size: 0.8rem; font-weight: 700; color: #93c5fd;">Liitä Nimenhuuto / myClub -teksti tai osallistujat:</label>
-                    <textarea id="import-attendance-text" class="search-input" style="height: 150px; font-family: monospace; font-size: 0.82rem; resize: vertical; line-height: 1.4;" placeholder="Esimerkiksi:
-In:
-#2 Nikou
-#42 Henri K
-#13 Joni V
-#87 Heikki H
-
-Out:
-#12 Korhonen (Sairas)
-#33 Laaksonen
-
-Ehkä:
-#7 Virtanen"></textarea>
-                </div>
-
-                <div id="import-parse-preview" style="max-height: 140px; overflow-y: auto; display: none; background: rgba(0,0,0,0.3); padding: 8px; border-radius: 8px; font-size: 0.78rem;">
-                    <!-- Real-time parse preview -->
-                </div>
             </div>
-            <div class="modal-actions" style="margin-top: 1rem; display: flex; justify-content: space-between; align-items: center;">
+            <div class="modal-actions" style="margin-top: 0.5rem; display: flex; justify-content: space-between; align-items: center;">
                 <button type="button" class="btn btn-outline" id="btn-close-attendance-import-bottom">Peruuta</button>
-                <button type="button" class="btn btn-primary" id="btn-execute-attendance-import">⚡ Päivitä ja tallenna osallistujat</button>
+                <button type="button" class="btn btn-primary" id="btn-execute-attendance-import">⚡ Päivitä liitetystä tekstistä</button>
             </div>
         </div>
     </div>
@@ -1220,9 +1237,9 @@ Ehkä:
     <!-- TOAST NOTIFICATION CONTAINER -->
     <div id="toast" class="toast-notification"></div>
 
-    <!-- Firebase Config & App Engine (Cache Busted v39.5) -->
-    <script src="firebase-config.js?v=39.5"></script>
-    <script src="app.js?v=39.5"></script>
+    <!-- Firebase Config & App Engine (Cache Busted v39.6) -->
+    <script src="firebase-config.js?v=39.6"></script>
+    <script src="app.js?v=39.6"></script>
 
 </body>
 </html>
