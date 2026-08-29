@@ -17,7 +17,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 
     <!-- CSS Stylesheet (Cache Busted v39.4) -->
-    <link rel="stylesheet" href="styles.css?v=39.4">
+    <link rel="stylesheet" href="styles.css?v=39.5">
 
     <!-- OCR Tesseract.js (Optinen tekstintunnistus valokuvista) -->
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4.1.1/dist/tesseract.min.js"></script>
@@ -253,10 +253,10 @@
             </div>
         </section>
 
-        <!-- SUMMARY VIEW PANEL (Kaikki kentälliset kerralla rinnakkain) -->
+        <!-- YLEISNÄKYMÄ (KAIKKI KENTÄLLISET) PANEL -->
         <section class="panel summary-view-panel" id="summary-view-panel" style="display: none;">
             <div class="panel-header">
-                <h2>📊 Kaikki kentälliset (Yhteenveto)</h2>
+                <h2>📊 Yleisnäkymä (Kaikki kentälliset)</h2>
                 <div class="summary-actions">
                     <button class="btn-xs btn-outline" id="btn-add-lineup-summary">+ Uusi kentällinen</button>
                     <button class="btn-xs btn-outline" id="btn-manage-lineups-summary">⚙️ Järjestä / Poista</button>
@@ -265,7 +265,7 @@
             </div>
             
             <p class="panel-hint" style="padding: 0.6rem 0.9rem 0;">
-                💡 Täppää mitä tahansa sijoituspaikkaa valitaksesi tai muuttaaksesi pelaajaa!
+                💡 Täppää mitä tahansa sijoituspaikkaa valitaksesi tai muuttaaksesi pelaajaa, tai raahaa pelaaja alapuolen pelaajapankista!
             </p>
 
             <div class="summary-grid-container" id="summary-grid-container">
@@ -295,6 +295,68 @@
                 </div>
                 <div class="summary-roster-grid" id="summary-roster-grid">
                     <!-- Dynamic Player Cards -->
+                </div>
+            </div>
+        </section>
+
+        <!-- LIVE-OSALLISTUJAT (NIMENHUUTO / MYCLUB) PANEL -->
+        <section class="panel summary-view-panel live-view-panel" id="live-view-panel" style="display: none;">
+            <div class="panel-header">
+                <h2>🟢 Live-osallistujat (Nimenhuuto & myClub)</h2>
+                <div class="summary-actions">
+                    <button class="btn-xs btn-outline highlight-customize" id="btn-live-import-attendance">📋 Tuo Nimenhuuto/myClub</button>
+                    <button class="btn-xs btn-outline" id="btn-live-new-event">+ Uusi tapahtuma</button>
+                    <button class="btn-xs btn-outline" id="btn-live-config-integration">⚙️ Linkit</button>
+                    <button class="btn-xs btn-primary" id="btn-copy-all-live">📋 Kopioi kentät</button>
+                </div>
+            </div>
+
+            <!-- LIVE EVENT HEADER & CONTROLS -->
+            <div class="live-event-bar" id="live-event-bar">
+                <div class="live-event-select-wrapper">
+                    <label for="live-event-select" style="font-weight: 700; font-size: 0.85rem; color: #93c5fa;">📅 Valittu tapahtuma:</label>
+                    <select id="live-event-select" class="team-dropdown" style="min-width: 220px; font-weight: 600;"></select>
+                    <button class="btn-xs btn-outline" id="btn-edit-current-event" title="Muokkaa tapahtuman nimeä tai päivämäärää">✏️ Muokkaa</button>
+                    <button class="btn-xs btn-outline danger-text" id="btn-delete-current-event" title="Poista tämä tapahtuma">🗑️</button>
+                </div>
+                <div class="live-stats-bar" id="live-stats-bar">
+                    <span class="live-stat-pill status-in" id="stat-count-in">🟢 Mukana (IN): 0</span>
+                    <span class="live-stat-pill status-out" id="stat-count-out">🔴 Poissa (OUT): 0</span>
+                    <span class="live-stat-pill status-maybe" id="stat-count-maybe">🟡 Ehkä: 0</span>
+                    <span class="live-stat-pill status-unanswered" id="stat-count-unanswered">⚪ Ei vastannut: 0</span>
+                </div>
+            </div>
+            
+            <p class="panel-hint" style="padding: 0 0.9rem 0.4rem;">
+                💡 Näet alla pelaajien live-ilmoittautumiset valittuun peliin. Vihreät 🟢 IN -pelaajat ovat mukana ja valmiina kentällisiin!
+            </p>
+
+            <div class="summary-grid-container" id="live-grid-container">
+                <!-- Dynamic Live Lineup Cards with Attendance Badges -->
+            </div>
+
+            <!-- LIVE ROSTER PLAYER BANK -->
+            <div class="summary-roster-section live-roster-section" id="live-roster-section">
+                <div class="summary-roster-header">
+                    <div class="summary-roster-title-wrapper">
+                        <h3>👥 Live-pelaajapankki (Ilmoittautuneet pelaajat)</h3>
+                        <span class="summary-roster-subtitle">Klikkaa pelaajaa asettaaksesi hänet kentälliseen tai muuttaaksesi ilmoittautumisstatusta!</span>
+                    </div>
+                    <div class="summary-roster-controls">
+                        <input type="text" id="live-roster-search" class="search-input" placeholder="Hae pelaajaa...">
+                        <div class="filter-pills" id="live-filter-pills">
+                            <button class="pill-btn active" data-live-filter="all">Kaikki</button>
+                            <button class="pill-btn pill-in" data-live-filter="in">🟢 Mukana (IN)</button>
+                            <button class="pill-btn highlight-unassigned" data-live-filter="in-unassigned">🟡 Vapaat IN-pelaajat</button>
+                            <button class="pill-btn pill-out" data-live-filter="out">🔴 Poissa (OUT)</button>
+                            <button class="pill-btn pill-maybe" data-live-filter="maybe">🟡 Ehkä</button>
+                            <button class="pill-btn pill-unanswered" data-live-filter="unanswered">⚪ Ei vastannut</button>
+                            <button class="pill-btn pill-mv" data-live-filter="mv">🟢 MV</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="summary-roster-grid" id="live-roster-grid">
+                    <!-- Dynamic Live Player Cards with Attendance Badges -->
                 </div>
             </div>
         </section>
@@ -982,20 +1044,143 @@
         </div>
     </div>
 
-    <!-- ASSIGN PLAYER TO LINEUP MODAL (Yhteenvetonäkymästä) -->
-    <div class="modal-overlay" id="assign-player-modal">
+        </div>
+    </div>
+
+    <!-- NIMENHUUTO & MYCLUB ATTENDANCE IMPORT MODAL -->
+    <div class="modal-overlay" id="attendance-import-modal">
         <div class="modal-card modal-large">
             <div class="modal-header">
-                <h3 id="assign-player-modal-title">Sijoita pelaaja kentälliseen</h3>
-                <button class="close-btn" id="btn-close-assign-player-modal">&times;</button>
+                <h3>📋 Tuo osallistujat (Nimenhuuto / myClub)</h3>
+                <button class="close-btn" id="btn-close-attendance-import-modal">&times;</button>
             </div>
-            <div class="assign-player-body" id="assign-player-body" style="max-height: 60vh; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;">
-                <!-- Dynamic lineup rows and position buttons -->
+            <div class="modal-body" style="display: flex; flex-direction: column; gap: 0.8rem;">
+                <p style="font-size: 0.82rem; color: var(--text-secondary); margin: 0;">
+                    Kopioi ja liitä Nimenhuudon tai myClubin osallistujalista tähän. Jäsennin tunnistaa automaattisesti pelaajat ja heidän statuksensa (IN 👍 / OUT 👎 / EHKÄ ❓).
+                </p>
+
+                <div class="form-group" style="margin: 0;">
+                    <label style="font-size: 0.8rem; font-weight: 700; color: #93c5fd;">Valitse tai luo tapahtuma:</label>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <select id="import-target-event-select" class="team-dropdown" style="flex: 1;"></select>
+                        <button type="button" class="btn btn-sm btn-outline" id="btn-import-create-event-quick">+ Uusi</button>
+                    </div>
+                </div>
+
+                <div class="form-group" style="margin: 0;">
+                    <label style="font-size: 0.8rem; font-weight: 700; color: #93c5fd;">Liitä Nimenhuuto / myClub -teksti tai osallistujat:</label>
+                    <textarea id="import-attendance-text" class="search-input" style="height: 150px; font-family: monospace; font-size: 0.82rem; resize: vertical; line-height: 1.4;" placeholder="Esimerkiksi:
+In:
+#2 Nikou
+#42 Henri K
+#13 Joni V
+#87 Heikki H
+
+Out:
+#12 Korhonen (Sairas)
+#33 Laaksonen
+
+Ehkä:
+#7 Virtanen"></textarea>
+                </div>
+
+                <div id="import-parse-preview" style="max-height: 140px; overflow-y: auto; display: none; background: rgba(0,0,0,0.3); padding: 8px; border-radius: 8px; font-size: 0.78rem;">
+                    <!-- Real-time parse preview -->
+                </div>
             </div>
             <div class="modal-actions" style="margin-top: 1rem; display: flex; justify-content: space-between; align-items: center;">
-                <button type="button" class="btn btn-outline danger-text" id="btn-remove-player-all-lineups">🚫 Poista kaikista kentistä</button>
-                <button type="button" class="btn btn-outline" id="btn-close-assign-player-bottom">Sulje</button>
+                <button type="button" class="btn btn-outline" id="btn-close-attendance-import-bottom">Peruuta</button>
+                <button type="button" class="btn btn-primary" id="btn-execute-attendance-import">⚡ Päivitä ja tallenna osallistujat</button>
             </div>
+        </div>
+    </div>
+
+    <!-- LIVE EVENT CREATE / EDIT MODAL -->
+    <div class="modal-overlay" id="live-event-modal">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3 id="live-event-modal-title">📅 Tapahtuman tiedot</h3>
+                <button class="close-btn" id="btn-close-live-event-modal">&times;</button>
+            </div>
+            <form id="live-event-form" style="display: flex; flex-direction: column; gap: 0.8rem;">
+                <input type="hidden" id="form-live-event-id">
+                <div class="form-group" style="margin: 0;">
+                    <label for="form-live-event-title" style="font-size: 0.8rem; font-weight: 700; color: #93c5fd;">Tapahtuman nimi / Ottelu:</label>
+                    <input type="text" id="form-live-event-title" class="search-input" required placeholder="Esim. SekTa - SB Kauhava">
+                </div>
+                <div class="form-group" style="margin: 0;">
+                    <label for="form-live-event-date" style="font-size: 0.8rem; font-weight: 700; color: #93c5fd;">Päivämäärä ja aika:</label>
+                    <input type="text" id="form-live-event-date" class="search-input" placeholder="Esim. Su 30.8. klo 15:00">
+                </div>
+                <div class="form-group" style="margin: 0;">
+                    <label for="form-live-event-location" style="font-size: 0.8rem; font-weight: 700; color: #93c5fd;">Pelipaikka / Areena:</label>
+                    <input type="text" id="form-live-event-location" class="search-input" placeholder="Esim. Qmax Arena">
+                </div>
+                <div class="modal-actions" style="margin-top: 1rem; display: flex; justify-content: space-between;">
+                    <button type="button" class="btn btn-outline" id="btn-close-live-event-bottom">Peruuta</button>
+                    <button type="submit" class="btn btn-primary">Tallenna tapahtuma 🏒</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- PLAYER ATTENDANCE STATUS TOGGLE MODAL -->
+    <div class="modal-overlay" id="player-attendance-modal">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3 id="player-attendance-modal-title">Ilmoittautumisstatus</h3>
+                <button class="close-btn" id="btn-close-player-attendance-modal">&times;</button>
+            </div>
+            <div class="modal-body" style="display: flex; flex-direction: column; gap: 0.8rem;">
+                <input type="hidden" id="form-attendance-player-id">
+                <p id="player-attendance-modal-desc" style="font-size: 0.85rem; font-weight: 600; color: #ffffff; margin: 0;"></p>
+                <div style="display: flex; flex-direction: column; gap: 6px;">
+                    <button type="button" class="btn btn-block status-btn-in" data-set-status="in" style="background: #059669; color: white; justify-content: flex-start; font-size: 0.9rem;">
+                        🟢 Mukana (IN 👍)
+                    </button>
+                    <button type="button" class="btn btn-block status-btn-out" data-set-status="out" style="background: #dc2626; color: white; justify-content: flex-start; font-size: 0.9rem;">
+                        🔴 Poissa (OUT 👎)
+                    </button>
+                    <button type="button" class="btn btn-block status-btn-maybe" data-set-status="maybe" style="background: #d97706; color: white; justify-content: flex-start; font-size: 0.9rem;">
+                        🟡 Ehkä (Epävarma ❓)
+                    </button>
+                    <button type="button" class="btn btn-block status-btn-unanswered" data-set-status="unanswered" style="background: #475569; color: white; justify-content: flex-start; font-size: 0.9rem;">
+                        ⚪ Ei vastausta
+                    </button>
+                </div>
+                <div class="form-group" style="margin-top: 0.4rem;">
+                    <label for="form-attendance-reason" style="font-size: 0.75rem; color: var(--text-secondary);">Syy / Lisätieto (esim. Sairas, Työvuoro):</label>
+                    <input type="text" id="form-attendance-reason" class="search-input" placeholder="Vapaaehtoinen lisätieto...">
+                </div>
+            </div>
+            <div class="modal-actions" style="margin-top: 0.8rem; display: flex; justify-content: flex-end;">
+                <button type="button" class="btn btn-outline" id="btn-close-player-attendance-bottom">Sulje</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- NIMENHUUTO & MYCLUB CONFIG MODAL -->
+    <div class="modal-overlay" id="nimenhuuto-config-modal">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3>⚙️ Nimenhuuto & myClub -linkit</h3>
+                <button class="close-btn" id="btn-close-nimenhuuto-config-modal">&times;</button>
+            </div>
+            <form id="nimenhuuto-config-form" style="display: flex; flex-direction: column; gap: 0.8rem;">
+                <div class="form-group" style="margin: 0;">
+                    <label for="form-nimenhuuto-url" style="font-size: 0.8rem; font-weight: 700; color: #93c5fd;">Nimenhuuto osoite tai tiimitunnus:</label>
+                    <input type="text" id="form-nimenhuuto-url" class="search-input" placeholder="Esim. sekta tai https://sekta.nimenhuuto.com">
+                    <span style="font-size: 0.72rem; color: var(--text-secondary);">SekTa joukkueelle: sekta.nimenhuuto.com</span>
+                </div>
+                <div class="form-group" style="margin: 0;">
+                    <label for="form-myclub-url" style="font-size: 0.8rem; font-weight: 700; color: #93c5fd;">myClub / iCal linkki (valinnainen):</label>
+                    <input type="text" id="form-myclub-url" class="search-input" placeholder="https://...">
+                </div>
+                <div class="modal-actions" style="margin-top: 1rem; display: flex; justify-content: space-between;">
+                    <button type="button" class="btn btn-outline" id="btn-close-nimenhuuto-config-bottom">Peruuta</button>
+                    <button type="submit" class="btn btn-primary">Tallenna linkit 🔗</button>
+                </div>
+            </form>
         </div>
     </div>
 
@@ -1035,9 +1220,9 @@
     <!-- TOAST NOTIFICATION CONTAINER -->
     <div id="toast" class="toast-notification"></div>
 
-    <!-- Firebase Config & App Engine (Cache Busted v39.4) -->
-    <script src="firebase-config.js?v=39.4"></script>
-    <script src="app.js?v=39.4"></script>
+    <!-- Firebase Config & App Engine (Cache Busted v39.5) -->
+    <script src="firebase-config.js?v=39.5"></script>
+    <script src="app.js?v=39.5"></script>
 
 </body>
 </html>
