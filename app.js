@@ -4644,25 +4644,86 @@
         return events;
     }
 
-    async function fetchAndSyncNimenhuutoEvents(targetUrl = null) {
+    function parseICalEvents(icsText) {
+        const events = [];
+        const vevents = icsText.split(/BEGIN:VEVENT/i);
+        
+        for (let i = 1; i < vevents.length; i++) {
+            const block = vevents[i].split(/END:VEVENT/i)[0] || '';
+            
+            let summary = 'Tapahtuma';
+            const sumMatch = block.match(/SUMMARY:(.*?)(?:\r?\n[A-Z]|\r?\nEND:|$)/s);
+            if (sumMatch) summary = sumMatch[1].replace(/\r?\n\s+/g, '').trim();
+
+            let location = '';
+            const locMatch = block.match(/LOCATION:(.*?)(?:\r?\n[A-Z]|\r?\nEND:|$)/s);
+            if (locMatch) location = locMatch[1].replace(/\r?\n\s+/g, '').trim();
+
+            let dtstart = '';
+            const dtMatch = block.match(/DTSTART(?:;[^:]+)?:(\d{8}T\d{4}\d{2}?Z?|\d{8})/i);
+            if (dtMatch) {
+                const raw = dtMatch[1];
+                if (raw.length >= 8) {
+                    const year = raw.substr(0, 4);
+                    const month = parseInt(raw.substr(4, 2), 10);
+                    const day = parseInt(raw.substr(6, 2), 10);
+                    let timeStr = '';
+                    if (raw.includes('T')) {
+                        const tPart = raw.split('T')[1];
+                        timeStr = ` klo ${tPart.substr(0, 2)}:${tPart.substr(2, 2)}`;
+                    }
+                    dtstart = `${day}.${month}.${year}${timeStr}`;
+                }
+            }
+
+            const id = 'ev_ical_' + i + '_' + Date.now();
+            const attendees = {};
+            roster.forEach(p => {
+                attendees[p.id] = { status: 'unanswered', reason: '' };
+            });
+
+            events.push({
+                id: id,
+                title: summary,
+                date: dtstart,
+                location: location,
+                source: 'myclub_ical',
+                attendees: attendees
+            });
+        }
+
+        return events;
+    }
+
+    async function fetchAndSyncEvents(targetUrl = null) {
+        const curTeam = teams.find(t => t.id === currentTeamId);
+        const teamName = curTeam ? curTeam.name : 'Joukkue';
+
         if (!targetUrl) {
-            const curTeam = teams.find(t => t.id === currentTeamId);
-            targetUrl = (curTeam && curTeam.nimenhuutoUrl) ? curTeam.nimenhuutoUrl : 'https://sekta.nimenhuuto.com/events';
+            targetUrl = (curTeam && (curTeam.eventsUrl || curTeam.nimenhuutoUrl || curTeam.myclubUrl)) ? (curTeam.eventsUrl || curTeam.nimenhuutoUrl || curTeam.myclubUrl) : '';
+        }
+
+        if (!targetUrl || !targetUrl.trim()) {
+            openAttendanceImportModal();
+            return false;
         }
 
         targetUrl = targetUrl.trim();
-        if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
+        if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://') && !targetUrl.startsWith('webcal://')) {
             if (targetUrl.includes('.')) {
                 targetUrl = 'https://' + targetUrl;
             } else {
                 targetUrl = `https://${targetUrl}.nimenhuuto.com/events`;
             }
         }
-        if (!targetUrl.includes('/events') && targetUrl.includes('nimenhuuto.com')) {
+        if (targetUrl.startsWith('webcal://')) {
+            targetUrl = 'https://' + targetUrl.substr(9);
+        }
+        if (!targetUrl.includes('/events') && targetUrl.includes('nimenhuuto.com') && !targetUrl.endsWith('.ics')) {
             targetUrl = targetUrl.replace(/\/+$/, '') + '/events';
         }
 
-        showToast(`Haetaan tapahtumia: ${targetUrl}... ⏳`);
+        showToast(`Haetaan tapahtumia joukkueelle ${teamName}... ⏳`);
 
         const proxyUrls = [
             `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`,
@@ -4670,187 +4731,62 @@
             targetUrl
         ];
 
-        let htmlText = '';
+        let rawText = '';
         let fetchSuccess = false;
 
         for (const pUrl of proxyUrls) {
             try {
                 const res = await fetch(pUrl, { cache: 'no-cache' });
                 if (res.ok) {
-                    htmlText = await res.text();
-                    if (htmlText && (htmlText.includes('event-detailed-container') || htmlText.includes('event_') || htmlText.includes('Nimenhuuto'))) {
+                    rawText = await res.text();
+                    if (rawText && (rawText.includes('BEGIN:VCALENDAR') || rawText.includes('event-detailed-container') || rawText.includes('event_') || rawText.includes('myClub') || rawText.includes('Nimenhuuto') || rawText.includes('tapahtumat'))) {
                         fetchSuccess = true;
                         break;
                     }
                 }
             } catch (err) {
-                console.warn('Proxy fetch attempt failed:', pUrl, err);
+                console.warn('Fetch attempt failed:', pUrl, err);
             }
         }
 
-        if (!fetchSuccess || !htmlText) {
-            showToast('Verkkohaku epäonnistui. Voit liittää osallistujat myös tekstinä.');
+        if (!fetchSuccess || !rawText) {
+            showToast(`Haku osoitteesta epäonnistui. Varmista osoite tai liitä osallistujat tekstinä.`);
+            openAttendanceImportModal();
             return false;
         }
 
-        const parsedEvents = parseNimenhuutoEventsHtml(htmlText);
+        let parsedEvents = [];
+        if (rawText.includes('BEGIN:VCALENDAR')) {
+            parsedEvents = parseICalEvents(rawText);
+        } else {
+            parsedEvents = parseNimenhuutoEventsHtml(rawText);
+        }
+
         if (parsedEvents.length === 0) {
-            showToast('Sivulta ei löytynyt tapahtumia.');
+            showToast('Sivulta ei löytynyt tapahtumia. Voit liittää tapahtuman tai osallistujat myös tekstinä.');
+            openAttendanceImportModal();
             return false;
         }
 
         teamEvents = parsedEvents;
         activeEventId = teamEvents[0] ? teamEvents[0].id : null;
 
-        // Remember URL on team
-        const curTeam = teams.find(t => t.id === currentTeamId);
-        if (curTeam) curTeam.nimenhuutoUrl = targetUrl;
+        // Remember URL specifically for this team
+        if (curTeam) {
+            curTeam.eventsUrl = targetUrl;
+            curTeam.nimenhuutoUrl = targetUrl;
+        }
 
         saveState();
         renderLiveView();
         document.getElementById('attendance-import-modal')?.classList.remove('active');
-        showToast(`Haettu onnistuneesti ${teamEvents.length} tapahtumaa Nimenhuudosta! 🎉`);
+        showToast(`Haettu onnistuneesti ${teamEvents.length} tapahtumaa joukkueelle ${teamName}! 🎉`);
         return true;
     }
 
     function loadTeamEvents(teamId) {
         let stored = loadFromStorage(`salibandy_events_${teamId}`, null);
-        if (!stored || !Array.isArray(stored) || stored.length === 0) {
-            const team = teams.find(t => t.id === teamId);
-            const teamName = team ? team.name : 'SekTa';
-            const curRoster = loadRosterForTeam(teamId);
-
-            if (teamName.toLowerCase().includes('sekta')) {
-                // Real initial events directly from sekta.nimenhuuto.com/events
-                stored = [
-                    {
-                        id: 'event_20207053',
-                        title: 'Harkka · Omat harkat',
-                        date: 'Ma 31.8. klo 21:00',
-                        location: 'Kupittaan palloiluhalli kenttä 3',
-                        source: 'nimenhuuto',
-                        attendees: {}
-                    },
-                    {
-                        id: 'event_20106914',
-                        title: 'Harkka · SekTa - TVV',
-                        date: 'Ke 2.9. klo 20:00',
-                        location: 'leaf areena, turku (Kenttä 1. Valkoinen paita)',
-                        source: 'nimenhuuto',
-                        attendees: {}
-                    },
-                    {
-                        id: 'event_20207054',
-                        title: 'Harkka · Omat harkat',
-                        date: 'Ma 7.9. klo 21:00',
-                        location: 'Kupittaan palloiluhalli kenttä 3',
-                        source: 'nimenhuuto',
-                        attendees: {}
-                    },
-                    {
-                        id: 'event_20106915',
-                        title: 'Harkka · SekTa - TVV',
-                        date: 'Ke 9.9. klo 20:00',
-                        location: 'leaf areena, turku',
-                        source: 'nimenhuuto',
-                        attendees: {}
-                    },
-                    {
-                        id: 'event_20042456',
-                        title: 'Matsi · SekTa - TBS',
-                        date: 'La 12.9. klo 11:30',
-                        location: 'Hani-Halli Oy, Keskuskatu 35, Mynämäki',
-                        source: 'nimenhuuto',
-                        attendees: {}
-                    },
-                    {
-                        id: 'event_20042457',
-                        title: 'Matsi · SBS Masku II - SekTa',
-                        date: 'La 12.9. klo 14:00',
-                        location: 'Hani-Halli Oy, Keskuskatu 35, Mynämäki',
-                        source: 'nimenhuuto',
-                        attendees: {}
-                    },
-                    {
-                        id: 'event_20207055',
-                        title: 'Harkka · Omat harkat',
-                        date: 'Ma 14.9. klo 21:00',
-                        location: 'Kupittaan palloiluhalli kenttä 3',
-                        source: 'nimenhuuto',
-                        attendees: {}
-                    },
-                    {
-                        id: 'event_20106916',
-                        title: 'Harkka · SekTa - TVV',
-                        date: 'Ke 16.9. klo 20:00',
-                        location: 'leaf areena, turku',
-                        source: 'nimenhuuto',
-                        attendees: {}
-                    },
-                    {
-                        id: 'event_20207056',
-                        title: 'Harkka · Omat harkat',
-                        date: 'Ma 21.9. klo 21:00',
-                        location: 'Kupittaan palloiluhalli kenttä 3',
-                        source: 'nimenhuuto',
-                        attendees: {}
-                    },
-                    {
-                        id: 'event_20106917',
-                        title: 'Harkka · SekTa - TVV',
-                        date: 'Ke 23.9. klo 20:00',
-                        location: 'leaf areena, turku',
-                        source: 'nimenhuuto',
-                        attendees: {}
-                    }
-                ];
-
-                // Seed Event 1 attendees (Ma 31.8.)
-                const inNums1 = [23, 19, 20, 22, 42, 13, 64, 15, 11, 66, 4];
-                const outNums1 = [7, 87];
-                curRoster.forEach(p => {
-                    if (inNums1.includes(p.number)) stored[0].attendees[p.id] = { status: 'in', reason: '' };
-                    else if (outNums1.includes(p.number)) stored[0].attendees[p.id] = { status: 'out', reason: '' };
-                    else stored[0].attendees[p.id] = { status: 'unanswered', reason: '' };
-                });
-
-                // Seed Event 2 attendees (Ke 2.9.)
-                const inNums2 = [23, 20, 42, 13, 19];
-                const outNums2 = [7, 21];
-                curRoster.forEach(p => {
-                    if (inNums2.includes(p.number)) stored[1].attendees[p.id] = { status: 'in', reason: '' };
-                    else if (outNums2.includes(p.number)) stored[1].attendees[p.id] = { status: 'out', reason: '' };
-                    else stored[1].attendees[p.id] = { status: 'unanswered', reason: '' };
-                });
-            } else {
-                const initialEvent = {
-                    id: 'ev_' + Date.now(),
-                    title: `${teamName} - Ottelu`,
-                    date: 'Su 30.8. klo 15:00',
-                    location: 'Peliareena',
-                    source: 'nimenhuuto',
-                    attendees: {}
-                };
-
-                curRoster.forEach((p, idx) => {
-                    if (idx < 14) {
-                        initialEvent.attendees[p.id] = { status: 'in', reason: '' };
-                    } else if (idx < 17) {
-                        initialEvent.attendees[p.id] = { status: 'out', reason: (idx === 14 ? 'Sairas' : idx === 15 ? 'Työvuoro' : 'Muu este') };
-                    } else if (idx < 18) {
-                        initialEvent.attendees[p.id] = { status: 'maybe', reason: 'Epävarma' };
-                    } else {
-                        initialEvent.attendees[p.id] = { status: 'unanswered', reason: '' };
-                    }
-                });
-
-                stored = [initialEvent];
-            }
-
-            localStorage.setItem(`salibandy_events_${teamId}`, JSON.stringify(stored));
-        }
-
-        teamEvents = stored;
+        teamEvents = Array.isArray(stored) ? stored : [];
         if (!activeEventId || !teamEvents.some(e => e.id === activeEventId)) {
             activeEventId = teamEvents[0] ? teamEvents[0].id : null;
         }
@@ -4881,6 +4817,56 @@
 
         if (!teamEvents || teamEvents.length === 0) {
             loadTeamEvents(currentTeamId);
+        }
+
+        const curTeam = teams.find(t => t.id === currentTeamId);
+        const teamName = curTeam ? curTeam.name : 'Joukkue';
+        const teamUrl = curTeam ? (curTeam.eventsUrl || curTeam.nimenhuutoUrl || curTeam.myclubUrl || '') : '';
+
+        // Empty state: when no events exist for this specific team yet
+        if (!teamEvents || teamEvents.length === 0) {
+            liveGridContainer.innerHTML = `
+                <div class="empty-live-box" style="grid-column: 1 / -1; padding: 2.5rem 1.5rem; text-align: center; background: rgba(255, 255, 255, 0.03); border: 2px dashed rgba(255, 255, 255, 0.15); border-radius: var(--radius-lg);">
+                    <div style="font-size: 2.8rem; margin-bottom: 0.6rem;">🌐</div>
+                    <h3 style="font-size: 1.2rem; color: #fff; margin-bottom: 0.4rem;">Ei vielä tapahtumia joukkueelle ${escapeHtml(teamName)}</h3>
+                    <p style="font-size: 0.85rem; color: var(--text-secondary); max-width: 520px; margin: 0 auto 1.2rem; line-height: 1.5;">
+                        Hae tulevat ottelut, harjoitukset ja pelaajien osallistumiset automaattisesti syöttämällä joukkueesi <strong>Nimenhuuto</strong>- tai <strong>myClub</strong> -osoite.
+                    </p>
+                    <div style="display: flex; justify-content: center; gap: 8px; max-width: 480px; margin: 0 auto 1rem; flex-wrap: wrap;">
+                        <input type="text" id="empty-live-url-input" class="search-input" style="flex: 1; min-width: 220px;" placeholder="Esim. https://${escapeHtml(teamName.toLowerCase().replace(/[^a-z0-9]/g, ''))}.nimenhuuto.com/events tai myClub-osoite" value="${escapeHtml(teamUrl)}">
+                        <button type="button" class="btn btn-primary" id="btn-empty-fetch-events">🔄 Hae tapahtumat</button>
+                    </div>
+                    <div style="display: flex; justify-content: center; gap: 8px; flex-wrap: wrap;">
+                        <button type="button" class="btn btn-sm btn-outline" id="btn-empty-paste-attendance">📋 Liitä lista käsin</button>
+                        <button type="button" class="btn btn-sm btn-outline" id="btn-empty-create-event">+ Luo tapahtuma käsin</button>
+                    </div>
+                </div>
+            `;
+
+            document.getElementById('btn-empty-fetch-events')?.addEventListener('click', () => {
+                const input = document.getElementById('empty-live-url-input');
+                const url = input ? input.value.trim() : '';
+                if (!url) {
+                    showToast('Syötä ensin osoite (esim. https://omatiimi.nimenhuuto.com/events)!');
+                    return;
+                }
+                fetchAndSyncEvents(url);
+            });
+            document.getElementById('btn-empty-paste-attendance')?.addEventListener('click', openAttendanceImportModal);
+            document.getElementById('btn-empty-create-event')?.addEventListener('click', () => openLiveEventModal(null));
+
+            // Reset status counters
+            const statIn = document.getElementById('stat-count-in');
+            const statOut = document.getElementById('stat-count-out');
+            const statMaybe = document.getElementById('stat-count-maybe');
+            const statUnanswered = document.getElementById('stat-count-unanswered');
+            if (statIn) statIn.textContent = `🟢 Mukana (IN): 0`;
+            if (statOut) statOut.textContent = `🔴 Poissa (OUT): 0`;
+            if (statMaybe) statMaybe.textContent = `🟡 Ehkä: 0`;
+            if (statUnanswered) statUnanswered.textContent = `⚪ Ei vastannut: 0`;
+
+            renderLiveRosterGrid();
+            return;
         }
 
         const curEvent = teamEvents.find(e => e.id === activeEventId) || teamEvents[0];
@@ -5238,19 +5224,57 @@
         let currentSection = 'in'; // default to IN
 
         lines.forEach(line => {
+            // Check for TSV / CSV table row (e.g. from myClub export or Excel)
+            if (line.includes('\t') || (line.includes(';') && !line.includes('&'))) {
+                const parts = line.split(/[\t;]/).map(p => p.trim());
+                let status = 'in';
+                let reason = '';
+                let namePart = '';
+                let numPart = '';
+
+                parts.forEach(part => {
+                    const lp = part.toLowerCase();
+                    if (lp === 'kyllä' || lp === 'in' || lp === 'osallistuu' || lp === 'mukana' || lp === 'yes' || lp === 'tulossa') status = 'in';
+                    else if (lp === 'ei' || lp === 'out' || lp === 'poissa' || lp === 'ei osallistu' || lp === 'no' || lp === 'estynyt') status = 'out';
+                    else if (lp === 'ehkä' || lp === 'varalla' || lp === 'maybe' || lp === 'epävarma') status = 'maybe';
+                    else if (lp === 'ei vastannut' || lp === 'ilmoittautumatta' || lp === 'avoin') status = 'unanswered';
+                    else if (/^#?\d+$/.test(part)) numPart = part;
+                    else if (part.length > 1 && !namePart) namePart = part;
+                    else if (part.length > 1 && namePart) reason = part;
+                });
+
+                let matchedPlayer = null;
+                if (numPart) {
+                    const num = parseInt(numPart.replace('#', ''), 10);
+                    matchedPlayer = roster.find(p => p.number === num);
+                }
+                if (!matchedPlayer && namePart) {
+                    const clean = namePart.toLowerCase();
+                    matchedPlayer = roster.find(p => p.name && (clean.includes(p.name.toLowerCase()) || p.name.toLowerCase().includes(clean)));
+                }
+                if (matchedPlayer) {
+                    result[matchedPlayer.id] = { status, reason };
+                    return;
+                }
+            }
+
             const lower = line.toLowerCase();
 
-            // Detect section headers
-            if (lower.startsWith('in') || lower.startsWith('mukana') || lower.startsWith('tulossa') || lower.startsWith('osallistuu') || lower.startsWith('kyllä') || lower.startsWith('yes')) {
+            // Detect section headers (Nimenhuuto & myClub)
+            if (lower.startsWith('in') || lower.startsWith('mukana') || lower.startsWith('tulossa') || lower.startsWith('osallistuu') || lower.startsWith('kyllä') || lower.startsWith('yes') || lower.startsWith('ilmoittautuneet')) {
                 currentSection = 'in';
                 return;
             }
-            if (lower.startsWith('out') || lower.startsWith('poissa') || lower.startsWith('ei pääse') || lower.startsWith('estynyt') || lower.startsWith('ei') || lower.startsWith('no')) {
+            if (lower.startsWith('out') || lower.startsWith('poissa') || lower.startsWith('ei osallistu') || lower.startsWith('ei pääse') || lower.startsWith('estynyt') || lower.startsWith('ei') || lower.startsWith('no')) {
                 currentSection = 'out';
                 return;
             }
             if (lower.startsWith('ehkä') || lower.startsWith('maybe') || lower.startsWith('epävarma') || lower.startsWith('varalla')) {
                 currentSection = 'maybe';
+                return;
+            }
+            if (lower.startsWith('ei vastannut') || lower.startsWith('ilmoittautumatta') || lower.startsWith('avoin')) {
+                currentSection = 'unanswered';
                 return;
             }
 
@@ -5262,7 +5286,6 @@
             }
 
             // Match against roster
-            // Try matching by number first: e.g. #19 or 19.
             let matchedPlayer = null;
             const numMatch = line.match(/#?(\d+)/);
             if (numMatch) {
@@ -5298,9 +5321,11 @@
         const textarea = document.getElementById('import-attendance-text');
         const urlInput = document.getElementById('import-web-url');
         const curTeam = teams.find(t => t.id === currentTeamId);
+        const teamName = curTeam ? curTeam.name : 'Joukkue';
 
         if (urlInput) {
-            urlInput.value = (curTeam && curTeam.nimenhuutoUrl) ? curTeam.nimenhuutoUrl : 'https://sekta.nimenhuuto.com/events';
+            urlInput.value = (curTeam && (curTeam.eventsUrl || curTeam.nimenhuutoUrl || curTeam.myclubUrl)) ? (curTeam.eventsUrl || curTeam.nimenhuutoUrl || curTeam.myclubUrl) : '';
+            urlInput.placeholder = `Esim. https://${teamName.toLowerCase().replace(/[^a-z0-9]/g, '')}.nimenhuuto.com/events tai myClub-osoite`;
         }
         if (textarea) textarea.value = '';
         if (modal) modal.classList.add('active');
@@ -5478,7 +5503,7 @@
         const nhInput = document.getElementById('form-nimenhuuto-url');
         const mcInput = document.getElementById('form-myclub-url');
 
-        if (nhInput) nhInput.value = (team && team.nimenhuutoUrl) ? team.nimenhuutoUrl : 'sekta';
+        if (nhInput) nhInput.value = (team && (team.nimenhuutoUrl || team.eventsUrl)) ? (team.nimenhuutoUrl || team.eventsUrl) : '';
         if (mcInput) mcInput.value = (team && team.myclubUrl) ? team.myclubUrl : '';
         if (modal) modal.classList.add('active');
     }
@@ -7617,8 +7642,12 @@
 
         document.getElementById('btn-live-fetch-web')?.addEventListener('click', () => {
             const curTeam = teams.find(t => t.id === currentTeamId);
-            const url = (curTeam && curTeam.nimenhuutoUrl) ? curTeam.nimenhuutoUrl : 'https://sekta.nimenhuuto.com/events';
-            fetchAndSyncNimenhuutoEvents(url);
+            const url = (curTeam && (curTeam.eventsUrl || curTeam.nimenhuutoUrl || curTeam.myclubUrl)) ? (curTeam.eventsUrl || curTeam.nimenhuutoUrl || curTeam.myclubUrl) : '';
+            if (!url) {
+                openAttendanceImportModal();
+            } else {
+                fetchAndSyncEvents(url);
+            }
         });
 
         document.getElementById('btn-execute-web-fetch')?.addEventListener('click', () => {
@@ -7628,7 +7657,7 @@
                 showToast('Syötä ensin Nimenhuuto- tai myClub -osoite!');
                 return;
             }
-            fetchAndSyncNimenhuutoEvents(url);
+            fetchAndSyncEvents(url);
         });
 
         document.getElementById('btn-live-import-attendance')?.addEventListener('click', openAttendanceImportModal);

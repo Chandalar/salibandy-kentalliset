@@ -16,8 +16,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 
-    <!-- CSS Stylesheet (Cache Busted v39.6) -->
-    <link rel="stylesheet" href="styles.css?v=39.6">
+    <!-- CSS Stylesheet (Cache Busted v39.7) -->
+    <link rel="stylesheet" href="styles.css?v=39.7">
 
     <!-- OCR Tesseract.js (Optinen tekstintunnistus valokuvista) -->
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4.1.1/dist/tesseract.min.js"></script>
@@ -1180,18 +1180,19 @@ Out:
     <div class="modal-overlay" id="nimenhuuto-config-modal">
         <div class="modal-card">
             <div class="modal-header">
-                <h3>⚙️ Nimenhuuto & myClub -linkit</h3>
+                <h3>⚙️ Tapahtumalähteet (Nimenhuuto & myClub)</h3>
                 <button class="close-btn" id="btn-close-nimenhuuto-config-modal">&times;</button>
             </div>
             <form id="nimenhuuto-config-form" style="display: flex; flex-direction: column; gap: 0.8rem;">
                 <div class="form-group" style="margin: 0;">
-                    <label for="form-nimenhuuto-url" style="font-size: 0.8rem; font-weight: 700; color: #93c5fd;">Nimenhuuto osoite tai tiimitunnus:</label>
-                    <input type="text" id="form-nimenhuuto-url" class="search-input" placeholder="Esim. sekta tai https://sekta.nimenhuuto.com">
-                    <span style="font-size: 0.72rem; color: var(--text-secondary);">SekTa joukkueelle: sekta.nimenhuuto.com</span>
+                    <label for="form-nimenhuuto-url" style="font-size: 0.8rem; font-weight: 700; color: #93c5fd;">Tapahtumaosoite tälle joukkueelle:</label>
+                    <input type="text" id="form-nimenhuuto-url" class="search-input" placeholder="Esim. https://joukkue.nimenhuuto.com/events tai myClub-linkki">
+                    <span style="font-size: 0.72rem; color: var(--text-secondary);">Jokaiselle joukkueelle voi asettaa oman erillisen osoitteensa.</span>
                 </div>
                 <div class="form-group" style="margin: 0;">
-                    <label for="form-myclub-url" style="font-size: 0.8rem; font-weight: 700; color: #93c5fd;">myClub / iCal linkki (valinnainen):</label>
-                    <input type="text" id="form-myclub-url" class="search-input" placeholder="https://...">
+                    <label for="form-myclub-url" style="font-size: 0.8rem; font-weight: 700; color: #93c5fd;">myClub / iCal -kalenterilinkki (.ics):</label>
+                    <input type="text" id="form-myclub-url" class="search-input" placeholder="https://seura.myclub.fi/events.ics">
+                    <span style="font-size: 0.72rem; color: var(--text-secondary);">myClubin iCal-tilauslinkki hakee tapahtumat automaattisesti kalenterista.</span>
                 </div>
                 <div class="modal-actions" style="margin-top: 1rem; display: flex; justify-content: space-between;">
                     <button type="button" class="btn btn-outline" id="btn-close-nimenhuuto-config-bottom">Peruuta</button>
@@ -1237,9 +1238,9 @@ Out:
     <!-- TOAST NOTIFICATION CONTAINER -->
     <div id="toast" class="toast-notification"></div>
 
-    <!-- Firebase Config & App Engine (Cache Busted v39.6) -->
-    <script src="firebase-config.js?v=39.6"></script>
-    <script src="app.js?v=39.6"></script>
+    <!-- Firebase Config & App Engine (Cache Busted v39.7) -->
+    <script src="firebase-config.js?v=39.7"></script>
+    <script src="app.js?v=39.7"></script>
 
 </body>
 </html>
