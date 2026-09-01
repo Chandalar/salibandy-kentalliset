@@ -1505,8 +1505,6 @@ body {
     user-select: none;
     -webkit-user-select: none;
     touch-action: pan-y pinch-zoom;
-    transform: translateZ(0);
-    -webkit-transform: translateZ(0);
 }
 
 .pitch-container.mode-vertical {
@@ -1551,8 +1549,6 @@ body {
     background: radial-gradient(circle at center, #1e3a8a 0%, #0d1624 100%);
     pointer-events: none !important;
     z-index: 0 !important;
-    transform: translateZ(0);
-    -webkit-transform: translateZ(0);
 }
 
 /* Court Markings & Goals Hierarchy (Always visible above surface) */
@@ -3009,8 +3005,8 @@ body[data-court-color="grid"] .faceoff-dot {
     }
 
     .pitch-outer-wrapper {
-        min-height: 350px !important;
-        height: 350px !important;
+        height: auto !important;
+        min-height: unset !important;
     }
 }
 
@@ -3058,33 +3054,22 @@ body[data-court-color="grid"] .faceoff-dot {
         font-size: 0.72rem;
     }
 
-    /* CONSTRAINED COURT WIDTH FOR EASY FINGER SWIPING & SCROLLING ON SIDES */
+    /* PITCH OUTER WRAPPER ON MOBILE */
     .pitch-outer-wrapper {
-        min-height: 310px !important;
-        height: 310px !important;
-        padding: 0.4rem 1.4rem !important;
+        height: auto !important;
+        min-height: unset !important;
+        padding: 0.4rem 0.5rem !important;
         justify-content: center;
     }
 
     .pitch-container {
-        max-width: 82% !important;
+        width: 100% !important;
+        max-width: 440px !important;
         margin: 0 auto;
     }
 
     .court-player-node {
         gap: 0.08rem !important;
-    }
-
-    .node-circle, .ball-circle, .floorball-png-icon {
-        width: 26px !important;
-        height: 26px !important;
-        font-size: 0.72rem !important;
-        border-width: 1.5px !important;
-    }
-
-    .node-label {
-        font-size: 0.58rem !important;
-        padding: 0.05rem 0.25rem !important;
     }
 
     .assign-btn-row {

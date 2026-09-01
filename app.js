@@ -2140,30 +2140,59 @@
 
         const ctxEl = canvasEl.getContext('2d');
         if (!ctxEl) return;
-        let courtRect = courtContainer.getBoundingClientRect();
 
-        if (courtRect.width === 0 || courtRect.height === 0) {
-            const panelEl = courtContainer.closest('.pitch-panel');
-            if (panelEl && window.getComputedStyle(panelEl).display === 'none') {
-                // Pitch panel is currently hidden by mobile tab, skip until tab is activated
-                return;
+        function updateCanvasSizeAndRedraw() {
+            let width = courtContainer.clientWidth || courtContainer.offsetWidth;
+            let height = courtContainer.clientHeight || courtContainer.offsetHeight;
+
+            if (width === 0 || height === 0) {
+                const rect = courtContainer.getBoundingClientRect();
+                width = rect.width;
+                height = rect.height;
             }
-            const parentWidth = courtContainer.parentElement ? courtContainer.parentElement.clientWidth : 0;
-            if (parentWidth > 0) {
-                courtRect = { width: parentWidth, height: Math.round(parentWidth * (orientationMode === 'vertical' ? 1.8 : 0.5)) };
-            } else {
-                setTimeout(() => initCourtBoardInstance(courtId), 50);
-                return;
+
+            if (width > 0 && height > 0) {
+                const pixelW = Math.round(width);
+                const pixelH = Math.round(height);
+                if (canvasEl.width !== pixelW || canvasEl.height !== pixelH) {
+                    canvasEl.width = pixelW;
+                    canvasEl.height = pixelH;
+                }
+                canvasEl.style.width = '100%';
+                canvasEl.style.height = '100%';
+                drawCanvasLinesForInstance(courtId, canvasEl, ctxEl);
             }
         }
 
-        canvasEl.width = courtRect.width;
-        canvasEl.height = courtRect.height;
-        canvasEl.style.width = courtRect.width + 'px';
-        canvasEl.style.height = courtRect.height + 'px';
+        // Setup ResizeObserver for instant auto-resizing and repaints on mobile/desktop
+        if (!courtContainer._resizeObserver && typeof ResizeObserver !== 'undefined') {
+            courtContainer._resizeObserver = new ResizeObserver((entries) => {
+                for (let entry of entries) {
+                    const cr = entry.contentRect;
+                    if (cr && cr.width > 0 && cr.height > 0) {
+                        const pixelW = Math.round(cr.width);
+                        const pixelH = Math.round(cr.height);
+                        if (canvasEl.width !== pixelW || canvasEl.height !== pixelH) {
+                            canvasEl.width = pixelW;
+                            canvasEl.height = pixelH;
+                            canvasEl.style.width = '100%';
+                            canvasEl.style.height = '100%';
+                            drawCanvasLinesForInstance(courtId, canvasEl, ctxEl);
+                        }
+                    }
+                }
+            });
+            courtContainer._resizeObserver.observe(courtContainer);
+        }
 
+        updateCanvasSizeAndRedraw();
         renderCourtNodesForInstance(courtId, layersEl);
-        drawCanvasLinesForInstance(courtId, canvasEl, ctxEl);
+
+        // If not measured yet (e.g. during initial layout frame), retry in 50ms & 150ms
+        if (canvasEl.width <= 10 || canvasEl.height <= 10) {
+            setTimeout(updateCanvasSizeAndRedraw, 50);
+            setTimeout(updateCanvasSizeAndRedraw, 150);
+        }
 
         if (!canvasEl._drawingEventsAttached) {
             canvasEl._drawingEventsAttached = true;
