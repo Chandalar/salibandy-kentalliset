@@ -2077,7 +2077,7 @@
                 </div>
 
                 <div class="pitch-outer-wrapper">
-                    <div class="pitch-container ${orientationMode === 'vertical' ? 'mode-vertical' : 'mode-horizontal'} ${isGridPaper ? 'mode-grid-paper' : ''} ${isFreeform ? 'mode-pure-canvas' : ''} ${rinkWhiteClass}" id="floorball-court-${courtId}">
+                    <div class="pitch-container ${orientationMode === 'vertical' ? 'mode-vertical' : 'mode-horizontal'} ${isGridPaper ? 'mode-grid-paper' : ''} ${isFreeform ? 'mode-pure-canvas' : ''} ${rinkWhiteClass}" id="floorball-court-${courtId}" data-court-color="${courtColor}">
                         <div class="court-surface"></div>
                         <div class="court-center-line"></div>
                         <div class="center-spot-pink"></div>

@@ -31,10 +31,15 @@
     --accent-danger: #ef4444;
     --accent-purple: #8b5cf6;
 
-    /* Pitch Visuals - Sleek Dark Salibandy Floor */
-    --court-bg: #1e293b;
-    --court-lines: rgba(255, 255, 255, 0.55);
-    --court-goal-crease: rgba(239, 68, 68, 0.3);
+    /* Surfaces */
+    --bg-surface: #131b2e;
+    --bg-surface-elevated: #1e293b;
+    --bg-surface-alt: #1e293b;
+
+    /* Pitch Visuals - Vibrant High-Contrast Salibandy Court */
+    --court-bg: #2563eb;
+    --court-lines: rgba(255, 255, 255, 0.92);
+    --court-goal-crease: rgba(239, 68, 68, 0.42);
     --court-goal-border: #ef4444;
 
     /* Typography & Spacing */
@@ -1569,32 +1574,33 @@ body {
 /* COURT COLOR THEMES (v38.0) */
 /* 1. Classic Blue (Default / Klassinen sininen Taraflex) */
 body[data-court-color="blue"] .court-surface,
-.pitch-container[data-court-color="blue"] .court-surface {
-    background: radial-gradient(circle at center, #1e3a8a 0%, #0d1624 100%) !important;
+.pitch-container[data-court-color="blue"] .court-surface,
+.court-surface {
+    background: radial-gradient(circle at center, #2563eb 0%, #1d4ed8 60%, #1e3a8a 100%) !important;
 }
 
 /* 2. Modern Graphite (Moderni grafiitti) */
 body[data-court-color="graphite"] .court-surface,
 .pitch-container[data-court-color="graphite"] .court-surface {
-    background: radial-gradient(circle at center, #334155 0%, #090d16 100%) !important;
+    background: radial-gradient(circle at center, #475569 0%, #334155 60%, #1e293b 100%) !important;
 }
 
 /* 3. Wood / Parquet (Parketti / Puulattia) */
 body[data-court-color="wood"] .court-surface,
 .pitch-container[data-court-color="wood"] .court-surface {
-    background: radial-gradient(circle at center, #854d0e 0%, #3a1a03 100%) !important;
+    background: radial-gradient(circle at center, #a16207 0%, #854d0e 60%, #451a03 100%) !important;
 }
 
 /* 4. Classic Green (Klassinen vihreä salibandymatto) */
 body[data-court-color="green"] .court-surface,
 .pitch-container[data-court-color="green"] .court-surface {
-    background: radial-gradient(circle at center, #065f46 0%, #022c22 100%) !important;
+    background: radial-gradient(circle at center, #059669 0%, #047857 60%, #064e3b 100%) !important;
 }
 
 /* 5. Terracotta (Terrakotta / Punaruskea) */
 body[data-court-color="terracotta"] .court-surface,
 .pitch-container[data-court-color="terracotta"] .court-surface {
-    background: radial-gradient(circle at center, #9f1239 0%, #4c0519 100%) !important;
+    background: radial-gradient(circle at center, #be123c 0%, #9f1239 60%, #4c0519 100%) !important;
 }
 
 /* 6. Ruutupaperi / Grid tactic paper */
@@ -4020,7 +4026,7 @@ body[data-court-color="grid"] .pitch-container .court-surface,
 }
 
 /* ==========================================================================
-   PURE CANVAS (Vapaapiirto / Open Whiteboard Mode without rink lines - MUCH BIGGER)
+   PURE CANVAS (Vapaapiirto / Open Whiteboard Mode without rink lines)
    ========================================================================== */
 .pitch-container.mode-pure-canvas .court-center-line,
 .pitch-container.mode-pure-canvas .center-spot-pink,
@@ -4031,28 +4037,23 @@ body[data-court-color="grid"] .pitch-container .court-surface,
 }
 
 .pitch-container.mode-pure-canvas {
-    width: 100% !important;
-    max-width: 100% !important;
-    aspect-ratio: auto !important;
-    min-height: 680px !important;
-    height: 78vh !important;
-    max-height: 900px !important;
-    margin: 0 auto;
-    background-color: var(--bg-surface) !important;
-    border-radius: var(--radius-lg);
-    border: 2px dashed rgba(255, 255, 255, 0.2);
-    box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.5), 0 8px 24px rgba(0,0,0,0.4);
+    background: radial-gradient(circle at center, #1e293b 0%, #0f172a 100%) !important;
+    border: 2px solid rgba(255, 255, 255, 0.25) !important;
 }
 
-@media (max-width: 768px) {
-    .pitch-container.mode-pure-canvas {
-        min-height: 520px !important;
-        height: 70vh !important;
-    }
+.pitch-container.mode-pure-canvas .court-surface {
+    background: radial-gradient(circle at center, #1e293b 0%, #0f172a 100%) !important;
 }
 
-.pitch-container.mode-pure-canvas.mode-grid-paper {
-    background-color: var(--bg-surface) !important;
+.pitch-container.mode-pure-canvas.mode-grid-paper .court-surface,
+.pitch-container.mode-grid-paper .court-surface {
+    background-color: #0b1329 !important;
+    background-image: 
+        linear-gradient(rgba(56, 189, 248, 0.18) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(56, 189, 248, 0.18) 1px, transparent 1px),
+        linear-gradient(rgba(56, 189, 248, 0.4) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(56, 189, 248, 0.4) 1px, transparent 1px) !important;
+    background-size: 16px 16px, 16px 16px, 80px 80px, 80px 80px !important;
 }
 
 /* ==========================================================================
@@ -5214,7 +5215,7 @@ body.mobile-ui .court-header-actions {
     gap: 4px;
 }
 
-/* Mobile UI: Sticky 2-row toolbar with prominent 44px buttons */
+/* Mobile UI: Clean 2-row toolbar with prominent 44px buttons */
 body.mobile-ui .pitch-toolbar {
     display: flex !important;
     flex-direction: column !important;
@@ -5222,9 +5223,9 @@ body.mobile-ui .pitch-toolbar {
     padding: 6px 8px !important;
     background: #111827 !important;
     border-bottom: 1px solid rgba(255, 255, 255, 0.12) !important;
-    position: sticky !important;
-    top: 0 !important;
-    z-index: 25 !important;
+    position: relative !important;
+    top: auto !important;
+    z-index: 5 !important;
 }
 
 body.mobile-ui .pitch-toolbar .toolbar-group {
