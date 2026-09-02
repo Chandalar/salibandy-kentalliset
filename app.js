@@ -6988,10 +6988,25 @@
         if (fileDropArea) fileDropArea.style.display = 'none';
         if (photoPreviewStep) photoPreviewStep.style.display = 'none';
         if (ocrStatus) ocrStatus.style.display = 'flex';
-        if (ocrStatusText) ocrStatusText.textContent = 'Luetaan tekstiä valokuvasta...';
+        
+        function loadTesseractOnDemand() {
+            return new Promise((resolve, reject) => {
+                if (typeof window !== 'undefined' && window.Tesseract) {
+                    return resolve(window.Tesseract);
+                }
+                const script = document.createElement('script');
+                script.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@4.1.1/dist/tesseract.min.js';
+                script.onload = () => resolve(window.Tesseract);
+                script.onerror = () => reject(new Error('Tesseract offline'));
+                document.head.appendChild(script);
+            });
+        }
 
-        if (typeof window !== 'undefined' && window.Tesseract && window.Tesseract.recognize) {
-            window.Tesseract.recognize(file, 'fin+eng', {
+        if (ocrStatusText) ocrStatusText.textContent = 'Valmistellaan tekstintunnistusta...';
+
+        loadTesseractOnDemand().then(tesseract => {
+            if (ocrStatusText) ocrStatusText.textContent = 'Luetaan tekstiä valokuvasta...';
+            return tesseract.recognize(file, 'fin+eng', {
                 logger: m => {
                     if (m.status === 'recognizing text' && ocrStatusText) {
                         const pct = Math.round((m.progress || 0) * 100);
@@ -7002,16 +7017,15 @@
                 const text = result?.data?.text || '';
                 parseOcrTextToPlayers(text);
             }).catch(err => {
-                console.warn('Tesseract OCR error, falling back to manual entry:', err);
+                console.warn('Tesseract OCR error or offline:', err);
                 parseOcrTextToPlayers('');
-                showToast('Tekstintunnistus valmis. Voit tarkistaa ja täydentää pelaajat!');
+                showToast('Valmis. Voit tarkistaa ja lisätä pelaajat!');
             });
-        } else {
-            setTimeout(() => {
-                parseOcrTextToPlayers('');
-                showToast('Valokuvalukija valmis. Muokkaa tunnistettuja tietoja ja tallenna!');
-            }, 600);
-        }
+        }).catch(err => {
+            console.warn('Could not load OCR script:', err);
+            parseOcrTextToPlayers('');
+            showToast('Valokuvalukija ei käytettävissä offline-tilassa. Voit syöttää pelaajat käsin.');
+        });
     }
 
     function parseOcrTextToPlayers(text) {

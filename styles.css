@@ -1501,21 +1501,23 @@ body {
 /* Floorball Court Container */
 .pitch-container {
     position: relative;
-    border-radius: 24px;
+    border-radius: 20px;
     overflow: hidden;
-    background-color: #1e3a8a;
-    background: radial-gradient(circle at center, #1e3a8a 0%, #0d1624 100%);
-    border: 3px solid rgba(255, 255, 255, 0.25);
-    box-shadow: inset 0 0 30px rgba(0, 0, 0, 0.7), 0 8px 24px rgba(0,0,0,0.6);
+    background-color: #1d4ed8;
+    background: linear-gradient(180deg, #1d4ed8 0%, #2563eb 50%, #1d4ed8 100%);
+    border: 3.5px solid #ffffff;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45);
     user-select: none;
     -webkit-user-select: none;
     touch-action: pan-y pinch-zoom;
 }
 
 .pitch-container.mode-vertical {
-    height: 840px;
-    max-height: 86vh;
-    aspect-ratio: 1 / 2;
+    height: calc(100vh - 210px);
+    height: calc(100dvh - 210px);
+    max-height: 820px;
+    min-height: 380px;
+    aspect-ratio: 1 / 1.7;
     width: auto;
     max-width: 96vw;
     margin: 0 auto;
@@ -1523,11 +1525,12 @@ body {
 }
 
 .pitch-container.mode-horizontal {
-    width: 100%;
+    width: 96vw;
     max-width: 880px;
-    aspect-ratio: 2 / 1;
+    aspect-ratio: 1.8 / 1;
     height: auto;
-    max-height: 62vh;
+    max-height: calc(100vh - 210px);
+    max-height: calc(100dvh - 210px);
     margin: 0 auto;
     display: block;
 }
@@ -1632,8 +1635,9 @@ body[data-court-color="grid"] .faceoff-dot {
     left: 0;
     right: 0;
     top: 50%;
-    height: 2px;
-    background: var(--court-lines);
+    height: 3px;
+    background: #ffffff;
+    opacity: 0.95;
     transform: translateY(-50%);
 }
 
@@ -1645,16 +1649,17 @@ body[data-court-color="grid"] .faceoff-dot {
     width: 14px;
     height: 14px;
     background: #ec4899;
+    border: 2px solid #ffffff;
     border-radius: 50%;
-    box-shadow: 0 0 8px rgba(236, 72, 153, 0.6);
+    box-shadow: 0 0 10px rgba(236, 72, 153, 0.8);
 }
 
 .pitch-container.mode-vertical .center-line-tick {
     position: absolute;
     top: 50%;
-    width: 2px;
-    height: 10px;
-    background: var(--court-lines);
+    width: 3px;
+    height: 12px;
+    background: #ffffff;
     transform: translateY(-50%);
 }
 
@@ -1665,12 +1670,12 @@ body[data-court-color="grid"] .faceoff-dot {
     position: absolute;
     left: 50%;
     transform: translateX(-50%);
-    width: 25%;
+    width: 26%;
     height: 10%;
 }
 
-.pitch-container.mode-vertical .goal-1 { top: 8.75%; }
-.pitch-container.mode-vertical .goal-2 { bottom: 8.75%; }
+.pitch-container.mode-vertical .goal-1 { top: 7%; }
+.pitch-container.mode-vertical .goal-2 { bottom: 7%; }
 
 .pitch-container.mode-vertical .goal-outer-box {
     position: absolute;
@@ -1678,19 +1683,19 @@ body[data-court-color="grid"] .faceoff-dot {
     left: 0;
     right: 0;
     bottom: 0;
-    border: 2px solid var(--court-goal-border);
-    background: var(--court-goal-crease);
+    border: 2.5px solid #ef4444;
+    background: rgba(239, 68, 68, 0.35);
 }
 
 .pitch-container.mode-vertical .goal-inner-crease {
     position: absolute;
     left: 50%;
     transform: translateX(-50%);
-    width: 50%;
-    height: 30%;
-    border: 2px dashed var(--court-goal-border);
-    border-radius: 8px;
-    background: rgba(239, 68, 68, 0.4);
+    width: 52%;
+    height: 32%;
+    border: 2px dashed #ffffff;
+    border-radius: 6px;
+    background: rgba(239, 68, 68, 0.55);
 }
 
 .pitch-container.mode-vertical .goal-1 .goal-inner-crease { top: 10%; }
@@ -1700,10 +1705,10 @@ body[data-court-color="grid"] .faceoff-dot {
     position: absolute;
     left: 50%;
     transform: translateX(-50%);
-    width: 32%;
-    height: 12%;
-    background: rgba(239, 68, 68, 0.6);
-    border: 2px solid #ef4444;
+    width: 34%;
+    height: 13%;
+    background: #dc2626;
+    border: 2px solid #ffffff;
     border-radius: 3px;
 }
 
@@ -1712,18 +1717,19 @@ body[data-court-color="grid"] .faceoff-dot {
 
 .pitch-container.mode-vertical .faceoff-dot {
     position: absolute;
-    width: 10px;
-    height: 10px;
-    background: rgba(255, 255, 255, 0.7);
-    border: 2px solid #ffffff;
+    width: 9px;
+    height: 9px;
+    background: #ffffff;
+    border: 1.5px solid #ffffff;
     border-radius: 50%;
     transform: translate(-50%, -50%);
+    box-shadow: 0 0 4px rgba(0, 0, 0, 0.3);
 }
 
-.pitch-container.mode-vertical .dot-tl { top: 8.75%; left: 12.5%; }
-.pitch-container.mode-vertical .dot-tr { top: 8.75%; left: 87.5%; }
-.pitch-container.mode-vertical .dot-bl { bottom: 8.75%; left: 12.5%; transform: translate(-50%, 50%); }
-.pitch-container.mode-vertical .dot-br { bottom: 8.75%; left: 87.5%; transform: translate(-50%, 50%); }
+.pitch-container.mode-vertical .dot-tl { top: 7%; left: 12.5%; }
+.pitch-container.mode-vertical .dot-tr { top: 7%; left: 87.5%; }
+.pitch-container.mode-vertical .dot-bl { bottom: 7%; left: 12.5%; transform: translate(-50%, 50%); }
+.pitch-container.mode-vertical .dot-br { bottom: 7%; left: 87.5%; transform: translate(-50%, 50%); }
 
 
 /* HORIZONTAL ORIENTATION (40m x 20m) */
@@ -1732,8 +1738,9 @@ body[data-court-color="grid"] .faceoff-dot {
     top: 0;
     bottom: 0;
     left: 50%;
-    width: 2px;
-    background: var(--court-lines);
+    width: 3px;
+    background: #ffffff;
+    opacity: 0.95;
     transform: translateX(-50%);
 }
 
@@ -1745,16 +1752,17 @@ body[data-court-color="grid"] .faceoff-dot {
     width: 14px;
     height: 14px;
     background: #ec4899;
+    border: 2px solid #ffffff;
     border-radius: 50%;
-    box-shadow: 0 0 8px rgba(236, 72, 153, 0.6);
+    box-shadow: 0 0 10px rgba(236, 72, 153, 0.8);
 }
 
 .pitch-container.mode-horizontal .center-line-tick {
     position: absolute;
     left: 50%;
-    height: 2px;
-    width: 10px;
-    background: var(--court-lines);
+    height: 3px;
+    width: 12px;
+    background: #ffffff;
     transform: translateX(-50%);
 }
 
@@ -1765,12 +1773,12 @@ body[data-court-color="grid"] .faceoff-dot {
     position: absolute;
     top: 50%;
     transform: translateY(-50%);
-    height: 25%;
+    height: 26%;
     width: 10%;
 }
 
-.pitch-container.mode-horizontal .goal-1 { left: 8.75%; }
-.pitch-container.mode-horizontal .goal-2 { right: 8.75%; }
+.pitch-container.mode-horizontal .goal-1 { left: 7%; }
+.pitch-container.mode-horizontal .goal-2 { right: 7%; }
 
 .pitch-container.mode-horizontal .goal-outer-box {
     position: absolute;
@@ -1778,19 +1786,19 @@ body[data-court-color="grid"] .faceoff-dot {
     left: 0;
     right: 0;
     bottom: 0;
-    border: 2px solid var(--court-goal-border);
-    background: var(--court-goal-crease);
+    border: 2.5px solid #ef4444;
+    background: rgba(239, 68, 68, 0.35);
 }
 
 .pitch-container.mode-horizontal .goal-inner-crease {
     position: absolute;
     top: 50%;
     transform: translateY(-50%);
-    height: 50%;
-    width: 30%;
-    border: 2px dashed var(--court-goal-border);
-    border-radius: 8px;
-    background: rgba(239, 68, 68, 0.4);
+    height: 52%;
+    width: 32%;
+    border: 2px dashed #ffffff;
+    border-radius: 6px;
+    background: rgba(239, 68, 68, 0.55);
 }
 
 .pitch-container.mode-horizontal .goal-1 .goal-inner-crease { left: 10%; }
@@ -1800,10 +1808,10 @@ body[data-court-color="grid"] .faceoff-dot {
     position: absolute;
     top: 50%;
     transform: translateY(-50%);
-    height: 32%;
-    width: 12%;
-    background: rgba(239, 68, 68, 0.6);
-    border: 2px solid #ef4444;
+    height: 34%;
+    width: 13%;
+    background: #dc2626;
+    border: 2px solid #ffffff;
     border-radius: 3px;
 }
 
@@ -1812,18 +1820,19 @@ body[data-court-color="grid"] .faceoff-dot {
 
 .pitch-container.mode-horizontal .faceoff-dot {
     position: absolute;
-    width: 10px;
-    height: 10px;
-    background: rgba(255, 255, 255, 0.7);
-    border: 2px solid #ffffff;
+    width: 9px;
+    height: 9px;
+    background: #ffffff;
+    border: 1.5px solid #ffffff;
     border-radius: 50%;
     transform: translate(-50%, -50%);
+    box-shadow: 0 0 4px rgba(0, 0, 0, 0.3);
 }
 
-.pitch-container.mode-horizontal .dot-tl { left: 8.75%; top: 12.5%; }
-.pitch-container.mode-horizontal .dot-tr { right: 8.75%; top: 12.5%; transform: translate(50%, -50%); }
-.pitch-container.mode-horizontal .dot-bl { left: 8.75%; bottom: 12.5%; transform: translate(-50%, 50%); }
-.pitch-container.mode-horizontal .dot-br { right: 8.75%; bottom: 12.5%; transform: translate(50%, 50%); }
+.pitch-container.mode-horizontal .dot-tl { left: 7%; top: 12.5%; }
+.pitch-container.mode-horizontal .dot-tr { right: 7%; top: 12.5%; transform: translate(50%, -50%); }
+.pitch-container.mode-horizontal .dot-bl { left: 7%; bottom: 12.5%; transform: translate(-50%, 50%); }
+.pitch-container.mode-horizontal .dot-br { right: 7%; bottom: 12.5%; transform: translate(50%, 50%); }
 
 /* On-Court Moveable Player & Ball Nodes */
 .pitch-container [id^="court-players-layer"] {
@@ -5122,33 +5131,38 @@ body.mobile-ui .pitch-outer-wrapper {
     height: auto !important;
     max-height: none !important;
     overflow: visible !important;
-    padding: 4px !important;
-    background: #111827 !important;
+    padding: 6px 4px !important;
+    background: transparent !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
 }
 
 body.mobile-ui .pitch-container {
-    width: 100% !important;
-    max-width: 100% !important;
     margin: 0 auto !important;
     padding: 0 !important;
-    border-radius: 14px !important;
+    border-radius: 16px !important;
+    border: 3px solid #ffffff !important;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5) !important;
 }
 
 body.mobile-ui .pitch-container.mode-vertical {
-    width: 100% !important;
-    max-width: 480px !important;
-    aspect-ratio: 1 / 1.75 !important;
-    height: auto !important;
-    max-height: none !important;
+    height: calc(100dvh - 210px) !important;
+    max-height: 560px !important;
+    min-height: 380px !important;
+    aspect-ratio: 1 / 1.7 !important;
+    width: auto !important;
+    max-width: 95vw !important;
     margin: 0 auto !important;
 }
 
 body.mobile-ui .pitch-container.mode-horizontal {
-    width: 100% !important;
-    max-width: 100% !important;
+    width: 96vw !important;
+    max-width: 800px !important;
     aspect-ratio: 1.8 / 1 !important;
     height: auto !important;
-    max-height: none !important;
+    max-height: calc(100dvh - 210px) !important;
+    margin: 0 auto !important;
 }
 
 /* Mobile UI: Roster panel full width with bigger touch targets */

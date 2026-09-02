@@ -1,9 +1,9 @@
 /* ============================================================
-   SERVICE WORKER – Kentälliset PWA v40.2
-   Fast, lightweight, offline-first caching for mobile & desktop
+   SERVICE WORKER – Kentälliset PWA v41.0
+   Fast, ultra-lightweight, 100% offline-ready & local-first
    ============================================================ */
 
-const CACHE_NAME = 'kentalliset-v40.2';
+const CACHE_NAME = 'kentalliset-v41.0';
 const APP_SHELL = [
     './',
     './index.html',
@@ -36,7 +36,7 @@ self.addEventListener('install', (event) => {
     );
 });
 
-// ── Activate: Clean all old caches and claim clients ──
+// ── Activate: Clean all old caches and claim clients immediately ──
 self.addEventListener('activate', (event) => {
     event.waitUntil(
         caches.keys().then((keys) =>
@@ -48,20 +48,19 @@ self.addEventListener('activate', (event) => {
     );
 });
 
-// ── Fetch: Network-First for HTML/JS/CSS, Cache-First for static fonts/icons ──
+// ── Fetch: Local-First (Instant Cache) with Background Revalidation ──
 self.addEventListener('fetch', (event) => {
     const url = new URL(event.request.url);
 
     // Skip non-GET requests
     if (event.request.method !== 'GET') return;
 
-    // Pass through Firebase, Google APIs, analytics and external CORS proxies
+    // Pass through Firebase Firestore / Auth real-time calls
     if (url.hostname.includes('firestore.googleapis.com') ||
         url.hostname.includes('firebase') ||
         url.hostname.includes('googleapis.com') ||
         url.hostname.includes('allorigins') ||
-        url.hostname.includes('corsproxy') ||
-        (url.hostname.includes('gstatic.com') && !url.pathname.includes('fonts'))) {
+        url.hostname.includes('corsproxy')) {
         return;
     }
 
@@ -97,25 +96,35 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
-    // Network-First with Cache fallback for all app shell assets (HTML, JS, CSS)
+    // App Shell Assets (HTML, JS, CSS, SVG): Instant Cache-First with Background Revalidation
     event.respondWith(
-        fetch(event.request)
-            .then((networkResponse) => {
-                if (networkResponse && networkResponse.ok) {
-                    const clone = networkResponse.clone();
-                    caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
-                }
-                return networkResponse;
-            })
-            .catch(() => {
-                return caches.match(event.request).then((cached) => {
-                    if (cached) return cached;
-                    if (event.request.mode === 'navigate' || url.pathname.endsWith('.html') || url.pathname === '/') {
-                        return caches.match('./index.html') || caches.match('/index.html');
+        caches.match(event.request).then((cachedResponse) => {
+            const fetchPromise = fetch(event.request)
+                .then((networkResponse) => {
+                    if (networkResponse && networkResponse.ok) {
+                        const clone = networkResponse.clone();
+                        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
                     }
-                    return new Response('Offline', { status: 503, statusText: 'Offline' });
+                    return networkResponse;
+                })
+                .catch((err) => {
+                    console.warn('[SW] Network offline or slow, served cached version:', err);
+                    return cachedResponse;
                 });
-            })
+
+            // If found in cache, return immediately (0ms delay offline/local)
+            if (cachedResponse) {
+                return cachedResponse;
+            }
+
+            // Otherwise wait for network with navigation fallback
+            return fetchPromise.catch(() => {
+                if (event.request.mode === 'navigate' || url.pathname.endsWith('.html') || url.pathname === '/') {
+                    return caches.match('./index.html') || caches.match('/index.html');
+                }
+                return new Response('Offline', { status: 503, statusText: 'Offline' });
+            });
+        })
     );
 });
 
