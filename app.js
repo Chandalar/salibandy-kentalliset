@@ -562,14 +562,14 @@
     }
 
     // ==========================================
-    // MOBILE UI MODE (v39.2)
+    // MOBILE UI MODE (v39.2 & Z Fold 5 Adaptive)
     // ==========================================
     function initMobileUI() {
-        // Auto-detect mobile only on very small phone screens (< 600px width), else default to desktop
-        if (currentUIMode === 'auto') {
-            const isPhone = (typeof window !== 'undefined') && (window.innerWidth < 600);
+        // Auto-detect UI mode dynamically based on viewport width (covers Z Fold 5 fold/unfold)
+        const userManualOverride = loadFromStorage('salibandy_ui_mode_user_override', false);
+        if (!userManualOverride) {
+            const isPhone = (typeof window !== 'undefined') && (window.innerWidth < 768);
             currentUIMode = isPhone ? 'mobile' : 'desktop';
-            localStorage.setItem('salibandy_ui_mode', JSON.stringify(currentUIMode));
         }
 
         applyUIMode(currentUIMode);
@@ -579,6 +579,28 @@
         const headerToggleBtn = document.getElementById('btn-header-ui-mode');
         if (headerToggleBtn) {
             headerToggleBtn.addEventListener('click', toggleUIMode);
+        }
+
+        // Live responsive listener for foldable screens (Samsung Galaxy Z Fold 5 etc)
+        if (typeof window !== 'undefined') {
+            window.addEventListener('resize', () => {
+                const userOverride = loadFromStorage('salibandy_ui_mode_user_override', false);
+                if (!userOverride) {
+                    const shouldBePhone = (window.innerWidth < 768);
+                    const newMode = shouldBePhone ? 'mobile' : 'desktop';
+                    if (currentUIMode !== newMode) {
+                        applyUIMode(newMode);
+                    }
+                }
+            });
+            window.addEventListener('orientationchange', () => {
+                setTimeout(() => {
+                    const page = getCurrentPage();
+                    if (page && page.courts) {
+                        page.courts.forEach(court => initCourtBoardInstance(court.id));
+                    }
+                }, 100);
+            });
         }
     }
 
@@ -625,15 +647,19 @@
             toggleSwitch.classList.toggle('is-mobile', mode === 'mobile');
         }
 
-        // Re-measure courts
-        requestAnimationFrame(() => {
+        // Re-measure courts across layout settlement phases
+        const refresh = () => {
             const page = getCurrentPage();
             if (page && page.courts) {
                 page.courts.forEach(court => {
                     initCourtBoardInstance(court.id);
                 });
             }
-        });
+        };
+        refresh();
+        requestAnimationFrame(refresh);
+        setTimeout(refresh, 80);
+        setTimeout(refresh, 250);
     }
 
     function switchMobileTab(tab) {
@@ -650,16 +676,21 @@
             btn.classList.toggle('active', btn.getAttribute('data-mobile-tab') === tab);
         });
 
-        // If switching to court, re-initialize all courts properly with full canvas, tools and nodes
+        // If switching to court, multi-phase refresh guarantees instant draw on mobile/Z Fold
         if (tab === 'court') {
-            requestAnimationFrame(() => {
+            const refresh = () => {
                 const page = getCurrentPage();
                 if (page && page.courts) {
                     page.courts.forEach(court => {
                         initCourtBoardInstance(court.id);
                     });
                 }
-            });
+            };
+            refresh();
+            requestAnimationFrame(refresh);
+            setTimeout(refresh, 60);
+            setTimeout(refresh, 200);
+            setTimeout(refresh, 500);
         }
 
         // If more tab, make sure more panel is built
@@ -670,6 +701,7 @@
 
     function toggleUIMode() {
         const newMode = currentUIMode === 'mobile' ? 'desktop' : 'mobile';
+        localStorage.setItem('salibandy_ui_mode_user_override', JSON.stringify(true));
         applyUIMode(newMode);
         showToast(newMode === 'mobile' ? '📱 Mobiili-tila aktivoitu' : '🖥️ Työpöytä-tila aktivoitu');
     }
@@ -2138,7 +2170,7 @@
         if (!courtContainer || !canvasEl || !layersEl) return;
         if (typeof canvasEl.getContext !== 'function') return;
 
-        const ctxEl = canvasEl.getContext('2d');
+        const ctxEl = canvasEl.getContext('2d', { alpha: true });
         if (!ctxEl) return;
 
         function updateCanvasSizeAndRedraw() {
@@ -2161,6 +2193,14 @@
                 canvasEl.style.width = '100%';
                 canvasEl.style.height = '100%';
                 drawCanvasLinesForInstance(courtId, canvasEl, ctxEl);
+                renderCourtNodesForInstance(courtId, layersEl);
+            } else {
+                // Retry if container is hidden or undergoing mobile tab transition
+                let retries = courtContainer._measureRetries || 0;
+                if (retries < 8) {
+                    courtContainer._measureRetries = retries + 1;
+                    setTimeout(updateCanvasSizeAndRedraw, 30 * retries + 40);
+                }
             }
         }
 
@@ -2188,11 +2228,10 @@
         updateCanvasSizeAndRedraw();
         renderCourtNodesForInstance(courtId, layersEl);
 
-        // If not measured yet (e.g. during initial layout frame), retry in 50ms & 150ms
-        if (canvasEl.width <= 10 || canvasEl.height <= 10) {
-            setTimeout(updateCanvasSizeAndRedraw, 50);
-            setTimeout(updateCanvasSizeAndRedraw, 150);
-        }
+        // Multi-frame retries to guarantee immediate paint after mobile tab switches or Z Fold unfold
+        setTimeout(updateCanvasSizeAndRedraw, 40);
+        setTimeout(updateCanvasSizeAndRedraw, 120);
+        setTimeout(updateCanvasSizeAndRedraw, 300);
 
         if (!canvasEl._drawingEventsAttached) {
             canvasEl._drawingEventsAttached = true;
