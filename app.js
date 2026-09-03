@@ -2966,9 +2966,308 @@
         });
     }
 
+    function drawFloorballCourtBase(ctx, w, h, isVert, isGrid, isFree, curTeam, courtColorTheme) {
+        // 1. Freeform mode (Open whiteboard)
+        if (isFree) {
+            const freeGrad = ctx.createRadialGradient(w / 2, h / 2, 10, w / 2, h / 2, Math.max(w, h));
+            freeGrad.addColorStop(0, '#1e293b');
+            freeGrad.addColorStop(1, '#0f172a');
+            ctx.fillStyle = freeGrad;
+            ctx.beginPath();
+            ctx.roundRect(0, 0, w, h, 20);
+            ctx.fill();
+
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            return;
+        }
+
+        // 2. Grid paper mode
+        if (isGrid) {
+            ctx.fillStyle = '#0b1329';
+            ctx.beginPath();
+            ctx.roundRect(0, 0, w, h, 20);
+            ctx.fill();
+
+            ctx.strokeStyle = 'rgba(56, 189, 248, 0.16)';
+            ctx.lineWidth = 1;
+            const step = Math.max(16, Math.round(Math.min(w, h) / 25));
+            for (let x = step; x < w; x += step) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, h);
+                ctx.stroke();
+            }
+            for (let y = step; y < h; y += step) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(w, y);
+                ctx.stroke();
+            }
+
+            ctx.strokeStyle = '#334155';
+            ctx.lineWidth = 3;
+            ctx.strokeRect(2, 2, w - 4, h - 4);
+            return;
+        }
+
+        // 3. Standard Floorball Court (Floor & Rink)
+        let c1 = '#2563eb', c2 = '#1d4ed8', c3 = '#1e3a8a'; // classic blue default
+        if (courtColorTheme === 'graphite') { c1 = '#475569'; c2 = '#334155'; c3 = '#1e293b'; }
+        else if (courtColorTheme === 'wood') { c1 = '#a16207'; c2 = '#854d0e'; c3 = '#451a03'; }
+        else if (courtColorTheme === 'green') { c1 = '#059669'; c2 = '#047857'; c3 = '#064e3b'; }
+        else if (courtColorTheme === 'terracotta') { c1 = '#be123c'; c2 = '#9f1239'; c3 = '#4c0519'; }
+
+        const floorGrad = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.15, w / 2, h / 2, Math.max(w, h) * 0.75);
+        floorGrad.addColorStop(0, c1);
+        floorGrad.addColorStop(0.6, c2);
+        floorGrad.addColorStop(1, c3);
+
+        ctx.fillStyle = floorGrad;
+        ctx.beginPath();
+        const cornerR = Math.max(12, Math.min(24, Math.round(Math.min(w, h) * 0.05)));
+        ctx.roundRect(0, 0, w, h, cornerR);
+        ctx.fill();
+
+        // White Rink Board
+        ctx.strokeStyle = (curTeam && curTeam.rinkColor === 'white') ? '#f8fafc' : '#ffffff';
+        ctx.lineWidth = Math.max(3, Math.round(Math.min(w, h) * 0.008));
+        ctx.stroke();
+
+        // Center Watermark Logo
+        if (curTeam && curTeam.showCourtLogo !== false && curTeam.logo) {
+            ctx.save();
+            ctx.globalAlpha = 0.20;
+            const logoSize = Math.round(Math.min(w, h) * 0.22);
+            ctx.font = `bold ${logoSize}px "Outfit", sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(curTeam.logo, w / 2, h / 2);
+            ctx.restore();
+        }
+
+        // Arena Name Badge
+        if (curTeam && curTeam.arenaName) {
+            ctx.save();
+            ctx.globalAlpha = 0.45;
+            const arenaSize = Math.max(9, Math.round(Math.min(w, h) * 0.026));
+            ctx.font = `bold ${arenaSize}px "Plus Jakarta Sans", sans-serif`;
+            ctx.fillStyle = '#ffffff';
+            ctx.textBaseline = 'bottom';
+            if (isVert) {
+                ctx.textAlign = 'center';
+                ctx.fillText(curTeam.arenaName.toUpperCase(), w / 2, h - 8);
+            } else {
+                ctx.textAlign = 'right';
+                ctx.fillText(curTeam.arenaName.toUpperCase(), w - 16, h - 8);
+            }
+            ctx.restore();
+        }
+
+        // Center Line & Center Spot
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
+        ctx.lineWidth = Math.max(2, Math.round(Math.min(w, h) * 0.006));
+
+        if (isVert) {
+            // Vertical Court Orientation (Goals top & bottom)
+            const midY = h / 2;
+            ctx.beginPath();
+            ctx.moveTo(0, midY);
+            ctx.lineTo(w, midY);
+            ctx.stroke();
+
+            // Ticks at 15% and 85%
+            const tickH = Math.max(6, Math.round(h * 0.015));
+            ctx.beginPath();
+            ctx.moveTo(w * 0.15, midY - tickH);
+            ctx.lineTo(w * 0.15, midY + tickH);
+            ctx.moveTo(w * 0.85, midY - tickH);
+            ctx.lineTo(w * 0.85, midY + tickH);
+            ctx.stroke();
+
+            // Pink Center Spot
+            ctx.fillStyle = '#ec4899';
+            ctx.beginPath();
+            ctx.arc(w / 2, midY, Math.max(4, Math.round(Math.min(w, h) * 0.014)), 0, Math.PI * 2);
+            ctx.fill();
+
+            // Goal 1 (Top)
+            const gw = w * 0.30;
+            const gh = h * 0.17;
+            const gx = w / 2 - gw / 2;
+            const gy1 = h * 0.07;
+            ctx.fillStyle = 'rgba(239, 68, 68, 0.28)';
+            ctx.strokeStyle = '#ef4444';
+            ctx.lineWidth = Math.max(1.5, Math.round(Math.min(w, h) * 0.005));
+            ctx.fillRect(gx, gy1, gw, gh);
+            ctx.strokeRect(gx, gy1, gw, gh);
+
+            // Goal 1 Inner Crease (dashed)
+            ctx.strokeStyle = '#ffffff';
+            ctx.setLineDash([5, 4]);
+            const crW1 = gw * 0.70;
+            const crH1 = gh * 0.45;
+            ctx.strokeRect(w / 2 - crW1 / 2, gy1 + 6, crW1, crH1);
+            ctx.setLineDash([]);
+
+            // Goal 1 Net
+            ctx.fillStyle = '#dc2626';
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 2;
+            const netW1 = gw * 0.52;
+            const netH1 = Math.max(8, gh * 0.20);
+            ctx.fillRect(w / 2 - netW1 / 2, gy1 + 3, netW1, netH1);
+            ctx.strokeRect(w / 2 - netW1 / 2, gy1 + 3, netW1, netH1);
+
+            // Goal 2 (Bottom)
+            const gy2 = h - gh - h * 0.07;
+            ctx.fillStyle = 'rgba(239, 68, 68, 0.28)';
+            ctx.strokeStyle = '#ef4444';
+            ctx.lineWidth = Math.max(1.5, Math.round(Math.min(w, h) * 0.005));
+            ctx.fillRect(gx, gy2, gw, gh);
+            ctx.strokeRect(gx, gy2, gw, gh);
+
+            // Goal 2 Inner Crease (dashed)
+            ctx.strokeStyle = '#ffffff';
+            ctx.setLineDash([5, 4]);
+            ctx.strokeRect(w / 2 - crW1 / 2, gy2 + gh - 6 - crH1, crW1, crH1);
+            ctx.setLineDash([]);
+
+            // Goal 2 Net
+            ctx.fillStyle = '#dc2626';
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 2;
+            const netW1_bot = gw * 0.52;
+            const netH1_bot = Math.max(8, gh * 0.20);
+            ctx.fillRect(w / 2 - netW1_bot / 2, gy2 + gh - 3 - netH1_bot, netW1_bot, netH1_bot);
+            ctx.strokeRect(w / 2 - netW1_bot / 2, gy2 + gh - 3 - netH1_bot, netW1_bot, netH1_bot);
+
+            // 4 Face-off dots
+            const dotR = Math.max(3.5, Math.round(Math.min(w, h) * 0.012));
+            ctx.fillStyle = '#ffffff';
+            ctx.strokeStyle = '#ec4899';
+            ctx.lineWidth = 2;
+            [
+                { x: w * 0.125, y: h * 0.07 },
+                { x: w * 0.875, y: h * 0.07 },
+                { x: w * 0.125, y: h * 0.93 },
+                { x: w * 0.875, y: h * 0.93 }
+            ].forEach(d => {
+                ctx.beginPath();
+                ctx.arc(d.x, d.y, dotR, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+            });
+
+        } else {
+            // Horizontal Court Orientation (Goals left & right)
+            const midX = w / 2;
+            ctx.beginPath();
+            ctx.moveTo(midX, 0);
+            ctx.lineTo(midX, h);
+            ctx.stroke();
+
+            // Ticks at 15% and 85%
+            const tickW = Math.max(6, Math.round(w * 0.015));
+            ctx.beginPath();
+            ctx.moveTo(midX - tickW, h * 0.15);
+            ctx.lineTo(midX + tickW, h * 0.15);
+            ctx.moveTo(midX - tickW, h * 0.85);
+            ctx.lineTo(midX + tickW, h * 0.85);
+            ctx.stroke();
+
+            // Pink Center Spot
+            ctx.fillStyle = '#ec4899';
+            ctx.beginPath();
+            ctx.arc(midX, h / 2, Math.max(4, Math.round(Math.min(w, h) * 0.014)), 0, Math.PI * 2);
+            ctx.fill();
+
+            // Left Goal
+            const gw = w * 0.17;
+            const gh = h * 0.30;
+            const gx1 = w * 0.07;
+            const gy = h / 2 - gh / 2;
+            ctx.fillStyle = 'rgba(239, 68, 68, 0.28)';
+            ctx.strokeStyle = '#ef4444';
+            ctx.lineWidth = Math.max(1.5, Math.round(Math.min(w, h) * 0.005));
+            ctx.fillRect(gx1, gy, gw, gh);
+            ctx.strokeRect(gx1, gy, gw, gh);
+
+            // Left Inner Crease
+            ctx.strokeStyle = '#ffffff';
+            ctx.setLineDash([5, 4]);
+            const crW2 = gw * 0.45;
+            const crH2 = gh * 0.70;
+            ctx.strokeRect(gx1 + 6, h / 2 - crH2 / 2, crW2, crH2);
+            ctx.setLineDash([]);
+
+            // Left Net
+            ctx.fillStyle = '#dc2626';
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 2;
+            const netW2 = Math.max(8, gw * 0.20);
+            const netH2 = gh * 0.52;
+            ctx.fillRect(gx1 + 3, h / 2 - netH2 / 2, netW2, netH2);
+            ctx.strokeRect(gx1 + 3, h / 2 - netH2 / 2, netW2, netH2);
+
+            // Right Goal
+            const gx2 = w - gw - w * 0.07;
+            ctx.fillStyle = 'rgba(239, 68, 68, 0.28)';
+            ctx.strokeStyle = '#ef4444';
+            ctx.lineWidth = Math.max(1.5, Math.round(Math.min(w, h) * 0.005));
+            ctx.fillRect(gx2, gy, gw, gh);
+            ctx.strokeRect(gx2, gy, gw, gh);
+
+            // Right Inner Crease
+            ctx.strokeStyle = '#ffffff';
+            ctx.setLineDash([5, 4]);
+            ctx.strokeRect(gx2 + gw - 6 - crW2, h / 2 - crH2 / 2, crW2, crH2);
+            ctx.setLineDash([]);
+
+            // Right Net
+            ctx.fillStyle = '#dc2626';
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 2;
+            const netW2_r = Math.max(8, gw * 0.20);
+            const netH2_r = gh * 0.52;
+            ctx.fillRect(gx2 + gw - 3 - netW2_r, h / 2 - netH2_r / 2, netW2_r, netH2_r);
+            ctx.strokeRect(gx2 + gw - 3 - netW2_r, h / 2 - netH2_r / 2, netW2_r, netH2_r);
+
+            // 4 Face-off dots
+            const dotR = Math.max(3.5, Math.round(Math.min(w, h) * 0.012));
+            ctx.fillStyle = '#ffffff';
+            ctx.strokeStyle = '#ec4899';
+            ctx.lineWidth = 2;
+            [
+                { x: w * 0.07, y: h * 0.125 },
+                { x: w * 0.07, y: h * 0.875 },
+                { x: w * 0.93, y: h * 0.125 },
+                { x: w * 0.93, y: h * 0.875 }
+            ].forEach(d => {
+                ctx.beginPath();
+                ctx.arc(d.x, d.y, dotR, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+            });
+        }
+    }
+
     function drawCanvasLinesForInstance(courtId, canvasEl, ctxEl) {
-        ctxEl.clearRect(0, 0, canvasEl.width, canvasEl.height);
+        const w = canvasEl.width;
+        const h = canvasEl.height;
+        if (w === 0 || h === 0) return;
+
         const courtKey = getCourtKey(courtId);
+        const isVert = (orientationMode === 'vertical');
+        const isGrid = (lineupGridPaper[courtKey] !== undefined) ? !!lineupGridPaper[courtKey] : (activeLineupKey === 'freeform');
+        const isFree = (activeLineupKey === 'freeform');
+        const curTeam = teams.find(t => t.id === currentTeamId) || {};
+
+        // 1. Draw base floorball court background & lines
+        drawFloorballCourtBase(ctxEl, w, h, isVert, isGrid, isFree, curTeam, courtColor);
+
+        // 2. Draw tactical paths, passes, runs, shots, zones
         const currentDrawings = lineupDrawings[courtKey] || lineupDrawings[activeLineupKey] || [];
         currentDrawings.forEach((draw, idx) => {
             if (!draw.stepNum && draw.type !== 'rect') {
