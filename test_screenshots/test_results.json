@@ -1,0 +1,162 @@
+[
+  {
+    "viewport": "z_fold_5_folded",
+    "size": "375x900",
+    "metrics": {
+      "windowInnerW": 375,
+      "windowInnerH": 900,
+      "isMobileUI": true,
+      "courtExists": true,
+      "courtRect": {
+        "x": 23,
+        "y": 274,
+        "width": 329,
+        "height": 615,
+        "top": 274,
+        "bottom": 889
+      },
+      "canvasW": 323,
+      "canvasH": 609,
+      "playerCount": 0,
+      "goal1Visible": true,
+      "goal2Visible": true,
+      "bottomNavVisible": true,
+      "bottomNavRect": {
+        "top": 848,
+        "height": 52
+      }
+    },
+    "tabSwitchSuccess": true,
+    "consoleErrors": [],
+    "pass": true,
+    "screenshot": "C:\\Users\\PRH\\Desktop\\Kentälliset\\test_screenshots\\z_fold_5_folded_court.png"
+  },
+  {
+    "viewport": "z_fold_5_unfolded",
+    "size": "800x900",
+    "metrics": {
+      "windowInnerW": 800,
+      "windowInnerH": 900,
+      "isMobileUI": false,
+      "courtExists": true,
+      "courtRect": {
+        "x": 32,
+        "y": 483,
+        "width": 735,
+        "height": 408,
+        "top": 483,
+        "bottom": 891
+      },
+      "canvasW": 729,
+      "canvasH": 402,
+      "playerCount": 0,
+      "goal1Visible": true,
+      "goal2Visible": true,
+      "bottomNavVisible": false,
+      "bottomNavRect": {
+        "top": 0,
+        "height": 0
+      }
+    },
+    "tabSwitchSuccess": true,
+    "consoleErrors": [],
+    "pass": true,
+    "screenshot": "C:\\Users\\PRH\\Desktop\\Kentälliset\\test_screenshots\\z_fold_5_unfolded_court.png"
+  },
+  {
+    "viewport": "android_s23_standard",
+    "size": "360x800",
+    "metrics": {
+      "windowInnerW": 360,
+      "windowInnerH": 800,
+      "isMobileUI": true,
+      "courtExists": true,
+      "courtRect": {
+        "x": 29,
+        "y": 274,
+        "width": 303,
+        "height": 515,
+        "top": 274,
+        "bottom": 789
+      },
+      "canvasW": 297,
+      "canvasH": 509,
+      "playerCount": 0,
+      "goal1Visible": true,
+      "goal2Visible": true,
+      "bottomNavVisible": true,
+      "bottomNavRect": {
+        "top": 748,
+        "height": 52
+      }
+    },
+    "tabSwitchSuccess": true,
+    "consoleErrors": [],
+    "pass": true,
+    "screenshot": "C:\\Users\\PRH\\Desktop\\Kentälliset\\test_screenshots\\android_s23_standard_court.png"
+  },
+  {
+    "viewport": "iphone_15_standard",
+    "size": "393x852",
+    "metrics": {
+      "windowInnerW": 393,
+      "windowInnerH": 852,
+      "isMobileUI": true,
+      "courtExists": true,
+      "courtRect": {
+        "x": 30,
+        "y": 274,
+        "width": 334,
+        "height": 567,
+        "top": 274,
+        "bottom": 841
+      },
+      "canvasW": 328,
+      "canvasH": 561,
+      "playerCount": 0,
+      "goal1Visible": true,
+      "goal2Visible": true,
+      "bottomNavVisible": true,
+      "bottomNavRect": {
+        "top": 800,
+        "height": 52
+      }
+    },
+    "tabSwitchSuccess": true,
+    "consoleErrors": [],
+    "pass": true,
+    "screenshot": "C:\\Users\\PRH\\Desktop\\Kentälliset\\test_screenshots\\iphone_15_standard_court.png"
+  },
+  {
+    "viewport": "android_ultra_large",
+    "size": "412x915",
+    "metrics": {
+      "windowInnerW": 412,
+      "windowInnerH": 915,
+      "isMobileUI": true,
+      "courtExists": true,
+      "courtRect": {
+        "x": 23,
+        "y": 274,
+        "width": 366,
+        "height": 630,
+        "top": 274,
+        "bottom": 904
+      },
+      "canvasW": 360,
+      "canvasH": 624,
+      "playerCount": 0,
+      "goal1Visible": true,
+      "goal2Visible": true,
+      "bottomNavVisible": true,
+      "bottomNavRect": {
+        "top": 863,
+        "height": 52
+      }
+    },
+    "tabSwitchSuccess": true,
+    "consoleErrors": [],
+    "pass": true,
+    "screenshot": "C:\\Users\\PRH\\Desktop\\Kentälliset\\test_screenshots\\android_ultra_large_court.png"
+  }
+]

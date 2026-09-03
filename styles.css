@@ -4990,24 +4990,90 @@ body.mobile-ui .pwa-install-banner {
 
 /* ── Mobile UI Mode: Layout Overrides ── */
 body.mobile-ui .app-header {
-    padding: 8px 10px;
-    flex-wrap: nowrap;
-    gap: 6px;
-    justify-content: space-between;
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    padding: 4px 8px !important;
+    height: 44px !important;
+    min-height: 44px !important;
+    max-height: 44px !important;
+    gap: 6px !important;
+}
+
+body.mobile-ui .header-brand {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    gap: 6px !important;
+    flex: 1 1 auto !important;
+    min-width: 140px !important;
+    overflow: visible !important;
+}
+
+body.mobile-ui .header-brand > div:last-child {
+    display: flex !important;
+    align-items: center !important;
+    min-width: 100px !important;
+    flex: 1 !important;
 }
 
 body.mobile-ui .header-brand h1 {
-    font-size: 0.88rem;
+    display: none !important;
+}
+
+body.mobile-ui .header-team-logo-wrapper {
+    width: 28px !important;
+    height: 28px !important;
+    font-size: 1rem !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    flex-shrink: 0 !important;
 }
 
 body.mobile-ui .header-stats {
-    display: none;
+    display: none !important;
+}
+
+body.mobile-ui .team-selector-wrapper {
+    display: flex !important;
+    align-items: center !important;
+    gap: 4px !important;
+    flex: 1 !important;
+    min-width: 90px !important;
+}
+
+body.mobile-ui .team-selector-wrapper .btn-xs {
+    display: none !important;
+}
+
+body.mobile-ui #btn-quick-refresh {
+    display: inline-flex !important;
+    padding: 2px 6px !important;
+    font-size: 0.8rem !important;
+    height: 28px !important;
+}
+
+body.mobile-ui .team-dropdown {
+    max-width: 130px !important;
+    min-width: 85px !important;
+    width: 100% !important;
+    font-size: 0.74rem !important;
+    padding: 2px 4px !important;
+    height: 28px !important;
+    border-radius: 6px !important;
+    background: #1e293b !important;
+    color: #e2e8f0 !important;
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
 }
 
 body.mobile-ui .header-actions {
     display: flex !important;
-    gap: 4px;
-    align-items: center;
+    gap: 4px !important;
+    align-items: center !important;
+    flex-shrink: 0 !important;
 }
 
 body.mobile-ui .header-actions .btn {
@@ -5017,24 +5083,10 @@ body.mobile-ui .header-actions .btn {
 body.mobile-ui .header-actions #btn-header-ui-mode,
 body.mobile-ui .header-actions #btn-open-settings-modal {
     display: inline-flex !important;
-    padding: 4px 8px !important;
-    font-size: 0.72rem !important;
-    height: 32px !important;
+    padding: 3px 6px !important;
+    font-size: 0.70rem !important;
+    height: 30px !important;
     white-space: nowrap !important;
-}
-
-body.mobile-ui .team-selector-wrapper {
-    gap: 4px;
-}
-
-body.mobile-ui .team-selector-wrapper .btn-xs {
-    display: none;
-}
-
-body.mobile-ui .team-dropdown {
-    max-width: 120px;
-    font-size: 0.78rem;
-    padding: 2px 4px;
 }
 
 /* Mobile UI: Lineup tabs become compact horizontal scroll with arrows */
@@ -5147,9 +5199,9 @@ body.mobile-ui .pitch-container {
 }
 
 body.mobile-ui .pitch-container.mode-vertical {
-    height: calc(100dvh - 210px) !important;
-    max-height: 560px !important;
-    min-height: 380px !important;
+    height: calc(100dvh - 285px) !important;
+    max-height: calc(100dvh - 285px) !important;
+    min-height: 300px !important;
     aspect-ratio: 1 / 1.7 !important;
     width: auto !important;
     max-width: 95vw !important;
@@ -5161,7 +5213,7 @@ body.mobile-ui .pitch-container.mode-horizontal {
     max-width: 800px !important;
     aspect-ratio: 1.8 / 1 !important;
     height: auto !important;
-    max-height: calc(100dvh - 210px) !important;
+    max-height: calc(100dvh - 285px) !important;
     margin: 0 auto !important;
 }
 
@@ -5213,28 +5265,63 @@ body.mobile-ui .court-board-card {
     border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
+/* Mobile UI: Ultra-compact single-row tactical pages bar */
+body.mobile-ui .tactical-pages-bar {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    padding: 3px 6px !important;
+    gap: 4px !important;
+    margin-bottom: 4px !important;
+    scrollbar-width: none !important;
+}
+
+body.mobile-ui .tactical-pages-bar::-webkit-scrollbar {
+    display: none !important;
+}
+
+body.mobile-ui .pages-bar-label {
+    display: none !important;
+}
+
 body.mobile-ui .court-board-header {
-    padding: 6px 8px !important;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-    justify-content: space-between;
-    align-items: center;
-    background: #0b1120;
+    padding: 4px 8px !important;
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    gap: 6px !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    background: #0b1120 !important;
+    overflow-x: auto !important;
+    scrollbar-width: none !important;
+}
+
+body.mobile-ui .court-board-header::-webkit-scrollbar {
+    display: none !important;
+}
+
+body.mobile-ui .court-board-title {
+    white-space: nowrap !important;
+    font-size: 0.82rem !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 4px !important;
 }
 
 body.mobile-ui .court-header-actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    gap: 4px !important;
+    align-items: center !important;
+    flex-shrink: 0 !important;
 }
 
-/* Mobile UI: Clean 2-row toolbar with prominent 44px buttons */
+/* Mobile UI: Clean 2-row horizontal-scrolling toolbar (zero wrapping!) */
 body.mobile-ui .pitch-toolbar {
     display: flex !important;
     flex-direction: column !important;
-    gap: 6px !important;
-    padding: 6px 8px !important;
+    gap: 4px !important;
+    padding: 4px 6px !important;
     background: #111827 !important;
     border-bottom: 1px solid rgba(255, 255, 255, 0.12) !important;
     position: relative !important;
@@ -5244,12 +5331,13 @@ body.mobile-ui .pitch-toolbar {
 
 body.mobile-ui .pitch-toolbar .toolbar-group {
     display: flex !important;
+    flex-wrap: nowrap !important;
     align-items: center !important;
-    gap: 6px !important;
+    gap: 5px !important;
     overflow-x: auto !important;
     white-space: nowrap !important;
     width: 100% !important;
-    padding: 2px 0 4px !important;
+    padding: 1px 0 !important;
     -webkit-overflow-scrolling: touch !important;
     scrollbar-width: none !important;
 }
@@ -5259,10 +5347,11 @@ body.mobile-ui .pitch-toolbar .toolbar-group::-webkit-scrollbar {
 }
 
 body.mobile-ui .tool-btn {
-    min-height: 42px !important;
-    min-width: 44px !important;
-    padding: 8px 12px !important;
-    font-size: 0.82rem !important;
+    min-height: 36px !important;
+    height: 36px !important;
+    min-width: 40px !important;
+    padding: 4px 10px !important;
+    font-size: 0.76rem !important;
     font-weight: 700 !important;
     white-space: nowrap !important;
     border-radius: 8px !important;
