@@ -666,8 +666,10 @@
         activeMobileTab = tab;
         document.body.setAttribute('data-mobile-tab', tab);
 
-        // If user taps Court, Roster or Lineup while in Summary or Live view, switch to 1. Kenttä
-        if ((tab === 'court' || tab === 'roster' || tab === 'lineup') && (activeLineupKey === 'summary' || activeLineupKey === 'live')) {
+        // If user taps Live, switch to live view
+        if (tab === 'live') {
+            switchTab('live');
+        } else if ((tab === 'court' || tab === 'roster' || tab === 'lineup') && (activeLineupKey === 'summary' || activeLineupKey === 'live')) {
             switchTab('1');
         }
 
@@ -1688,6 +1690,11 @@
         } else if (activeLineupKey === 'live') {
             document.body.classList.add('is-live-view');
             document.body.classList.remove('is-summary-view');
+            activeMobileTab = 'live';
+            document.body.setAttribute('data-mobile-tab', 'live');
+            document.querySelectorAll('.mobile-nav-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.getAttribute('data-mobile-tab') === 'live');
+            });
             if (rosterPanelSection) rosterPanelSection.style.display = 'none';
             if (pitchPanelSection) pitchPanelSection.style.display = 'none';
             if (lineupPanelSection) lineupPanelSection.style.display = 'none';
@@ -1697,6 +1704,13 @@
             renderLiveView();
         } else {
             document.body.classList.remove('is-summary-view', 'is-live-view');
+            if (activeMobileTab === 'live') {
+                activeMobileTab = 'court';
+                document.body.setAttribute('data-mobile-tab', 'court');
+                document.querySelectorAll('.mobile-nav-btn').forEach(btn => {
+                    btn.classList.toggle('active', btn.getAttribute('data-mobile-tab') === 'court');
+                });
+            }
             if (rosterPanelSection) rosterPanelSection.style.display = 'flex';
             if (pitchPanelSection) pitchPanelSection.style.display = 'flex';
             if (summaryViewPanel) summaryViewPanel.style.display = 'none';
@@ -5605,8 +5619,9 @@
                         <span class="summary-p-name">${escapeHtml(p.name)}</span>
                         <span class="summary-p-pos-tag">${p.position}</span>
                     </div>
-                    <div style="margin-top: 3px; display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">
-                        ${attPill}
+                    <div style="margin-top: 4px; display: flex; align-items: center; justify-content: space-between; gap: 6px; flex-wrap: wrap;">
+                        <div class="live-pill-wrapper" data-action="edit-status">${attPill}</div>
+                        <button type="button" class="btn-xs btn-primary highlight-live" data-action="assign-player-live" style="padding: 3px 10px; font-size: 0.74rem; font-weight: 700; border-radius: 6px;">🏒 Sijoita kenttään</button>
                     </div>
                     <div class="summary-p-assignments">
                         ${assignTagsHtml}
@@ -5622,7 +5637,13 @@
                 card.classList.remove('is-dragging');
             });
 
-            card.addEventListener('click', () => {
+            card.addEventListener('click', (e) => {
+                const assignBtn = e.target.closest('[data-action="assign-player-live"]');
+                if (assignBtn) {
+                    e.stopPropagation();
+                    openAssignModal(p);
+                    return;
+                }
                 openPlayerAttendanceStatusModal(p);
             });
 

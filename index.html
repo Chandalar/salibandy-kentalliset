@@ -16,8 +16,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 
-    <!-- CSS Stylesheet (Cache Busted v44.0) -->
-    <link rel="stylesheet" href="styles.css?v=44.0">
+    <!-- CSS Stylesheet (Cache Busted v45.0) -->
+    <link rel="stylesheet" href="styles.css?v=45.0">
 
     <!-- Firebase SDK v10 (Deferred for instant local/offline boot) -->
     <script defer src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
@@ -77,6 +77,7 @@
                 <h1>Salibandyn Kentälliset</h1>
                 <div class="team-selector-wrapper">
                     <select id="team-select" class="team-dropdown"></select>
+                    <a href="simple.html" class="btn-xs btn-primary highlight-simple-app" id="btn-mobile-quick-simple" title="Siirry supernopeaan Kevytversioon (Kännykälle suositeltu)">⚡ Kevytversio</a>
                     <button class="btn-xs btn-outline highlight-customize" id="btn-customize-team" title="Muokkaa joukkueen logoa, värejä, areenaa ja asetuksia">🎨 Kustomoi</button>
                     <button class="btn-xs btn-outline" id="btn-new-team" title="Uusi joukkue">+ Uusi</button>
                     <button class="btn-xs btn-outline" id="btn-quick-refresh" title="Päivitä sovellus ja lataa uusin versio">🔄</button>
@@ -112,6 +113,9 @@
                 </button>
             </div>
 
+            <a href="simple.html" class="btn btn-primary highlight-simple-app" id="btn-desktop-simple-app" title="Siirry supernopeaan Kevytversioon (Suositeltu kännykälle)">
+                ⚡ Kevytversio
+            </a>
             <button class="btn btn-outline highlight-ui-mode" id="btn-header-ui-mode" title="Vaihda Mobiili- / Työpöytä-näkymä">
                 📱 Mobiilitila
             </button>
@@ -1214,13 +1218,17 @@ Out:
             <span class="mobile-nav-icon">🏟️</span>
             <span class="mobile-nav-label">Kenttä</span>
         </button>
-        <button class="mobile-nav-btn" data-mobile-tab="roster">
-            <span class="mobile-nav-icon">👥</span>
-            <span class="mobile-nav-label">Pelaajat</span>
+        <button class="mobile-nav-btn" data-mobile-tab="live">
+            <span class="mobile-nav-icon">🟢</span>
+            <span class="mobile-nav-label">Live</span>
         </button>
         <button class="mobile-nav-btn" data-mobile-tab="lineup">
             <span class="mobile-nav-icon">📋</span>
             <span class="mobile-nav-label">Kokoonpano</span>
+        </button>
+        <button class="mobile-nav-btn" data-mobile-tab="roster">
+            <span class="mobile-nav-icon">👥</span>
+            <span class="mobile-nav-label">Pelaajat</span>
         </button>
         <button class="mobile-nav-btn" data-mobile-tab="more">
             <span class="mobile-nav-icon">⚙️</span>
@@ -1244,9 +1252,9 @@ Out:
     <!-- TOAST NOTIFICATION CONTAINER -->
     <div id="toast" class="toast-notification"></div>
 
-    <!-- Firebase Config & App Engine (Cache Busted v44.0) -->
-    <script src="firebase-config.js?v=44.0"></script>
-    <script src="app.js?v=44.0"></script>
+    <!-- Firebase Config & App Engine (Cache Busted v45.0) -->
+    <script src="firebase-config.js?v=45.0"></script>
+    <script src="app.js?v=45.0"></script>
 
 </body>
 </html>
