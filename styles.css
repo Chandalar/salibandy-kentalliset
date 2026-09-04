@@ -5140,6 +5140,7 @@ body.mobile-ui.is-summary-view #summary-view-panel {
     min-height: 100% !important;
 }
 
+body.mobile-ui[data-mobile-tab="live"] #live-view-panel,
 body.mobile-ui.is-live-view #live-view-panel {
     display: flex !important;
     flex-direction: column !important;
