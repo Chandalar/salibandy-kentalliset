@@ -134,6 +134,12 @@
 
     if (Array.isArray(teams)) {
         teams.forEach(t => {
+            if (!t.name || t.name.startsWith('data:') || t.name.length > 40) {
+                t.name = 'SekTa';
+            }
+            if (t.id && (t.id.startsWith('data:') || t.id.length > 50)) {
+                t.id = 'team_sekta';
+            }
             if (!t.logo) {
                 t.logo = (t.id === 'team_edustus') ? '🦁' : ((t.id === 'team_junnut') ? '⚡' : '🏑');
             }
