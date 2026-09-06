@@ -1,7 +1,7 @@
 /**
- * KENTÄLLISET SIMPLE (Kevytversio) – Engine v1.1
- * Shared localStorage & Cloud Firestore sync with the main app
- * High-speed live attendees integration & one-tap lineup builder
+ * KENTÄLLISET SIMPLE (Kevytversio) – Engine v2.0
+ * Multi-engine Nimenhuuto & myClub fetching (Jina Reader, AllOrigins, iCal)
+ * High-speed live attendees integration & responsive multi-column lineup builder
  */
 
 (function() {
@@ -15,7 +15,7 @@
     let lineupConfigs = [];
     let teamEvents = [];
     let activeEventId = null;
-    let activeLineupTab = '1';
+    let activeLineupTab = 'all'; // Default to 'all' so multiple lines are visible at once!
     let activeRosterFilter = 'all';
 
     // DOM Elements
@@ -32,7 +32,17 @@
     const modalBody = document.getElementById('modal-body');
     const modalClose = document.getElementById('btn-modal-close');
 
-    // Default line positions
+    // Sync Modal
+    const syncModal = document.getElementById('event-sync-modal');
+    const syncUrlInput = document.getElementById('input-sync-url');
+    const btnCloseSyncModal = document.getElementById('btn-close-sync-modal');
+    const btnOpenSyncModal = document.getElementById('btn-open-sync-modal');
+    const btnOpenSyncSettings = document.getElementById('btn-open-sync-settings');
+    const btnDoFetchEvents = document.getElementById('btn-do-fetch-events');
+    const btnDoPasteAttendance = document.getElementById('btn-do-paste-attendance');
+    const inputPasteAttendance = document.getElementById('input-paste-attendance');
+
+    // Positions
     const POS_ORDER = ['MV', 'VP', 'OP', 'VH', 'KH', 'OH'];
     const POS_LABELS = {
         'MV': 'Maalivahti',
@@ -50,7 +60,7 @@
         clearTimeout(toastEl._timer);
         toastEl._timer = setTimeout(() => {
             toastEl.style.display = 'none';
-        }, 2400);
+        }, 2500);
     }
 
     function loadState() {
@@ -63,6 +73,15 @@
             const rawActiveTeam = localStorage.getItem('salibandy_active_team_id');
             currentTeamId = rawActiveTeam ? JSON.parse(rawActiveTeam) : teams[0].id;
             if (!teams.some(t => t.id === currentTeamId)) currentTeamId = teams[0].id;
+
+            const curTeam = teams.find(t => t.id === currentTeamId);
+            // Default Sekta events URL if team name matches
+            if (curTeam && !curTeam.eventsUrl && !curTeam.nimenhuutoUrl) {
+                if ((curTeam.name || '').toLowerCase().includes('sekta')) {
+                    curTeam.eventsUrl = 'https://sekta.nimenhuuto.com/events';
+                    curTeam.nimenhuutoUrl = 'https://sekta.nimenhuuto.com/events';
+                }
+            }
 
             const rawRoster = localStorage.getItem('salibandy_roster_' + currentTeamId);
             roster = rawRoster ? JSON.parse(rawRoster) : [];
@@ -133,14 +152,24 @@
         teams.forEach(t => {
             const opt = document.createElement('option');
             opt.value = t.id;
-            opt.textContent = (t.logo ? t.logo + ' ' : '') + t.name;
+            
+            // Do NOT put base64 data image URLs in select textContent!
+            const isBase64 = (t.logo && (t.logo.startsWith('data:') || t.logo.length > 20));
+            const emojiPrefix = (!isBase64 && t.logo) ? (t.logo + ' ') : '';
+            opt.textContent = emojiPrefix + (t.name || 'Joukkue');
+
             if (t.id === currentTeamId) opt.selected = true;
             teamSelect.appendChild(opt);
         });
 
         const curTeam = teams.find(t => t.id === currentTeamId) || teams[0];
         if (teamLogoBadge) {
-            teamLogoBadge.textContent = curTeam.logo || '🏑';
+            const isBase64 = (curTeam.logo && (curTeam.logo.startsWith('data:') || curTeam.logo.startsWith('http')));
+            if (isBase64) {
+                teamLogoBadge.innerHTML = `<img src="${curTeam.logo}" alt="Logo" style="width: 100%; height: 100%; object-fit: cover; border-radius: 6px;">`;
+            } else {
+                teamLogoBadge.textContent = curTeam.logo || '🏑';
+            }
         }
     }
 
@@ -204,10 +233,10 @@
         if (!lineupNavBar) return;
         lineupNavBar.innerHTML = '';
 
-        // Tab: Kaikki kentät
+        // Tab: Kaikki kentät (Multiple lines visible side-by-side)
         const allTab = document.createElement('button');
         allTab.className = `lineup-tab ${activeLineupTab === 'all' ? 'active' : ''}`;
-        allTab.textContent = '📋 Kaikki kentät';
+        allTab.textContent = '👥 Kaikki kentät rinnakkain';
         allTab.addEventListener('click', () => {
             activeLineupTab = 'all';
             renderLineupTabs();
@@ -284,7 +313,7 @@
                                 </div>
                             </div>
                             <div class="slot-right">
-                                <span style="color: var(--text-muted); font-size: 0.8rem;">Tyhjä</span>
+                                <span style="color: var(--text-muted); font-size: 0.78rem;">Tyhjä</span>
                             </div>
                         </div>
                     `;
@@ -303,7 +332,7 @@
                 </div>
             `;
 
-            // Bind click events on slots
+            // Bind clicks
             card.querySelectorAll('.slot-item').forEach(slot => {
                 slot.addEventListener('click', (e) => {
                     if (e.target.dataset.action === 'clear-slot') {
@@ -378,7 +407,7 @@
         });
 
         if (filtered.length === 0) {
-            rosterListContainer.innerHTML = '<div style="padding: 1rem; text-align: center; color: var(--text-muted);">Ei pelaajia valitulla suodattimella.</div>';
+            rosterListContainer.innerHTML = '<div style="padding: 1rem; text-align: center; color: var(--text-muted); grid-column: 1 / -1;">Ei pelaajia valitulla suodattimella.</div>';
             return;
         }
 
@@ -569,6 +598,127 @@
         return null;
     }
 
+    function findOrAddPlayerToRoster(rawText) {
+        if (!rawText || !rawText.trim()) return null;
+        const match = matchPlayerFromRoster(rawText);
+        if (match) return match;
+
+        const text = rawText.trim();
+        const numMatch = text.match(/#(\d+)/);
+        const num = numMatch ? parseInt(numMatch[1], 10) : (roster.length + 1);
+        const cleanName = text.replace(/^[#\d\.\-\*/\s]+/, '').replace(/\(.*?\)/, '').trim() || `Pelaaja ${num}`;
+
+        const newPlayer = {
+            id: 'p_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+            name: cleanName,
+            number: num,
+            position: 'H'
+        };
+        roster.push(newPlayer);
+        return newPlayer;
+    }
+
+    function parseJinaNimenhuuto(text) {
+        const events = [];
+        const idRegex = /https:\/\/[^\/]+\/events\/(\d+)/g;
+        const ids = [];
+        let m;
+        while ((m = idRegex.exec(text)) !== null) {
+            if (!ids.includes(m[1])) ids.push(m[1]);
+        }
+
+        ids.forEach(id => {
+            const startPos = text.indexOf('/events/' + id);
+            if (startPos === -1) return;
+            
+            const nextPositions = ids.filter(oId => oId !== id)
+                .map(oId => text.indexOf('/events/' + oId, startPos + 30))
+                .filter(p => p > startPos);
+            const endPos = nextPositions.length > 0 ? Math.min(...nextPositions) : text.length;
+            const chunk = text.substring(Math.max(0, startPos - 100), endPos);
+
+            let title = 'Tapahtuma';
+            const titleMatch = chunk.match(/\[([A-ZÅÄÖa-zåäö0-9\s\.\-·]+)\]\(https:\/\/[^\/]+\/events\/\d+\)/);
+            if (titleMatch && !titleMatch[1].startsWith('SYYS') && !titleMatch[1].startsWith('LOKA') && !titleMatch[1].startsWith('MARRAS') && !titleMatch[1].startsWith('TAMMI') && !titleMatch[1].startsWith('HELMI') && !titleMatch[1].startsWith('MAALIS') && !titleMatch[1].startsWith('HUHTI') && !titleMatch[1].startsWith('TOUKO') && !titleMatch[1].startsWith('KESÄ') && !titleMatch[1].startsWith('HEINÄ') && !titleMatch[1].startsWith('ELO') && !titleMatch[1].startsWith('JOULU')) {
+                title = titleMatch[1].replace(/&middot;/g, '·').trim();
+            }
+
+            let dateStr = '';
+            let location = '';
+            const dateMatch = chunk.match(/####\s*\[(.*?)\]/);
+            if (dateMatch) {
+                const fullDate = dateMatch[1].trim();
+                if (fullDate.includes(' klo ')) {
+                    const parts = fullDate.split(/(?=klo\s*\d+)/i);
+                    const timeAndRest = parts[1] || '';
+                    const timeMatch = timeAndRest.match(/(klo\s*\d+:\d+)(.*)/i);
+                    if (timeMatch) {
+                        dateStr = (parts[0] + timeMatch[1]).trim();
+                        location = timeMatch[2].replace(/^[\s,]+/, '').trim();
+                    } else {
+                        dateStr = fullDate;
+                    }
+                } else {
+                    dateStr = fullDate;
+                }
+            }
+
+            const inPlayerNames = [];
+            const outPlayerNames = [];
+
+            const tabOutMatch = chunk.match(/\*\s*\[Out\s*(\d+)\][^\n]*\n+([\s\S]*?)(?=\n\[|\n\*|\n####|$)/i);
+            if (tabOutMatch) {
+                const outCount = parseInt(tabOutMatch[1], 10);
+                const afterTabs = tabOutMatch[2].trim();
+                const paragraphs = afterTabs.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean);
+
+                const inCountMatch = chunk.match(/\*\s*\[In\s*(\d+)\]/i);
+                const inCount = inCountMatch ? parseInt(inCountMatch[1], 10) : 0;
+
+                if (inCount > 0 && paragraphs.length > 0) {
+                    const inRaw = paragraphs[0];
+                    if (!inRaw.includes('Ei ketään')) {
+                        const pList = inRaw.split(/(?=#\d+)/).map(s => s.trim()).filter(s => s.startsWith('#'));
+                        inPlayerNames.push(...pList);
+                    }
+                }
+
+                if (outCount > 0) {
+                    const outIndex = (inCount > 0) ? 1 : 0;
+                    if (paragraphs.length > outIndex) {
+                        const outRaw = paragraphs[outIndex];
+                        if (!outRaw.includes('Ei ketään')) {
+                            const pList = outRaw.split(/(?=#\d+)/).map(s => s.trim()).filter(s => s.startsWith('#'));
+                            outPlayerNames.push(...pList);
+                        }
+                    }
+                }
+            }
+
+            const attendees = {};
+            roster.forEach(p => { attendees[p.id] = { status: 'unanswered', reason: '' }; });
+            inPlayerNames.forEach(raw => {
+                const p = findOrAddPlayerToRoster(raw);
+                if (p) attendees[p.id] = { status: 'in', reason: '' };
+            });
+            outPlayerNames.forEach(raw => {
+                const p = findOrAddPlayerToRoster(raw);
+                if (p) attendees[p.id] = { status: 'out', reason: '' };
+            });
+
+            events.push({
+                id: 'event_' + id,
+                title: title,
+                date: dateStr,
+                location: location,
+                source: 'nimenhuuto',
+                attendees: attendees
+            });
+        });
+
+        return events;
+    }
+
     function parseNimenhuutoEventsHtml(htmlText) {
         const events = [];
         const eventBlocks = htmlText.split(/id=["'](event_\d+)["']/g);
@@ -644,8 +794,12 @@
         }
 
         if (!targetUrl) {
-            targetUrl = prompt('Syötä joukkueesi Nimenhuuto- tai myClub-osoite\n(Esim: https://omatiimi.nimenhuuto.com/events):');
-            if (!targetUrl || !targetUrl.trim()) return;
+            if (syncUrlInput && syncUrlInput.value.trim()) {
+                targetUrl = syncUrlInput.value.trim();
+            } else {
+                openSyncModal();
+                return false;
+            }
         }
 
         targetUrl = targetUrl.trim();
@@ -658,38 +812,66 @@
 
         showToast('Haetaan tapahtumia verkosta... ⏳');
 
+        // Multi-engine proxies: Jina Reader as #1, AllOrigins as #2, CORS proxy as #3
         const proxyUrls = [
-            `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`,
+            `https://r.jina.ai/${targetUrl}`,
+            `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`,
             `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`,
             targetUrl
         ];
 
         let rawText = '';
         let ok = false;
+        let isJina = false;
+
         for (const pUrl of proxyUrls) {
             try {
-                const res = await fetch(pUrl, { cache: 'no-cache' });
+                const isAllOrigins = pUrl.includes('allorigins.win/get');
+                const isJinaReader = pUrl.includes('r.jina.ai');
+                const headers = isJinaReader ? { 'Accept': 'text/html' } : {};
+
+                const res = await fetch(pUrl, { cache: 'no-cache', headers: headers });
                 if (res.ok) {
-                    rawText = await res.text();
-                    if (rawText && (rawText.includes('event_') || rawText.includes('Nimenhuuto') || rawText.includes('myClub') || rawText.includes('BEGIN:VCALENDAR'))) {
-                        ok = true;
-                        break;
+                    if (isAllOrigins) {
+                        const json = await res.json();
+                        if (json && json.contents) {
+                            rawText = json.contents;
+                            ok = true;
+                            break;
+                        }
+                    } else {
+                        const txt = await res.text();
+                        if (txt && (txt.includes('event_') || txt.includes('events/') || txt.includes('Nimenhuuto') || txt.includes('myClub') || txt.includes('VCALENDAR'))) {
+                            rawText = txt;
+                            ok = true;
+                            if (isJinaReader) isJina = true;
+                            break;
+                        }
                     }
                 }
             } catch (e) {
-                console.warn('Proxy failed:', pUrl, e);
+                console.warn('Proxy attempt error:', pUrl, e);
             }
         }
 
         if (!ok || !rawText) {
-            showToast('Tapahtumien haku epäonnistui. Tarkista osoite!');
-            return;
+            showToast('Verkkohaku ei onnistunut. Voit liittää osallistujat tekstinä!');
+            openSyncModal();
+            return false;
         }
 
-        const events = parseNimenhuutoEventsHtml(rawText);
+        let events = [];
+        if (isJina) {
+            events = parseJinaNimenhuuto(rawText);
+        } else {
+            events = parseNimenhuutoEventsHtml(rawText);
+            if (events.length === 0) events = parseJinaNimenhuuto(rawText);
+        }
+
         if (events.length === 0) {
             showToast('Sivulta ei löytynyt tapahtumia.');
-            return;
+            openSyncModal();
+            return false;
         }
 
         teamEvents = events;
@@ -703,7 +885,61 @@
         renderEventBar();
         renderLineupCards();
         renderRosterList();
+        closeSyncModal();
         showToast(`Haettu ${teamEvents.length} tapahtumaa onnistuneesti! 🎉`);
+        return true;
+    }
+
+    function parsePastedAttendance(rawText) {
+        if (!rawText || !rawText.trim()) return;
+        const lines = rawText.split('\n').map(l => l.trim()).filter(Boolean);
+        const attendees = {};
+        roster.forEach(p => { attendees[p.id] = { status: 'unanswered', reason: '' }; });
+
+        let currentStatus = 'in';
+
+        lines.forEach(line => {
+            const lp = line.toLowerCase();
+            if (lp.startsWith('in') || lp.startsWith('mukana') || lp.startsWith('kyllä') || lp.startsWith('osallistuu')) {
+                currentStatus = 'in';
+            } else if (lp.startsWith('out') || lp.startsWith('poissa') || lp.startsWith('ei')) {
+                currentStatus = 'out';
+            } else if (lp.startsWith('ehkä') || lp.startsWith('maybe')) {
+                currentStatus = 'maybe';
+            }
+
+            // Extract numbers or names
+            const pMatches = line.matchAll(/#?(\d+)\s*([^,\n;\t]+)?/g);
+            for (const pm of pMatches) {
+                const num = parseInt(pm[1], 10);
+                const p = roster.find(r => r.number === num);
+                if (p) {
+                    attendees[p.id] = { status: currentStatus, reason: '' };
+                }
+            }
+        });
+
+        let curEvent = teamEvents.find(e => e.id === activeEventId);
+        if (!curEvent) {
+            curEvent = {
+                id: 'ev_' + Date.now(),
+                title: 'Ottelu / Tapahtuma',
+                date: 'Tänään',
+                location: '',
+                attendees: attendees
+            };
+            teamEvents.unshift(curEvent);
+            activeEventId = curEvent.id;
+        } else {
+            curEvent.attendees = attendees;
+        }
+
+        saveState();
+        renderEventBar();
+        renderLineupCards();
+        renderRosterList();
+        closeSyncModal();
+        showToast('Liitetyt osallistujat tallennettu! 👍');
     }
 
     function copyWhatsAppText() {
@@ -750,6 +986,22 @@
         }[m]));
     }
 
+    function openSyncModal() {
+        if (!syncModal) return;
+        const curTeam = teams.find(t => t.id === currentTeamId);
+        if (syncUrlInput) {
+            syncUrlInput.value = (curTeam && (curTeam.eventsUrl || curTeam.nimenhuutoUrl)) ? (curTeam.eventsUrl || curTeam.nimenhuutoUrl) : '';
+            if (!syncUrlInput.value && (curTeam?.name || '').toLowerCase().includes('sekta')) {
+                syncUrlInput.value = 'https://sekta.nimenhuuto.com/events';
+            }
+        }
+        syncModal.classList.add('active');
+    }
+
+    function closeSyncModal() {
+        syncModal?.classList.remove('active');
+    }
+
     function init() {
         loadState();
         renderTeamHeader();
@@ -779,27 +1031,39 @@
             renderRosterList();
         });
 
-        // Fetch events from web
-        document.getElementById('btn-simple-fetch-events')?.addEventListener('click', () => {
-            fetchAndSyncEvents();
-        });
-
-        // Config events URL
-        document.getElementById('btn-simple-config-events')?.addEventListener('click', () => {
+        // Open Sync Modal
+        btnOpenSyncModal?.addEventListener('click', () => {
             const curTeam = teams.find(t => t.id === currentTeamId);
-            const oldUrl = curTeam ? (curTeam.eventsUrl || curTeam.nimenhuutoUrl || '') : '';
-            const newUrl = prompt('Aseta joukkueen Nimenhuuto- tai myClub-osoite:\n(Esim. https://omatiimi.nimenhuuto.com/events)', oldUrl);
-            if (newUrl !== null) {
-                if (curTeam) {
-                    curTeam.eventsUrl = newUrl.trim();
-                    curTeam.nimenhuutoUrl = newUrl.trim();
-                }
-                saveState();
-                showToast('Osoite tallennettu! Voit nyt painaa 🔄 Hae.');
+            const url = curTeam ? (curTeam.eventsUrl || curTeam.nimenhuutoUrl) : '';
+            if (url) {
+                fetchAndSyncEvents(url);
+            } else {
+                openSyncModal();
             }
         });
 
-        // Copy button
+        btnOpenSyncSettings?.addEventListener('click', openSyncModal);
+        btnCloseSyncModal?.addEventListener('click', closeSyncModal);
+
+        btnDoFetchEvents?.addEventListener('click', () => {
+            const url = syncUrlInput ? syncUrlInput.value.trim() : '';
+            if (!url) {
+                showToast('Syötä ensin osoite!');
+                return;
+            }
+            fetchAndSyncEvents(url);
+        });
+
+        btnDoPasteAttendance?.addEventListener('click', () => {
+            const text = inputPasteAttendance ? inputPasteAttendance.value.trim() : '';
+            if (!text) {
+                showToast('Liitä ensin tekstiä laatikkoon!');
+                return;
+            }
+            parsePastedAttendance(text);
+        });
+
+        // Copy WhatsApp
         document.getElementById('btn-copy-wa')?.addEventListener('click', copyWhatsAppText);
 
         // Refresh button
@@ -819,8 +1083,11 @@
         modalEl?.addEventListener('click', (e) => {
             if (e.target === modalEl) modalEl.classList.remove('active');
         });
+        syncModal?.addEventListener('click', (e) => {
+            if (e.target === syncModal) closeSyncModal();
+        });
 
-        console.log('⚡ Kentälliset Simple v1.1 Initialized');
+        console.log('⚡ Kentälliset Simple v2.0 Initialized');
     }
 
     if (document.readyState === 'loading') {

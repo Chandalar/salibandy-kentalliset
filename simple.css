@@ -1,7 +1,8 @@
 /* ============================================================
-   KENTÄLLISET SIMPLE (Kevytversio) – v1.0
+   KENTÄLLISET SIMPLE (Kevytversio) – v2.0
    Ultra-fast, lightweight, single-glance floorball lineup app
    Zero GPU bloat, 100% reliable, instantaneous touch response
+   Multi-column grid on wide / unfolded foldable screens
    ============================================================ */
 
 :root {
@@ -77,6 +78,7 @@ body {
     justify-content: center;
     font-size: 1.2rem;
     flex-shrink: 0;
+    overflow: hidden;
 }
 
 .team-select {
@@ -242,14 +244,30 @@ body {
 /* ── MAIN CONTENT CONTAINER ── */
 .simple-content {
     padding: 10px;
-    max-width: 900px;
+    max-width: 1400px;
     margin: 0 auto;
     display: flex;
     flex-direction: column;
     gap: 12px;
 }
 
-/* ── LINEUP CARD ── */
+/* ── LINEUP CARD & RESPONSIVE MULTI-COLUMN GRID ── */
+#lineup-card-container {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+/* Multi-column grid on wide screens like Samsung Z Fold 5 unfolded or desktop */
+@media (min-width: 640px) {
+    #lineup-card-container {
+        display: grid !important;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)) !important;
+        gap: 12px !important;
+        align-items: start !important;
+    }
+}
+
 .lineup-card {
     background: var(--bg-card);
     border: 1px solid var(--border-color);
@@ -262,8 +280,8 @@ body {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 10px;
-    padding-bottom: 8px;
+    margin-bottom: 8px;
+    padding-bottom: 6px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
@@ -301,7 +319,7 @@ body {
 .slots-container {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 5px;
 }
 
 .slot-item {
@@ -309,11 +327,11 @@ body {
     align-items: center;
     justify-content: space-between;
     gap: 8px;
-    padding: 8px 12px;
+    padding: 7px 10px;
     background: var(--bg-slot);
     border: 1px solid var(--border-color);
-    border-radius: 10px;
-    min-height: 48px;
+    border-radius: 8px;
+    min-height: 42px;
     cursor: pointer;
     transition: background 0.15s, border-color 0.15s;
 }
@@ -332,18 +350,18 @@ body {
 .slot-left {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
     min-width: 0;
     flex: 1;
 }
 
 .pos-tag {
-    font-size: 0.75rem;
+    font-size: 0.72rem;
     font-weight: 800;
     font-family: var(--font-heading);
-    padding: 4px 8px;
-    border-radius: 6px;
-    min-width: 36px;
+    padding: 3px 6px;
+    border-radius: 5px;
+    min-width: 32px;
     text-align: center;
 }
 
@@ -357,7 +375,7 @@ body {
 }
 
 .slot-player-name {
-    font-size: 0.95rem;
+    font-size: 0.9rem;
     font-weight: 700;
     color: #fff;
     white-space: nowrap;
@@ -366,7 +384,7 @@ body {
 }
 
 .slot-player-empty-label {
-    font-size: 0.88rem;
+    font-size: 0.82rem;
     font-weight: 600;
     color: var(--text-muted);
 }
@@ -379,9 +397,9 @@ body {
 }
 
 .status-badge-mini {
-    padding: 3px 7px;
-    border-radius: 5px;
-    font-size: 0.7rem;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.68rem;
     font-weight: 700;
 }
 
@@ -395,7 +413,7 @@ body {
     border: none;
     color: var(--text-muted);
     font-size: 1.1rem;
-    padding: 4px 8px;
+    padding: 2px 6px;
     cursor: pointer;
     border-radius: 4px;
 }
@@ -457,6 +475,14 @@ body {
     display: flex;
     flex-direction: column;
     gap: 6px;
+}
+
+@media (min-width: 640px) {
+    .player-list {
+        display: grid !important;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)) !important;
+        gap: 8px !important;
+    }
 }
 
 .player-row {

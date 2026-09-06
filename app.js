@@ -5123,6 +5123,133 @@
         return events;
     }
 
+    function parseJinaNimenhuuto(text) {
+        const events = [];
+        const idRegex = /https:\/\/[^\/]+\/events\/(\d+)/g;
+        const ids = [];
+        let m;
+        while ((m = idRegex.exec(text)) !== null) {
+            if (!ids.includes(m[1])) ids.push(m[1]);
+        }
+
+        ids.forEach(id => {
+            const startPos = text.indexOf('/events/' + id);
+            if (startPos === -1) return;
+            
+            const nextPositions = ids.filter(oId => oId !== id)
+                .map(oId => text.indexOf('/events/' + oId, startPos + 30))
+                .filter(p => p > startPos);
+            const endPos = nextPositions.length > 0 ? Math.min(...nextPositions) : text.length;
+            const chunk = text.substring(Math.max(0, startPos - 100), endPos);
+
+            let title = 'Tapahtuma';
+            const titleMatch = chunk.match(/\[([A-ZÅÄÖa-zåäö0-9\s\.\-·]+)\]\(https:\/\/[^\/]+\/events\/\d+\)/);
+            if (titleMatch && !titleMatch[1].startsWith('SYYS') && !titleMatch[1].startsWith('LOKA') && !titleMatch[1].startsWith('MARRAS') && !titleMatch[1].startsWith('TAMMI') && !titleMatch[1].startsWith('HELMI') && !titleMatch[1].startsWith('MAALIS') && !titleMatch[1].startsWith('HUHTI') && !titleMatch[1].startsWith('TOUKO') && !titleMatch[1].startsWith('KESÄ') && !titleMatch[1].startsWith('HEINÄ') && !titleMatch[1].startsWith('ELO') && !titleMatch[1].startsWith('JOULU')) {
+                title = titleMatch[1].replace(/&middot;/g, '·').trim();
+            }
+
+            let dateStr = '';
+            let location = '';
+            const dateMatch = chunk.match(/####\s*\[(.*?)\]/);
+            if (dateMatch) {
+                const fullDate = dateMatch[1].trim();
+                if (fullDate.includes(' klo ')) {
+                    const parts = fullDate.split(/(?=klo\s*\d+)/i);
+                    const timeAndRest = parts[1] || '';
+                    const timeMatch = timeAndRest.match(/(klo\s*\d+:\d+)(.*)/i);
+                    if (timeMatch) {
+                        dateStr = (parts[0] + timeMatch[1]).trim();
+                        location = timeMatch[2].replace(/^[\s,]+/, '').trim();
+                    } else {
+                        dateStr = fullDate;
+                    }
+                } else {
+                    dateStr = fullDate;
+                }
+            }
+
+            const inPlayerNames = [];
+            const outPlayerNames = [];
+
+            const tabOutMatch = chunk.match(/\*\s*\[Out\s*(\d+)\][^\n]*\n+([\s\S]*?)(?=\n\[|\n\*|\n####|$)/i);
+            if (tabOutMatch) {
+                const outCount = parseInt(tabOutMatch[1], 10);
+                const afterTabs = tabOutMatch[2].trim();
+                const paragraphs = afterTabs.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean);
+
+                const inCountMatch = chunk.match(/\*\s*\[In\s*(\d+)\]/i);
+                const inCount = inCountMatch ? parseInt(inCountMatch[1], 10) : 0;
+
+                if (inCount > 0 && paragraphs.length > 0) {
+                    const inRaw = paragraphs[0];
+                    if (!inRaw.includes('Ei ketään')) {
+                        const pList = inRaw.split(/(?=#\d+)/).map(s => s.trim()).filter(s => s.startsWith('#'));
+                        inPlayerNames.push(...pList);
+                    }
+                }
+
+                if (outCount > 0) {
+                    const outIndex = (inCount > 0) ? 1 : 0;
+                    if (paragraphs.length > outIndex) {
+                        const outRaw = paragraphs[outIndex];
+                        if (!outRaw.includes('Ei ketään')) {
+                            const pList = outRaw.split(/(?=#\d+)/).map(s => s.trim()).filter(s => s.startsWith('#'));
+                            outPlayerNames.push(...pList);
+                        }
+                    }
+                }
+            }
+
+            const attendees = {};
+            roster.forEach(p => { attendees[p.id] = { status: 'unanswered', reason: '' }; });
+            inPlayerNames.forEach(raw => {
+                let match = matchPlayerFromRoster(raw);
+                if (!match) {
+                    const textP = raw.trim();
+                    const numM = textP.match(/#(\d+)/);
+                    const numP = numM ? parseInt(numM[1], 10) : (roster.length + 1);
+                    const cleanP = textP.replace(/^[#\d\.\-\*/\s]+/, '').replace(/\(.*?\)/, '').trim() || `Pelaaja ${numP}`;
+                    match = {
+                        id: 'p_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+                        name: cleanP,
+                        number: numP,
+                        position: 'H'
+                    };
+                    roster.push(match);
+                }
+                if (match) attendees[match.id] = { status: 'in', reason: '' };
+            });
+            outPlayerNames.forEach(raw => {
+                let match = matchPlayerFromRoster(raw);
+                if (!match) {
+                    const textP = raw.trim();
+                    const numM = textP.match(/#(\d+)/);
+                    const numP = numM ? parseInt(numM[1], 10) : (roster.length + 1);
+                    const cleanP = textP.replace(/^[#\d\.\-\*/\s]+/, '').replace(/\(.*?\)/, '').trim() || `Pelaaja ${numP}`;
+                    match = {
+                        id: 'p_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+                        name: cleanP,
+                        number: numP,
+                        position: 'H'
+                    };
+                    roster.push(match);
+                }
+                if (match) attendees[match.id] = { status: 'out', reason: '' };
+            });
+
+            events.push({
+                id: 'event_' + id,
+                title: title,
+                date: dateStr,
+                location: location,
+                source: 'nimenhuuto',
+                attendees: attendees
+            });
+        });
+
+        return events;
+    }
+
     async function fetchAndSyncEvents(targetUrl = null) {
         const curTeam = teams.find(t => t.id === currentTeamId);
         const teamName = curTeam ? curTeam.name : 'Joukkue';
@@ -5138,15 +5265,13 @@
 
         targetUrl = targetUrl.trim();
         if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://') && !targetUrl.startsWith('webcal://')) {
-            if (targetUrl.includes('.')) {
-                targetUrl = 'https://' + targetUrl;
-            } else {
-                targetUrl = `https://${targetUrl}.nimenhuuto.com/events`;
-            }
+            targetUrl = 'https://' + targetUrl;
         }
+
         if (targetUrl.startsWith('webcal://')) {
-            targetUrl = 'https://' + targetUrl.substr(9);
+            targetUrl = targetUrl.replace('webcal://', 'https://');
         }
+
         if (!targetUrl.includes('/events') && targetUrl.includes('nimenhuuto.com') && !targetUrl.endsWith('.ics')) {
             targetUrl = targetUrl.replace(/\/+$/, '') + '/events';
         }
@@ -5154,7 +5279,9 @@
         showToast(`Haetaan tapahtumia joukkueelle ${teamName}... ⏳`);
 
         const proxyUrls = [
-            `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`,
+            `https://r.jina.ai/${targetUrl}`,
+            `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`,
+            `https://api.allorigins.win/raw=${encodeURIComponent(targetUrl)}`,
             `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`,
             targetUrl
         ];
@@ -5164,12 +5291,23 @@
 
         for (const pUrl of proxyUrls) {
             try {
-                const res = await fetch(pUrl, { cache: 'no-cache' });
+                const isJinaReader = pUrl.includes('r.jina.ai');
+                const headers = isJinaReader ? { 'Accept': 'text/html' } : {};
+                const res = await fetch(pUrl, { cache: 'no-cache', headers: headers });
                 if (res.ok) {
-                    rawText = await res.text();
-                    if (rawText && (rawText.includes('BEGIN:VCALENDAR') || rawText.includes('event-detailed-container') || rawText.includes('event_') || rawText.includes('myClub') || rawText.includes('Nimenhuuto') || rawText.includes('tapahtumat'))) {
-                        fetchSuccess = true;
-                        break;
+                    if (pUrl.includes('allorigins.win/get')) {
+                        const json = await res.json();
+                        if (json && json.contents) {
+                            rawText = json.contents;
+                            fetchSuccess = true;
+                            break;
+                        }
+                    } else {
+                        rawText = await res.text();
+                        if (rawText && (rawText.includes('BEGIN:VCALENDAR') || rawText.includes('event-detailed-container') || rawText.includes('event_') || rawText.includes('events/') || rawText.includes('myClub') || rawText.includes('Nimenhuuto') || rawText.includes('tapahtumat'))) {
+                            fetchSuccess = true;
+                            break;
+                        }
                     }
                 }
             } catch (err) {
@@ -5188,6 +5326,9 @@
             parsedEvents = parseICalEvents(rawText);
         } else {
             parsedEvents = parseNimenhuutoEventsHtml(rawText);
+            if (parsedEvents.length === 0) {
+                parsedEvents = parseJinaNimenhuuto(rawText);
+            }
         }
 
         if (parsedEvents.length === 0) {
