@@ -63,6 +63,32 @@
         }, 2500);
     }
 
+    // ── RENDER SCHEDULER ─────────────────────────────────────────────
+    // Batch multiple render calls into a single requestAnimationFrame tick.
+    // This prevents DOM thrashing and paint artifacts on mobile (black areas).
+    let _renderScheduled = false;
+    let _renderFlags = { header: false, eventBar: false, tabs: false, cards: false, roster: false };
+
+    function scheduleRender(flags = {}) {
+        Object.assign(_renderFlags, flags);
+        if (_renderScheduled) return;
+        _renderScheduled = true;
+        requestAnimationFrame(() => {
+            _renderScheduled = false;
+            const f = _renderFlags;
+            _renderFlags = { header: false, eventBar: false, tabs: false, cards: false, roster: false };
+            if (f.header) renderTeamHeader();
+            if (f.eventBar) renderEventBar();
+            if (f.tabs) renderLineupTabs();
+            if (f.cards) renderLineupCards();
+            if (f.roster) renderRosterList();
+        });
+    }
+
+    function renderAll() {
+        scheduleRender({ header: true, eventBar: true, tabs: true, cards: true, roster: true });
+    }
+
     function loadState() {
         try {
             const rawTeams = localStorage.getItem('salibandy_teams_v1');
@@ -273,7 +299,7 @@
             chip.addEventListener('click', () => {
                 const f = chip.dataset.filter;
                 activeRosterFilter = (activeRosterFilter === f) ? 'all' : f;
-                renderRosterList();
+                scheduleRender({ roster: true });
             });
         });
     }
@@ -288,8 +314,7 @@
         allTab.textContent = '👥 1.–4. Kentät';
         allTab.addEventListener('click', () => {
             activeLineupTab = 'all';
-            renderLineupTabs();
-            renderLineupCards();
+            scheduleRender({ tabs: true, cards: true });
         });
         lineupNavBar.appendChild(allTab);
 
@@ -299,8 +324,7 @@
         specialTab.textContent = '⚡ YV & AV';
         specialTab.addEventListener('click', () => {
             activeLineupTab = 'special';
-            renderLineupTabs();
-            renderLineupCards();
+            scheduleRender({ tabs: true, cards: true });
         });
         lineupNavBar.appendChild(specialTab);
 
@@ -312,8 +336,7 @@
             btn.textContent = cfg.name;
             btn.addEventListener('click', () => {
                 activeLineupTab = cfg.id;
-                renderLineupTabs();
-                renderLineupCards();
+                scheduleRender({ tabs: true, cards: true });
             });
             lineupNavBar.appendChild(btn);
         });
@@ -410,8 +433,7 @@
                         const p = e.target.dataset.pos;
                         lineups[lk][p] = '';
                         saveState();
-                        renderLineupCards();
-                        renderRosterList();
+                        scheduleRender({ cards: true, roster: true });
                         showToast('Pelaaja poistettu kentällisestä');
                         return;
                     }
@@ -426,8 +448,7 @@
                 const lk = e.target.dataset.lineup;
                 GRID_POS_ORDER.forEach(p => lineups[lk][p] = '');
                 saveState();
-                renderLineupCards();
-                renderRosterList();
+                scheduleRender({ cards: true, roster: true });
                 showToast(`${cfg.name} tyhjennetty`);
             });
 
@@ -542,8 +563,7 @@
         curEvent.attendees[playerId] = { status: nextStatus, reason: '' };
         saveState();
         renderStatsBar(curEvent.attendees);
-        renderLineupCards();
-        renderRosterList();
+        scheduleRender({ cards: true, roster: true });
         showToast(`Status päivitetty: ${nextStatus.toUpperCase()}`);
     }
 
@@ -590,8 +610,7 @@
             item.addEventListener('click', () => {
                 lineups[lineupKey][pos] = p.id;
                 saveState();
-                renderLineupCards();
-                renderRosterList();
+                scheduleRender({ cards: true, roster: true });
                 modalEl.classList.remove('active');
                 showToast(`#${p.number} ${p.name} asetettu paikkaan ${lineName} - ${pos} 👍`);
             });
@@ -632,8 +651,7 @@
                     if (!lineups[cfg.id]) lineups[cfg.id] = { MV: '', VP: '', OP: '', VH: '', KH: '', OH: '' };
                     lineups[cfg.id][pos] = player.id;
                     saveState();
-                    renderLineupCards();
-                    renderRosterList();
+                    scheduleRender({ cards: true, roster: true });
                     modalEl.classList.remove('active');
                     showToast(`Sijoitettu: ${cfg.name} - ${pos} 👍`);
                 });
@@ -952,9 +970,7 @@
         }
 
         saveState();
-        renderEventBar();
-        renderLineupCards();
-        renderRosterList();
+        scheduleRender({ eventBar: true, cards: true, roster: true });
         closeSyncModal();
         showToast(`Haettu ${teamEvents.length} tapahtumaa onnistuneesti! 🎉`);
         return true;
@@ -1005,9 +1021,7 @@
         }
 
         saveState();
-        renderEventBar();
-        renderLineupCards();
-        renderRosterList();
+        scheduleRender({ eventBar: true, cards: true, roster: true });
         closeSyncModal();
         showToast('Liitetyt osallistujat tallennettu! 👍');
     }
@@ -1074,21 +1088,21 @@
 
     function init() {
         loadState();
-        renderTeamHeader();
-        renderEventBar();
-        renderLineupTabs();
-        renderLineupCards();
-        renderRosterList();
 
-        // Team change
-        teamSelect?.addEventListener('change', (e) => {
-            currentTeamId = e.target.value;
-            loadState();
+        // Initial render – wait one RAF tick so browser has laid out DOM
+        requestAnimationFrame(() => {
             renderTeamHeader();
             renderEventBar();
             renderLineupTabs();
             renderLineupCards();
             renderRosterList();
+        });
+
+        // Team change
+        teamSelect?.addEventListener('change', (e) => {
+            currentTeamId = e.target.value;
+            loadState();
+            renderAll();
             showToast('Joukkue vaihdettu');
         });
 
@@ -1096,9 +1110,7 @@
         eventSelect?.addEventListener('change', (e) => {
             activeEventId = e.target.value;
             saveState();
-            renderEventBar();
-            renderLineupCards();
-            renderRosterList();
+            scheduleRender({ eventBar: true, cards: true, roster: true });
         });
 
         // Open Sync Modal
@@ -1136,13 +1148,10 @@
         // Copy WhatsApp
         document.getElementById('btn-copy-wa')?.addEventListener('click', copyWhatsAppText);
 
-        // Refresh button
+        // Refresh button – force full re-render in next RAF tick
         document.getElementById('btn-simple-refresh')?.addEventListener('click', () => {
             loadState();
-            renderTeamHeader();
-            renderEventBar();
-            renderLineupCards();
-            renderRosterList();
+            renderAll();
             showToast('Päivitetty!');
         });
 
@@ -1155,6 +1164,48 @@
         });
         syncModal?.addEventListener('click', (e) => {
             if (e.target === syncModal) closeSyncModal();
+        });
+
+        // ── MOBILE FOREGROUND RESUME FIX ─────────────────────────────────
+        // On foldable/tablet: when app comes back from background, browser
+        // often shows a black/stale paint. Force full re-render on resume.
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') {
+                // Two-tick delay: first tick resets any GPU state, second
+                // tick re-paints actual content.
+                requestAnimationFrame(() => {
+                    requestAnimationFrame(() => {
+                        loadState();
+                        renderAll();
+                    });
+                });
+            }
+        });
+
+        // Also handle BFCache restore (back/forward navigation on mobile)
+        window.addEventListener('pageshow', (e) => {
+            if (e.persisted) {
+                requestAnimationFrame(() => {
+                    requestAnimationFrame(() => {
+                        loadState();
+                        renderAll();
+                    });
+                });
+            }
+        });
+
+        // Handle screen fold/unfold – Z Fold 5 fires 'resize' when unfolding
+        let _lastWidth = window.innerWidth;
+        window.addEventListener('resize', () => {
+            const newWidth = window.innerWidth;
+            if (Math.abs(newWidth - _lastWidth) > 100) {
+                // Major width change = fold/unfold event
+                _lastWidth = newWidth;
+                requestAnimationFrame(() => {
+                    renderLineupCards();
+                    renderRosterList();
+                });
+            }
         });
 
         console.log('⚡ Kentälliset Simple v2.0 Initialized');

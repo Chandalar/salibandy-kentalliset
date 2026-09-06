@@ -256,6 +256,10 @@ body {
     display: flex;
     flex-direction: column;
     gap: 8px;
+    /* Force GPU compositing layer – prevents black areas on repaint */
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+    will-change: contents;
 }
 
 /* 2-column grid on screens >= 560px (Samsung Z Fold 5 unfolded, tablets) */
@@ -682,23 +686,31 @@ body {
 }
 
 /* ── BOTTOM SHEET / MODAL ── */
+/* Use visibility+opacity+pointer-events instead of display:none/flex.
+   This is critical on Android/Samsung: toggling display causes full
+   paint invalidation → black areas. Opacity transition avoids this. */
 .simple-modal {
     position: fixed;
     top: 0;
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0, 0, 0, 0.75);
+    background: rgba(0, 0, 0, 0.8);
     z-index: 1000;
-    display: none;
+    display: flex;  /* Always flex – visibility controls shown/hidden */
     align-items: flex-end;
     justify-content: center;
-    backdrop-filter: blur(4px);
-    -webkit-backdrop-filter: blur(4px);
+    visibility: hidden;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.18s ease, visibility 0.18s ease;
+    /* NO backdrop-filter – causes black areas on Samsung WebView / Chrome Android */
 }
 
 .simple-modal.active {
-    display: flex;
+    visibility: visible;
+    opacity: 1;
+    pointer-events: auto;
 }
 
 .modal-sheet {
@@ -712,12 +724,14 @@ body {
     flex-direction: column;
     padding: 16px;
     box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.6);
-    animation: slideUp 0.2s ease-out;
+    /* GPU layer for smooth animation without causing parent repaint */
+    transform: translateY(40px);
+    transition: transform 0.2s ease-out;
+    will-change: transform;
 }
 
-@keyframes slideUp {
-    from { transform: translateY(100%); }
-    to { transform: translateY(0); }
+.simple-modal.active .modal-sheet {
+    transform: translateY(0);
 }
 
 .modal-header {
