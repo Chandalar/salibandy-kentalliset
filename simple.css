@@ -423,6 +423,7 @@ body {
 .pos-mv { background: #064e3b; color: #6ee7b7; }
 .pos-p  { background: #1e3a8a; color: #93c5fd; }
 .pos-h  { background: #7c2d12; color: #fed7aa; }
+.pos-6p { background: #581c87; color: #e9d5ff; }
 
 .slot-right {
     display: flex;
@@ -669,19 +670,24 @@ body {
     flex-shrink: 0;
 }
 
+.player-assigned-badges {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 3px;
+    align-items: center;
+    max-width: 220px;
+    overflow: hidden;
+}
+
 .player-assigned-badge {
-    font-size: 0.68rem;
+    font-size: 0.65rem;
     font-weight: 700;
-    padding: 2px 6px;
+    padding: 2px 5px;
     border-radius: 4px;
     background: rgba(59, 130, 246, 0.18);
     color: #93c5fd;
     border: 1px solid rgba(59, 130, 246, 0.35);
     white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 130px;
-    flex-shrink: 1;
 }
 
 .player-row-right {
