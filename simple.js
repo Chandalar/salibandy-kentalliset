@@ -15,6 +15,7 @@
     let lineupConfigs = [];
     let teamEvents = [];
     let activeEventId = null;
+    let lineupReserves = {}; // Map of lineupKey -> array of playerIds
     let activeLineupTab = 'all'; // Default to 'all' so multiple lines are visible at once!
     let activeRosterFilter = 'all';
 
@@ -130,15 +131,63 @@
             const rawRoster = localStorage.getItem('salibandy_roster_' + currentTeamId);
             roster = rawRoster ? JSON.parse(rawRoster) : [];
 
+            // If current team roster is empty, try default_team or team_sekta or fallback to DEFAULT_ROSTER
+            if (!roster || roster.length === 0) {
+                const altRoster1 = localStorage.getItem('salibandy_roster_default_team');
+                const altRoster2 = localStorage.getItem('salibandy_roster_team_sekta');
+                if (altRoster1 && JSON.parse(altRoster1).length > 0) {
+                    roster = JSON.parse(altRoster1);
+                } else if (altRoster2 && JSON.parse(altRoster2).length > 0) {
+                    roster = JSON.parse(altRoster2);
+                } else {
+                    roster = [
+                        { id: 'p_mv23', name: 'Matias V', number: 23, position: 'MV' },
+                        { id: 'p_mv45', name: 'Jussi V', number: 45, position: 'MV' },
+                        { id: 'p_mv7', name: 'Sami P', number: 7, position: 'MV' },
+                        { id: 'p_mv3', name: 'Mika A', number: 3, position: 'MV' },
+                        { id: 'p_19', name: 'Aaltonen', number: 19, position: 'VP' },
+                        { id: 'p_20', name: 'Veikka', number: 20, position: 'OP' },
+                        { id: 'p_42', name: 'Henri K', number: 42, position: 'KH' },
+                        { id: 'p_64', name: 'Onni V', number: 64, position: 'VH' },
+                        { id: 'p_71', name: 'Masto', number: 71, position: 'VP' },
+                        { id: 'p_4', name: 'Joona R', number: 4, position: 'OP' },
+                        { id: 'p_55', name: 'Vesa H', number: 55, position: 'KH' },
+                        { id: 'p_11', name: 'Juki', number: 11, position: 'VH' },
+                        { id: 'p_2', name: 'Nikou', number: 2, position: 'OH' },
+                        { id: 'p_88', name: 'Jerker B', number: 88, position: 'OH' },
+                        { id: 'p_21', name: 'Niko A', number: 21, position: 'VH' },
+                        { id: 'p_13', name: 'Joni V', number: 13, position: 'OH' },
+                        { id: 'p_10', name: 'Eino A', number: 10, position: 'KH' },
+                        { id: 'p_15', name: 'Akseli', number: 15, position: 'VH' },
+                        { id: 'p_22', name: 'Petri V', number: 22, position: 'VP' },
+                        { id: 'p_87', name: 'Heikki H', number: 87, position: 'OH' },
+                        { id: 'p_44', name: 'Jesse', number: 44, position: 'H' },
+                        { id: 'p_62', name: 'Ilmari O', number: 62, position: 'H' },
+                        { id: 'p_66', name: 'Miika', number: 66, position: 'H' }
+                    ];
+                }
+            }
+
             const rawLineups = localStorage.getItem('salibandy_lineups_' + currentTeamId);
             lineups = rawLineups ? JSON.parse(rawLineups) : {};
             
+            const rawReserves = localStorage.getItem('salibandy_reserves_' + currentTeamId);
+            lineupReserves = rawReserves ? JSON.parse(rawReserves) : {};
+
             // Ensure essential lineups 1, 2, 3, 4, yv, av exist in lineups state
             ['1', '2', '3', '4', 'yv', 'av'].forEach(k => {
                 if (!lineups[k]) {
                     lineups[k] = { MV: '', VP: '', OP: '', VH: '', KH: '', OH: '' };
                 }
             });
+
+            // If completely empty lineups, seed with initial realistic starters & bench
+            const isAnyAssigned = Object.values(lineups).some(l => Object.values(l).some(Boolean));
+            if (!isAnyAssigned && roster.length >= 12) {
+                lineups['1'] = { MV: 'p_mv23', VP: 'p_19', OP: 'p_20', VH: 'p_11', KH: 'p_42', OH: 'p_64' };
+                lineups['2'] = { MV: 'p_mv45', VP: 'p_71', OP: 'p_4', VH: 'p_21', KH: 'p_55', OH: 'p_2' };
+                if (!lineupReserves['1']) lineupReserves['1'] = ['p_88'];
+            }
 
             // Default standard configs: 1, 2, 3, 4 MUST ALWAYS BE FIRST!
             const defaultConfigs = [
@@ -176,6 +225,33 @@
 
             const rawEvents = localStorage.getItem('salibandy_events_' + currentTeamId);
             teamEvents = rawEvents ? JSON.parse(rawEvents) : [];
+            if (!teamEvents || teamEvents.length === 0) {
+                const altEvents1 = localStorage.getItem('salibandy_events_default_team');
+                const altEvents2 = localStorage.getItem('salibandy_events_team_sekta');
+                if (altEvents1 && JSON.parse(altEvents1).length > 0) {
+                    teamEvents = JSON.parse(altEvents1);
+                } else if (altEvents2 && JSON.parse(altEvents2).length > 0) {
+                    teamEvents = JSON.parse(altEvents2);
+                }
+            }
+
+            // Default event with attendees if empty
+            if (teamEvents.length === 0) {
+                const sampleAttendees = {};
+                roster.forEach((p, idx) => {
+                    const st = idx < 12 ? 'in' : (idx < 17 ? 'out' : 'maybe');
+                    sampleAttendees[p.id] = { status: st, reason: '' };
+                });
+                teamEvents = [
+                    {
+                        id: 'default_event_1',
+                        title: 'SekTa - Seuraava Ottelu',
+                        date: 'Klo 19:00',
+                        location: 'Kotiareena',
+                        attendees: sampleAttendees
+                    }
+                ];
+            }
 
             const rawActiveEvent = localStorage.getItem('salibandy_active_event_id_' + currentTeamId);
             activeEventId = rawActiveEvent ? JSON.parse(rawActiveEvent) : (teamEvents[0]?.id || null);
@@ -191,6 +267,7 @@
             localStorage.setItem('salibandy_active_team_id', JSON.stringify(currentTeamId));
             localStorage.setItem('salibandy_roster_' + currentTeamId, JSON.stringify(roster));
             localStorage.setItem('salibandy_lineups_' + currentTeamId, JSON.stringify(lineups));
+            localStorage.setItem('salibandy_reserves_' + currentTeamId, JSON.stringify(lineupReserves));
             localStorage.setItem('salibandy_lineup_configs_' + currentTeamId, JSON.stringify(lineupConfigs));
             localStorage.setItem('salibandy_events_' + currentTeamId, JSON.stringify(teamEvents));
             if (activeEventId) {
@@ -342,6 +419,43 @@
         });
     }
 
+    function getLineupReserves(lineupKey) {
+        if (!lineupReserves) lineupReserves = {};
+        const entry = lineupReserves[lineupKey];
+        if (Array.isArray(entry)) return entry;
+        if (entry && typeof entry === 'object' && Array.isArray(entry.general)) return entry.general;
+        return [];
+    }
+
+    function addLineupReserve(lineupKey, playerId) {
+        if (!playerId) return;
+        if (!lineupReserves) lineupReserves = {};
+        if (!lineupReserves[lineupKey]) {
+            lineupReserves[lineupKey] = [];
+        }
+        if (Array.isArray(lineupReserves[lineupKey])) {
+            if (!lineupReserves[lineupKey].includes(playerId)) {
+                lineupReserves[lineupKey].push(playerId);
+            }
+        } else {
+            if (!Array.isArray(lineupReserves[lineupKey].general)) lineupReserves[lineupKey].general = [];
+            if (!lineupReserves[lineupKey].general.includes(playerId)) {
+                lineupReserves[lineupKey].general.push(playerId);
+            }
+        }
+        saveState();
+    }
+
+    function removeLineupReserve(lineupKey, playerId) {
+        if (!lineupReserves || !lineupReserves[lineupKey]) return;
+        if (Array.isArray(lineupReserves[lineupKey])) {
+            lineupReserves[lineupKey] = lineupReserves[lineupKey].filter(id => id !== playerId);
+        } else if (lineupReserves[lineupKey].general) {
+            lineupReserves[lineupKey].general = lineupReserves[lineupKey].general.filter(id => id !== playerId);
+        }
+        saveState();
+    }
+
     function renderLineupCards() {
         if (!lineupCardContainer) return;
         lineupCardContainer.innerHTML = '';
@@ -413,6 +527,38 @@
                 }
             });
 
+            // ── Varapelaajat / Vaihtopenkki ──
+            const lineReserves = getLineupReserves(cfg.id);
+            let reservesChipsHtml = '';
+            if (lineReserves.length > 0) {
+                lineReserves.forEach(pId => {
+                    const p = roster.find(r => r.id === pId);
+                    if (p) {
+                        const att = attendeesMap[p.id] || { status: 'unanswered' };
+                        const badgeDot = att.status === 'in' ? '🟢' : att.status === 'out' ? '🔴' : att.status === 'maybe' ? '🟡' : '⚪';
+                        reservesChipsHtml += `
+                            <div class="reserve-chip">
+                                <span class="reserve-dot">${badgeDot}</span>
+                                <span class="reserve-name" title="${escapeHtml(p.name)}">#${p.number} ${escapeHtml(p.name)}</span>
+                                <button class="btn-remove-reserve" data-lineup="${cfg.id}" data-player="${p.id}" title="Poista varamies">✕</button>
+                            </div>
+                        `;
+                    }
+                });
+            }
+
+            const reservesSectionHtml = `
+                <div class="lineup-reserves-section">
+                    <div class="reserves-header-row">
+                        <span class="reserves-label">🪑 Varalla${lineReserves.length > 0 ? ` (${lineReserves.length})` : ''}:</span>
+                        <button class="btn-add-reserve" data-lineup="${cfg.id}" title="Lisää varamies kentälliseen">+ Varamies</button>
+                    </div>
+                    <div class="reserves-chips-row">
+                        ${reservesChipsHtml || '<span class="reserves-empty-note">Ei varapelaajia</span>'}
+                    </div>
+                </div>
+            `;
+
             card.innerHTML = `
                 <div class="lineup-card-header">
                     <div class="lineup-title">🏒 ${cfg.name}</div>
@@ -423,9 +569,10 @@
                 <div class="slots-container compact-grid">
                     ${slotsHtml}
                 </div>
+                ${reservesSectionHtml}
             `;
 
-            // Bind clicks
+            // Bind slot clicks
             card.querySelectorAll('.slot-item').forEach(slot => {
                 slot.addEventListener('click', (e) => {
                     if (e.target.dataset.action === 'clear-slot') {
@@ -444,12 +591,31 @@
                 });
             });
 
+            // Bind clear lineup
             card.querySelector('[data-action="clear-lineup"]')?.addEventListener('click', (e) => {
                 const lk = e.target.dataset.lineup;
                 GRID_POS_ORDER.forEach(p => lineups[lk][p] = '');
                 saveState();
                 scheduleRender({ cards: true, roster: true });
                 showToast(`${cfg.name} tyhjennetty`);
+            });
+
+            // Bind add reserve
+            card.querySelector('.btn-add-reserve')?.addEventListener('click', (e) => {
+                const lk = e.currentTarget.dataset.lineup;
+                openReservePicker(lk);
+            });
+
+            // Bind remove reserve
+            card.querySelectorAll('.btn-remove-reserve').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const lk = e.currentTarget.dataset.lineup;
+                    const pId = e.currentTarget.dataset.player;
+                    removeLineupReserve(lk, pId);
+                    saveState();
+                    scheduleRender({ cards: true, roster: true });
+                    showToast('Varapelaaja poistettu');
+                });
             });
 
             lineupCardContainer.appendChild(card);
@@ -475,6 +641,16 @@
                     if (!assignments[pId]) assignments[pId] = [];
                     assignments[pId].push(`${lineName.replace('Kenttä', 'K.')}: ${pos}`);
                 }
+            });
+        });
+
+        // Add reserves assignments
+        lineupConfigs.forEach(cfg => {
+            const reserves = getLineupReserves(cfg.id);
+            const lineName = cfg.name.replace('Kenttä', 'K.');
+            reserves.forEach(pId => {
+                if (!assignments[pId]) assignments[pId] = [];
+                assignments[pId].push(`${lineName}: Varamies 🪑`);
             });
         });
 
@@ -621,6 +797,69 @@
         modalEl.classList.add('active');
     }
 
+    function openReservePicker(lineupKey) {
+        if (!modalEl) return;
+        const cfg = lineupConfigs.find(c => c.id === lineupKey);
+        const lineName = cfg ? cfg.name : lineupKey;
+
+        modalTitle.textContent = `Lisää varamies (${lineName})`;
+        modalBody.innerHTML = '';
+
+        const curEvent = teamEvents.find(e => e.id === activeEventId);
+        const attendeesMap = curEvent ? (curEvent.attendees || {}) : {};
+        const currentReserves = getLineupReserves(lineupKey);
+
+        // Players not already in this line's reserves
+        const availablePlayers = roster.filter(p => !currentReserves.includes(p.id));
+
+        if (availablePlayers.length === 0) {
+            modalBody.innerHTML = '<div style="padding: 1.5rem; text-align: center; color: var(--text-muted); font-weight: 600;">Kaikki pelaajat on jo lisätty varamiehiksi tähän kentälliseen.</div>';
+            modalEl.classList.add('active');
+            return;
+        }
+
+        // Sort: IN first, then MAYBE, then UNANSWERED, then OUT; then by jersey number
+        const sorted = [...availablePlayers].sort((a, b) => {
+            const attA = attendeesMap[a.id] || { status: 'unanswered' };
+            const attB = attendeesMap[b.id] || { status: 'unanswered' };
+            const weight = s => s === 'in' ? 0 : s === 'maybe' ? 1 : s === 'unanswered' ? 2 : 3;
+            if (weight(attA.status) !== weight(attB.status)) {
+                return weight(attA.status) - weight(attB.status);
+            }
+            return a.number - b.number;
+        });
+
+        sorted.forEach(p => {
+            const att = attendeesMap[p.id] || { status: 'unanswered' };
+            const item = document.createElement('div');
+            item.className = `picker-player-item ${att.status === 'in' ? 'is-in' : att.status === 'out' ? 'is-out' : ''}`;
+
+            const attText = att.status === 'in' ? '🟢 IN' : att.status === 'out' ? '🔴 OUT' : att.status === 'maybe' ? '🟡 EHKÄ' : '⚪ AVOIN';
+
+            item.innerHTML = `
+                <div>
+                    <strong style="color: #93c5fd; font-size: 1rem;">#${p.number}</strong>
+                    <span style="font-weight: 700; margin-left: 6px;">${escapeHtml(p.name)}</span>
+                    <span class="player-pos-badge" style="margin-left: 6px;">${p.position || 'H'}</span>
+                </div>
+                <div>
+                    <span class="status-badge-mini ${att.status}">${attText}</span>
+                </div>
+            `;
+
+            item.addEventListener('click', () => {
+                addLineupReserve(lineupKey, p.id);
+                scheduleRender({ cards: true, roster: true });
+                modalEl.classList.remove('active');
+                showToast(`#${p.number} ${p.name} lisätty varamieheksi (${lineName}) 🪑`);
+            });
+
+            modalBody.appendChild(item);
+        });
+
+        modalEl.classList.add('active');
+    }
+
     function openPlayerAssignTargetPicker(player) {
         if (!modalEl) return;
         modalTitle.textContent = `Sijoita: #${player.number} ${player.name}`;
@@ -629,7 +868,7 @@
         lineupConfigs.forEach(cfg => {
             if (cfg.type === 'drawing_only') return;
             const lineBox = document.createElement('div');
-            lineBox.style.cssText = 'background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 10px; padding: 10px; margin-bottom: 6px;';
+            lineBox.style.cssText = 'background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 10px; padding: 10px; margin-bottom: 8px;';
 
             const title = document.createElement('div');
             title.style.cssText = 'font-weight: 800; font-size: 0.9rem; color: #fff; margin-bottom: 8px;';
@@ -642,10 +881,11 @@
             POS_ORDER.forEach(pos => {
                 const currentOccupant = lineups[cfg.id] ? lineups[cfg.id][pos] : '';
                 const occPlayer = roster.find(p => p.id === currentOccupant);
+                const isThisPlayer = currentOccupant === player.id;
                 const btn = document.createElement('button');
                 btn.className = 'btn-header';
-                btn.style.cssText = 'justify-content: center; padding: 8px 4px; font-size: 0.78rem; text-align: center;';
-                btn.innerHTML = `<strong>${pos}</strong><br><span style="font-size:0.65rem; color:var(--text-muted);">${occPlayer ? '#' + occPlayer.number : 'Vapaa'}</span>`;
+                btn.style.cssText = `justify-content: center; padding: 8px 4px; font-size: 0.78rem; text-align: center; ${isThisPlayer ? 'background: rgba(16,185,129,0.25); border-color: #10b981;' : ''}`;
+                btn.innerHTML = `<strong>${pos}</strong><br><span style="font-size:0.65rem; color:${isThisPlayer ? '#34d399' : 'var(--text-muted)'};">${occPlayer ? '#' + occPlayer.number : 'Vapaa'}</span>`;
 
                 btn.addEventListener('click', () => {
                     if (!lineups[cfg.id]) lineups[cfg.id] = { MV: '', VP: '', OP: '', VH: '', KH: '', OH: '' };
@@ -660,6 +900,23 @@
             });
 
             lineBox.appendChild(btnGrid);
+
+            // Reserve button
+            const isAlreadyReserve = getLineupReserves(cfg.id).includes(player.id);
+            const reserveBtn = document.createElement('button');
+            reserveBtn.className = 'btn-header';
+            reserveBtn.style.cssText = `width: 100%; margin-top: 8px; justify-content: center; padding: 8px; font-size: 0.78rem; ${isAlreadyReserve ? 'background: rgba(59, 130, 246, 0.25); border-color: #3b82f6; color: #93c5fd;' : 'background: rgba(255,255,255,0.05); color: #cbd5e1;'}`;
+            reserveBtn.innerHTML = isAlreadyReserve ? `✓ On jo varamiehenä (${cfg.name})` : `🪑 Lisää varamieheksi (${cfg.name})`;
+            reserveBtn.addEventListener('click', () => {
+                if (!isAlreadyReserve) {
+                    addLineupReserve(cfg.id, player.id);
+                    scheduleRender({ cards: true, roster: true });
+                    showToast(`#${player.number} ${player.name} asetettu varamieheksi (${cfg.name}) 🪑`);
+                }
+                modalEl.classList.remove('active');
+            });
+            lineBox.appendChild(reserveBtn);
+
             modalBody.appendChild(lineBox);
         });
 
@@ -1053,6 +1310,22 @@
                     text += `${pos}: -\n`;
                 }
             });
+
+            // Reserves
+            const reserves = getLineupReserves(cfg.id);
+            if (reserves.length > 0) {
+                const reserveNames = reserves.map(pId => {
+                    const p = roster.find(r => r.id === pId);
+                    if (!p) return null;
+                    const att = attendeesMap[p.id] || { status: 'unanswered' };
+                    const attIcon = att.status === 'in' ? '🟢' : att.status === 'out' ? '🔴' : att.status === 'maybe' ? '🟡' : '';
+                    return `#${p.number} ${p.name} ${attIcon}`.trim();
+                }).filter(Boolean);
+                if (reserveNames.length > 0) {
+                    text += `Varalla: ${reserveNames.join(', ')}\n`;
+                }
+            }
+
             text += '\n';
         });
 

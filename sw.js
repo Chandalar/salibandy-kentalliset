@@ -3,7 +3,7 @@
    Fast, ultra-lightweight, 100% offline-ready & local-first
    ============================================================ */
 
-const CACHE_NAME = 'kentalliset-v50.0';
+const CACHE_NAME = 'kentalliset-v51.0';
 const APP_SHELL = [
     './',
     './index.html',
