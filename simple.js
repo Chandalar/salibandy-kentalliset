@@ -411,9 +411,11 @@
         if (!lineupNavBar) return;
         lineupNavBar.innerHTML = '';
 
+        const isAllActive = (activeLineupTab !== 'yv_av' && activeLineupTab !== 'special' && activeLineupTab !== '6v5');
+
         // Tab 1: 1.–4. Kentät (Default: shows lines 1, 2, 3, 4 together on the screen)
         const allTab = document.createElement('button');
-        allTab.className = `lineup-tab ${activeLineupTab === 'all' ? 'active' : ''}`;
+        allTab.className = `lineup-tab ${isAllActive ? 'active' : ''}`;
         allTab.textContent = '👥 1.–4. Kentät';
         allTab.addEventListener('click', () => {
             activeLineupTab = 'all';
@@ -440,20 +442,6 @@
             scheduleRender({ tabs: true, cards: true });
         });
         lineupNavBar.appendChild(sixTab);
-
-        // Individual line tabs: ONLY 1., 2., 3., 4. Kenttä!
-        ['1', '2', '3', '4'].forEach(id => {
-            const cfg = SIMPLE_LINEUP_CONFIGS.find(c => c.id === id);
-            if (!cfg) return;
-            const btn = document.createElement('button');
-            btn.className = `lineup-tab ${activeLineupTab === id ? 'active' : ''}`;
-            btn.textContent = cfg.name;
-            btn.addEventListener('click', () => {
-                activeLineupTab = id;
-                scheduleRender({ tabs: true, cards: true });
-            });
-            lineupNavBar.appendChild(btn);
-        });
     }
 
     function getLineupReserves(lineupKey) {
@@ -498,19 +486,14 @@
         lineupCardContainer.innerHTML = '';
 
         let configsToShow = [];
-        if (activeLineupTab === 'all') {
-            // Exactly lines 1, 2, 3, 4!
-            configsToShow = SIMPLE_LINEUP_CONFIGS.filter(c => ['1', '2', '3', '4'].includes(c.id));
-        } else if (activeLineupTab === 'yv_av' || activeLineupTab === 'special') {
+        if (activeLineupTab === 'yv_av' || activeLineupTab === 'special') {
             // YV & AV: 2 kentällistä molempia! (1. YV, 2. YV, 1. AV, 2. AV)
             configsToShow = SIMPLE_LINEUP_CONFIGS.filter(c => ['yv1', 'yv2', 'av1', 'av2'].includes(c.id));
         } else if (activeLineupTab === '6v5') {
             // 6 vs 5: 2 kentällistä! (1. 6vs5, 2. 6vs5)
             configsToShow = SIMPLE_LINEUP_CONFIGS.filter(c => ['6v5_1', '6v5_2'].includes(c.id));
-        } else if (['1', '2', '3', '4'].includes(activeLineupTab)) {
-            // Individual line (1, 2, 3, or 4)
-            configsToShow = SIMPLE_LINEUP_CONFIGS.filter(c => c.id === activeLineupTab);
         } else {
+            // Default: 1.–4. Kentät
             configsToShow = SIMPLE_LINEUP_CONFIGS.filter(c => ['1', '2', '3', '4'].includes(c.id));
         }
 
