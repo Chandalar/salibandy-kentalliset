@@ -3,7 +3,7 @@
    Fast, ultra-lightweight, 100% offline-ready & local-first
    ============================================================ */
 
-const CACHE_NAME = 'kentalliset-v45.0';
+const CACHE_NAME = 'kentalliset-v50.0';
 const APP_SHELL = [
     './',
     './index.html',
@@ -51,19 +51,20 @@ self.addEventListener('activate', (event) => {
     );
 });
 
-// ── Fetch: Local-First (Instant Cache) with Background Revalidation ──
+// ── Fetch ──
 self.addEventListener('fetch', (event) => {
     const url = new URL(event.request.url);
 
     // Skip non-GET requests
     if (event.request.method !== 'GET') return;
 
-    // Pass through Firebase Firestore / Auth real-time calls
+    // Pass through Firebase Firestore / Auth / Proxies
     if (url.hostname.includes('firestore.googleapis.com') ||
         url.hostname.includes('firebase') ||
         url.hostname.includes('googleapis.com') ||
         url.hostname.includes('allorigins') ||
-        url.hostname.includes('corsproxy')) {
+        url.hostname.includes('corsproxy') ||
+        url.hostname.includes('jina.ai')) {
         return;
     }
 
@@ -99,7 +100,28 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
-    // App Shell Assets (HTML, JS, CSS, SVG): Instant Cache-First with Background Revalidation
+    // ── HTML Navigation: NETWORK-FIRST with Cache Fallback ──
+    // Ensures online users ALWAYS get the latest deployed version,
+    // but app remains 100% offline-ready if connection drops!
+    if (event.request.mode === 'navigate' || url.pathname.endsWith('.html') || url.pathname === '/') {
+        event.respondWith(
+            fetch(event.request)
+                .then((networkResponse) => {
+                    if (networkResponse && networkResponse.ok) {
+                        const clone = networkResponse.clone();
+                        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+                    }
+                    return networkResponse;
+                })
+                .catch(() => {
+                    return caches.match(event.request)
+                        .then((cached) => cached || caches.match('./simple.html') || caches.match('./index.html'));
+                })
+        );
+        return;
+    }
+
+    // App Shell Assets (JS, CSS, SVG): Stale-While-Revalidate
     event.respondWith(
         caches.match(event.request).then((cachedResponse) => {
             const fetchPromise = fetch(event.request)
@@ -111,22 +133,10 @@ self.addEventListener('fetch', (event) => {
                     return networkResponse;
                 })
                 .catch((err) => {
-                    console.warn('[SW] Network offline or slow, served cached version:', err);
                     return cachedResponse;
                 });
 
-            // If found in cache, return immediately (0ms delay offline/local)
-            if (cachedResponse) {
-                return cachedResponse;
-            }
-
-            // Otherwise wait for network with navigation fallback
-            return fetchPromise.catch(() => {
-                if (event.request.mode === 'navigate' || url.pathname.endsWith('.html') || url.pathname === '/') {
-                    return caches.match('./index.html') || caches.match('/index.html');
-                }
-                return new Response('Offline', { status: 503, statusText: 'Offline' });
-            });
+            return cachedResponse || fetchPromise;
         })
     );
 });

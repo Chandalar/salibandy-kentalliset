@@ -1966,8 +1966,7 @@ body[data-court-color="grid"] .faceoff-dot {
 }
 
 .node-label {
-    background: rgba(15, 23, 42, 0.92);
-    backdrop-filter: blur(4px);
+    background: rgba(15, 23, 42, 0.96);
     border: 1px solid var(--border-color);
     padding: 0.1rem 0.38rem;
     border-radius: var(--radius-full);
@@ -2749,25 +2748,25 @@ body[data-court-color="grid"] .faceoff-dot {
     color: #cbd5e1 !important;
 }
 
-/* Modal Styling */
+/* Modal Styling - Clean, high-performance, 0 GPU memory overhead */
 .modal-overlay {
     position: fixed;
     top: 0;
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0, 0, 0, 0.82);
-    backdrop-filter: blur(6px);
-    display: flex;
+    background: rgba(11, 17, 32, 0.88);
+    display: none !important;
     align-items: center;
     justify-content: center;
-    z-index: 100;
+    z-index: 10000;
     opacity: 0;
     pointer-events: none;
-    transition: opacity 0.2s ease;
+    transition: opacity 0.15s ease;
 }
 
 .modal-overlay.active {
+    display: flex !important;
     opacity: 1;
     pointer-events: auto;
 }
@@ -4296,9 +4295,7 @@ body[data-court-color="grid"] .pitch-container .court-surface,
     display: inline-flex;
     align-items: center;
     gap: 0.35rem;
-    background: rgba(15, 23, 42, 0.92);
-    backdrop-filter: blur(6px);
-    -webkit-backdrop-filter: blur(6px);
+    background: rgba(15, 23, 42, 0.96);
     border: 1.5px solid #facc15;
     border-radius: var(--radius-sm);
     padding: 0.25rem 0.55rem;
@@ -4486,7 +4483,6 @@ body[data-court-color="grid"] .pitch-container .court-surface,
     border-radius: var(--radius-md);
     margin-bottom: 0.5rem;
     gap: 0.5rem;
-    backdrop-filter: blur(4px);
     transition: all 0.2s ease;
 }
 

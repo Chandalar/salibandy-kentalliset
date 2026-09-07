@@ -18,12 +18,18 @@
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
 
     <!-- Stylesheet -->
-    <link rel="stylesheet" href="simple.css?v=3.0">
+    <link rel="stylesheet" href="simple.css?v=50.0">
 
-    <!-- Firebase SDK (for automatic background sync) -->
-    <script defer src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-    <script defer src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
-    <script defer src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <script>
+    (function() {
+        try {
+            const params = new URLSearchParams(window.location.search);
+            if (params.get('mode') === 'simple') {
+                localStorage.setItem('salibandy_app_mode', 'simple');
+            }
+        } catch(e) {}
+    })();
+    </script>
 </head>
 <body>
 
@@ -35,7 +41,7 @@
         </div>
         <div class="header-right">
             <button class="btn-header" id="btn-simple-refresh" title="Päivitä">🔄</button>
-            <a href="index.html" class="btn-header highlight" title="Siirry laajempaan taktiseen fläppitauluun">🎨 Taktinen tila</a>
+            <a href="index.html?mode=advanced" class="btn-header highlight" title="Siirry taktiseen fläppitauluun (Advanced)">🎨 Taktinen fläppitaulu</a>
         </div>
     </header>
 
@@ -126,8 +132,8 @@
     <div class="simple-toast" id="simple-toast"></div>
 
     <!-- Firebase Config & App Engine -->
-    <script src="firebase-config.js"></script>
-    <script src="simple.js?v=3.0"></script>
+    <script src="firebase-config.js?v=50.0"></script>
+    <script src="simple.js?v=50.0"></script>
 
 </body>
 </html>
