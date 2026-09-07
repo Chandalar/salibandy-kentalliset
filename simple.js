@@ -45,14 +45,32 @@
 
     // Positions
     const POS_ORDER = ['MV', 'VP', 'OP', 'VH', 'KH', 'OH'];
+    const POS_ORDER_6V5 = ['VP', 'OP', 'VH', 'KH', 'OH', '6P'];
     const POS_LABELS = {
         'MV': 'Maalivahti',
         'VP': 'Vasen pakki',
         'OP': 'Oikea pakki',
         'VH': 'Vasen hyökkääjä',
         'KH': 'Sentteri',
-        'OH': 'Oikea hyökkääjä'
+        'OH': 'Oikea hyökkääjä',
+        '6P': '6. Pelaaja',
+        'VM': '6. Pelaaja'
     };
+
+    // Canonical lineup configurations for Simple mode:
+    // Only 1-4 standard lines, 2x YV & 2x AV, and 2x 6vs5 lines!
+    const SIMPLE_LINEUP_CONFIGS = [
+        { id: '1', name: '1. Kenttä', shortName: '1. K.', group: 'standard', icon: '🏒' },
+        { id: '2', name: '2. Kenttä', shortName: '2. K.', group: 'standard', icon: '🏒' },
+        { id: '3', name: '3. Kenttä', shortName: '3. K.', group: 'standard', icon: '🏒' },
+        { id: '4', name: '4. Kenttä', shortName: '4. K.', group: 'standard', icon: '🏒' },
+        { id: 'yv1', name: '1. Ylivoima (YV)', shortName: '1. YV', group: 'yv_av', icon: '⚡' },
+        { id: 'yv2', name: '2. Ylivoima (YV)', shortName: '2. YV', group: 'yv_av', icon: '⚡' },
+        { id: 'av1', name: '1. Alivoima (AV)', shortName: '1. AV', group: 'yv_av', icon: '🛡️' },
+        { id: 'av2', name: '2. Alivoima (AV)', shortName: '2. AV', group: 'yv_av', icon: '🛡️' },
+        { id: '6v5_1', name: '1. 6vs5 (Ilman MV)', shortName: '1. 6v5', group: '6v5', icon: '🔥' },
+        { id: '6v5_2', name: '2. 6vs5 (Ilman MV)', shortName: '2. 6v5', group: '6v5', icon: '🔥' }
+    ];
 
     function showToast(msg) {
         if (!toastEl) return;
@@ -174,12 +192,37 @@
             const rawReserves = localStorage.getItem('salibandy_reserves_' + currentTeamId);
             lineupReserves = rawReserves ? JSON.parse(rawReserves) : {};
 
-            // Ensure essential lineups 1, 2, 3, 4, yv, av exist in lineups state
-            ['1', '2', '3', '4', 'yv', 'av'].forEach(k => {
-                if (!lineups[k]) {
-                    lineups[k] = { MV: '', VP: '', OP: '', VH: '', KH: '', OH: '' };
+            // Ensure all canonical lineups exist
+            SIMPLE_LINEUP_CONFIGS.forEach(cfg => {
+                const is6v5 = cfg.group === '6v5';
+                if (!lineups[cfg.id]) {
+                    lineups[cfg.id] = is6v5 
+                        ? { VP: '', OP: '', VH: '', KH: '', OH: '', '6P': '' }
+                        : { MV: '', VP: '', OP: '', VH: '', KH: '', OH: '' };
                 }
             });
+
+            // Backwards compatibility migration from single 'yv', 'av', '6v5'
+            if (lineups['yv'] && !Object.values(lineups['yv1'] || {}).some(Boolean)) {
+                lineups['yv1'] = { ...lineups['yv'] };
+            }
+            if (lineups['av'] && !Object.values(lineups['av1'] || {}).some(Boolean)) {
+                lineups['av1'] = { ...lineups['av'] };
+            }
+            if (lineups['6v5'] && !Object.values(lineups['6v5_1'] || {}).some(Boolean)) {
+                lineups['6v5_1'] = {
+                    VP: lineups['6v5'].VP || '',
+                    OP: lineups['6v5'].OP || '',
+                    VH: lineups['6v5'].VH || '',
+                    KH: lineups['6v5'].KH || '',
+                    OH: lineups['6v5'].OH || '',
+                    '6P': lineups['6v5']['6P'] || lineups['6v5']['VM'] || ''
+                };
+            }
+
+            if (lineupReserves['yv'] && !lineupReserves['yv1']) lineupReserves['yv1'] = [...lineupReserves['yv']];
+            if (lineupReserves['av'] && !lineupReserves['av1']) lineupReserves['av1'] = [...lineupReserves['av']];
+            if (lineupReserves['6v5'] && !lineupReserves['6v5_1']) lineupReserves['6v5_1'] = [...lineupReserves['6v5']];
 
             // If completely empty lineups, seed with initial realistic starters & bench
             const isAnyAssigned = Object.values(lineups).some(l => Object.values(l).some(Boolean));
@@ -189,39 +232,9 @@
                 if (!lineupReserves['1']) lineupReserves['1'] = ['p_88'];
             }
 
-            // Default standard configs: 1, 2, 3, 4 MUST ALWAYS BE FIRST!
-            const defaultConfigs = [
-                { id: '1', name: '1. Kenttä', type: 'standard' },
-                { id: '2', name: '2. Kenttä', type: 'standard' },
-                { id: '3', name: '3. Kenttä', type: 'standard' },
-                { id: '4', name: '4. Kenttä', type: 'standard' },
-                { id: 'yv', name: 'Ylivoima (YV)', type: 'special' },
-                { id: 'av', name: 'Alivoima (AV)', type: 'special' }
-            ];
-
-            const rawConfigs = localStorage.getItem('salibandy_lineup_configs_' + currentTeamId);
-            let parsedConfigs = rawConfigs ? JSON.parse(rawConfigs) : null;
-            if (!parsedConfigs || !Array.isArray(parsedConfigs) || parsedConfigs.length === 0) {
-                lineupConfigs = defaultConfigs;
-            } else {
-                const priorityOrder = ['1', '2', '3', '4', 'yv', 'av'];
-                const knownIds = new Set(parsedConfigs.map(c => c.id));
-                defaultConfigs.forEach(dc => {
-                    if (!knownIds.has(dc.id)) {
-                        parsedConfigs.push(dc);
-                    }
-                });
-
-                // Always sort so 1, 2, 3, 4 are first!
-                parsedConfigs.sort((a, b) => {
-                    const idxA = priorityOrder.indexOf(a.id);
-                    const idxB = priorityOrder.indexOf(b.id);
-                    const orderA = idxA !== -1 ? idxA : 99;
-                    const orderB = idxB !== -1 ? idxB : 99;
-                    return orderA - orderB;
-                });
-                lineupConfigs = parsedConfigs;
-            }
+            // In Simple mode: ONLY canonical lineups exist (1-4, 2x YV, 2x AV, 2x 6vs5).
+            // Drawing boards and tactical custom tabs are excluded.
+            lineupConfigs = SIMPLE_LINEUP_CONFIGS;
 
             const rawEvents = localStorage.getItem('salibandy_events_' + currentTeamId);
             teamEvents = rawEvents ? JSON.parse(rawEvents) : [];
@@ -263,12 +276,25 @@
 
     function saveState() {
         try {
+            // Keep legacy keys in sync for advanced mode compatibility
+            if (lineups['yv1']) lineups['yv'] = { ...lineups['yv1'] };
+            if (lineups['av1']) lineups['av'] = { ...lineups['av1'] };
+            if (lineups['6v5_1']) {
+                lineups['6v5'] = {
+                    VP: lineups['6v5_1'].VP || '',
+                    OP: lineups['6v5_1'].OP || '',
+                    VH: lineups['6v5_1'].VH || '',
+                    KH: lineups['6v5_1'].KH || '',
+                    OH: lineups['6v5_1'].OH || '',
+                    VM: lineups['6v5_1']['6P'] || lineups['6v5_1']['VM'] || ''
+                };
+            }
+
             localStorage.setItem('salibandy_teams_v1', JSON.stringify(teams));
             localStorage.setItem('salibandy_active_team_id', JSON.stringify(currentTeamId));
             localStorage.setItem('salibandy_roster_' + currentTeamId, JSON.stringify(roster));
             localStorage.setItem('salibandy_lineups_' + currentTeamId, JSON.stringify(lineups));
             localStorage.setItem('salibandy_reserves_' + currentTeamId, JSON.stringify(lineupReserves));
-            localStorage.setItem('salibandy_lineup_configs_' + currentTeamId, JSON.stringify(lineupConfigs));
             localStorage.setItem('salibandy_events_' + currentTeamId, JSON.stringify(teamEvents));
             if (activeEventId) {
                 localStorage.setItem('salibandy_active_event_id_' + currentTeamId, JSON.stringify(activeEventId));
@@ -385,7 +411,7 @@
         if (!lineupNavBar) return;
         lineupNavBar.innerHTML = '';
 
-        // Tab: 1.–4. Kentät (Shows 1, 2, 3, 4 together on the screen!)
+        // Tab 1: 1.–4. Kentät (Default: shows lines 1, 2, 3, 4 together on the screen)
         const allTab = document.createElement('button');
         allTab.className = `lineup-tab ${activeLineupTab === 'all' ? 'active' : ''}`;
         allTab.textContent = '👥 1.–4. Kentät';
@@ -395,24 +421,35 @@
         });
         lineupNavBar.appendChild(allTab);
 
-        // Tab: YV & AV (Special teams)
+        // Tab 2: YV & AV (Kaksi kentällistä molempia: 1. YV, 2. YV, 1. AV, 2. AV)
         const specialTab = document.createElement('button');
-        specialTab.className = `lineup-tab ${activeLineupTab === 'special' ? 'active' : ''}`;
-        specialTab.textContent = '⚡ YV & AV';
+        specialTab.className = `lineup-tab ${(activeLineupTab === 'yv_av' || activeLineupTab === 'special') ? 'active' : ''}`;
+        specialTab.textContent = '⚡ YV & AV (4)';
         specialTab.addEventListener('click', () => {
-            activeLineupTab = 'special';
+            activeLineupTab = 'yv_av';
             scheduleRender({ tabs: true, cards: true });
         });
         lineupNavBar.appendChild(specialTab);
 
-        // Individual line tabs
-        lineupConfigs.forEach(cfg => {
-            if (cfg.type === 'drawing_only') return;
+        // Tab 3: 6 vs 5 (Kaksi kentällistä: 1. 6vs5, 2. 6vs5)
+        const sixTab = document.createElement('button');
+        sixTab.className = `lineup-tab ${activeLineupTab === '6v5' ? 'active' : ''}`;
+        sixTab.textContent = '🔥 6 vs 5 (2)';
+        sixTab.addEventListener('click', () => {
+            activeLineupTab = '6v5';
+            scheduleRender({ tabs: true, cards: true });
+        });
+        lineupNavBar.appendChild(sixTab);
+
+        // Individual line tabs: ONLY 1., 2., 3., 4. Kenttä!
+        ['1', '2', '3', '4'].forEach(id => {
+            const cfg = SIMPLE_LINEUP_CONFIGS.find(c => c.id === id);
+            if (!cfg) return;
             const btn = document.createElement('button');
-            btn.className = `lineup-tab ${activeLineupTab === cfg.id ? 'active' : ''}`;
+            btn.className = `lineup-tab ${activeLineupTab === id ? 'active' : ''}`;
             btn.textContent = cfg.name;
             btn.addEventListener('click', () => {
-                activeLineupTab = cfg.id;
+                activeLineupTab = id;
                 scheduleRender({ tabs: true, cards: true });
             });
             lineupNavBar.appendChild(btn);
@@ -463,41 +500,44 @@
         let configsToShow = [];
         if (activeLineupTab === 'all') {
             // Exactly lines 1, 2, 3, 4!
-            configsToShow = lineupConfigs.filter(c => ['1', '2', '3', '4'].includes(c.id));
-            if (configsToShow.length === 0) {
-                configsToShow = lineupConfigs.slice(0, 4);
-            }
-        } else if (activeLineupTab === 'special') {
-            // YV & AV
-            configsToShow = lineupConfigs.filter(c => ['yv', 'av'].includes(c.id));
+            configsToShow = SIMPLE_LINEUP_CONFIGS.filter(c => ['1', '2', '3', '4'].includes(c.id));
+        } else if (activeLineupTab === 'yv_av' || activeLineupTab === 'special') {
+            // YV & AV: 2 kentällistä molempia! (1. YV, 2. YV, 1. AV, 2. AV)
+            configsToShow = SIMPLE_LINEUP_CONFIGS.filter(c => ['yv1', 'yv2', 'av1', 'av2'].includes(c.id));
+        } else if (activeLineupTab === '6v5') {
+            // 6 vs 5: 2 kentällistä! (1. 6vs5, 2. 6vs5)
+            configsToShow = SIMPLE_LINEUP_CONFIGS.filter(c => ['6v5_1', '6v5_2'].includes(c.id));
+        } else if (['1', '2', '3', '4'].includes(activeLineupTab)) {
+            // Individual line (1, 2, 3, or 4)
+            configsToShow = SIMPLE_LINEUP_CONFIGS.filter(c => c.id === activeLineupTab);
         } else {
-            // Individual line
-            configsToShow = lineupConfigs.filter(c => c.id === activeLineupTab);
+            configsToShow = SIMPLE_LINEUP_CONFIGS.filter(c => ['1', '2', '3', '4'].includes(c.id));
         }
 
         const curEvent = teamEvents.find(e => e.id === activeEventId);
         const attendeesMap = curEvent ? (curEvent.attendees || {}) : {};
 
-        // 2-column formation order:
-        // Left col: VH, KH, OH (Forwards)
-        // Right col: VP, OP, MV (Defenders & Goalie)
-        const GRID_POS_ORDER = ['VH', 'VP', 'KH', 'OP', 'OH', 'MV'];
-
         configsToShow.forEach(cfg => {
             const card = document.createElement('div');
             card.className = 'lineup-card';
 
-            const lineSlots = lineups[cfg.id] || { MV: '', VP: '', OP: '', VH: '', KH: '', OH: '' };
+            const is6v5 = cfg.group === '6v5';
+            const gridPositions = is6v5 
+                ? ['VH', 'VP', 'KH', 'OP', 'OH', '6P'] 
+                : ['VH', 'VP', 'KH', 'OP', 'OH', 'MV'];
+
+            const lineSlots = lineups[cfg.id] || {};
 
             let slotsHtml = '';
-            GRID_POS_ORDER.forEach(pos => {
-                const playerId = lineSlots[pos];
+            gridPositions.forEach(pos => {
+                const playerId = lineSlots[pos] || (pos === '6P' ? lineSlots['VM'] : '');
                 const player = roster.find(p => p.id === playerId);
                 const att = player ? (attendeesMap[player.id] || { status: 'unanswered' }) : null;
 
                 let posClass = 'pos-h';
                 if (pos === 'MV') posClass = 'pos-mv';
                 else if (pos === 'VP' || pos === 'OP') posClass = 'pos-p';
+                else if (pos === '6P' || pos === 'VM') posClass = 'pos-6p';
 
                 if (player) {
                     let badgeDot = att.status === 'in' ? '🟢' : att.status === 'out' ? '🔴' : att.status === 'maybe' ? '🟡' : '⚪';
@@ -561,7 +601,7 @@
 
             card.innerHTML = `
                 <div class="lineup-card-header">
-                    <div class="lineup-title">🏒 ${cfg.name}</div>
+                    <div class="lineup-title">${cfg.icon || '🏒'} ${escapeHtml(cfg.name)}</div>
                     <div class="lineup-actions">
                         <button class="btn-lineup-action" data-action="clear-lineup" data-lineup="${cfg.id}">Tyhjennä</button>
                     </div>
@@ -575,10 +615,14 @@
             // Bind slot clicks
             card.querySelectorAll('.slot-item').forEach(slot => {
                 slot.addEventListener('click', (e) => {
-                    if (e.target.dataset.action === 'clear-slot') {
-                        const lk = e.target.dataset.lineup;
-                        const p = e.target.dataset.pos;
-                        lineups[lk][p] = '';
+                    const clearBtn = e.target.closest('[data-action="clear-slot"]');
+                    if (clearBtn) {
+                        const lk = clearBtn.dataset.lineup;
+                        const p = clearBtn.dataset.pos;
+                        if (lineups[lk]) {
+                            lineups[lk][p] = '';
+                            if (p === '6P' && lineups[lk]['VM']) lineups[lk]['VM'] = '';
+                        }
                         saveState();
                         scheduleRender({ cards: true, roster: true });
                         showToast('Pelaaja poistettu kentällisestä');
@@ -594,7 +638,8 @@
             // Bind clear lineup
             card.querySelector('[data-action="clear-lineup"]')?.addEventListener('click', (e) => {
                 const lk = e.target.dataset.lineup;
-                GRID_POS_ORDER.forEach(p => lineups[lk][p] = '');
+                gridPositions.forEach(p => { if (lineups[lk]) lineups[lk][p] = ''; });
+                if (lineups[lk] && lineups[lk]['VM']) lineups[lk]['VM'] = '';
                 saveState();
                 scheduleRender({ cards: true, roster: true });
                 showToast(`${cfg.name} tyhjennetty`);
@@ -629,28 +674,22 @@
         const curEvent = teamEvents.find(e => e.id === activeEventId);
         const attendeesMap = curEvent ? (curEvent.attendees || {}) : {};
 
-        // Find assignments
+        // Find assignments across all 10 canonical lineups
         const assignments = {};
-        Object.keys(lineups).forEach(lk => {
-            const line = lineups[lk] || {};
-            const cfg = lineupConfigs.find(c => c.id === lk);
-            const lineName = cfg ? cfg.name : lk;
-            POS_ORDER.forEach(pos => {
-                const pId = line[pos];
+        SIMPLE_LINEUP_CONFIGS.forEach(cfg => {
+            const line = lineups[cfg.id] || {};
+            const positions = cfg.group === '6v5' ? POS_ORDER_6V5 : POS_ORDER;
+            positions.forEach(pos => {
+                const pId = line[pos] || (pos === '6P' ? line['VM'] : '');
                 if (pId) {
                     if (!assignments[pId]) assignments[pId] = [];
-                    assignments[pId].push(`${lineName.replace('Kenttä', 'K.')}: ${pos}`);
+                    assignments[pId].push(`${cfg.shortName}: ${pos}`);
                 }
             });
-        });
-
-        // Add reserves assignments
-        lineupConfigs.forEach(cfg => {
             const reserves = getLineupReserves(cfg.id);
-            const lineName = cfg.name.replace('Kenttä', 'K.');
             reserves.forEach(pId => {
                 if (!assignments[pId]) assignments[pId] = [];
-                assignments[pId].push(`${lineName}: Varamies 🪑`);
+                assignments[pId].push(`${cfg.shortName}: Varamies 🪑`);
             });
         });
 
@@ -670,7 +709,7 @@
             const attB = attendeesMap[b.id] || { status: 'unanswered' };
             const weight = s => s === 'in' ? 0 : s === 'maybe' ? 1 : s === 'unanswered' ? 2 : 3;
             if (weight(attA.status) !== weight(attB.status)) return weight(attA.status) - weight(attB.status);
-            return a.number - b.number;
+            return (a.number || 0) - (b.number || 0);
         });
 
         if (filtered.length === 0) {
@@ -691,7 +730,7 @@
 
             let assignHtml = '';
             if (isAssigned) {
-                assignHtml = `<span class="player-assigned-badge">${pAssigns.join(', ')}</span>`;
+                assignHtml = `<div class="player-assigned-badges">${pAssigns.map(a => `<span class="player-assigned-badge">${escapeHtml(a)}</span>`).join('')}</div>`;
             }
 
             row.innerHTML = `
@@ -745,10 +784,11 @@
 
     function openSlotPicker(lineupKey, pos) {
         if (!modalEl) return;
-        const cfg = lineupConfigs.find(c => c.id === lineupKey);
+        const cfg = SIMPLE_LINEUP_CONFIGS.find(c => c.id === lineupKey);
         const lineName = cfg ? cfg.name : lineupKey;
+        const posLabel = POS_LABELS[pos] || pos;
 
-        modalTitle.textContent = `Valitse ${POS_LABELS[pos]} (${lineName})`;
+        modalTitle.textContent = `Valitse ${posLabel} (${lineName})`;
         modalBody.innerHTML = '';
 
         const curEvent = teamEvents.find(e => e.id === activeEventId);
@@ -758,11 +798,18 @@
         const sorted = [...roster].sort((a, b) => {
             const attA = attendeesMap[a.id] || { status: 'unanswered' };
             const attB = attendeesMap[b.id] || { status: 'unanswered' };
-            const isMatchA = (pos === 'MV' && a.position === 'MV') || (pos.includes('P') && a.position === 'P') || (pos.includes('H') && a.position === 'H');
-            const isMatchB = (pos === 'MV' && b.position === 'MV') || (pos.includes('P') && b.position === 'P') || (pos.includes('H') && b.position === 'H');
+            const isMatchA = (pos === 'MV' && a.position === 'MV') 
+                || (pos.includes('P') && pos !== '6P' && a.position === 'P') 
+                || (pos.includes('H') && a.position === 'H')
+                || (pos === '6P' && a.position !== 'MV');
+            const isMatchB = (pos === 'MV' && b.position === 'MV') 
+                || (pos.includes('P') && pos !== '6P' && b.position === 'P') 
+                || (pos.includes('H') && b.position === 'H')
+                || (pos === '6P' && b.position !== 'MV');
             if (isMatchA !== isMatchB) return isMatchB ? 1 : -1;
             const weight = s => s === 'in' ? 0 : s === 'maybe' ? 1 : s === 'unanswered' ? 2 : 3;
-            return weight(attA.status) - weight(attB.status);
+            if (weight(attA.status) !== weight(attB.status)) return weight(attA.status) - weight(attB.status);
+            return (a.number || 0) - (b.number || 0);
         });
 
         sorted.forEach(p => {
@@ -784,11 +831,13 @@
             `;
 
             item.addEventListener('click', () => {
+                if (!lineups[lineupKey]) lineups[lineupKey] = {};
                 lineups[lineupKey][pos] = p.id;
+                if (pos === '6P') lineups[lineupKey]['VM'] = p.id;
                 saveState();
                 scheduleRender({ cards: true, roster: true });
                 modalEl.classList.remove('active');
-                showToast(`#${p.number} ${p.name} asetettu paikkaan ${lineName} - ${pos} 👍`);
+                showToast(`#${p.number} ${p.name} asetettu paikkaan ${lineName} - ${posLabel} 👍`);
             });
 
             modalBody.appendChild(item);
@@ -799,7 +848,7 @@
 
     function openReservePicker(lineupKey) {
         if (!modalEl) return;
-        const cfg = lineupConfigs.find(c => c.id === lineupKey);
+        const cfg = SIMPLE_LINEUP_CONFIGS.find(c => c.id === lineupKey);
         const lineName = cfg ? cfg.name : lineupKey;
 
         modalTitle.textContent = `Lisää varamies (${lineName})`;
@@ -826,7 +875,7 @@
             if (weight(attA.status) !== weight(attB.status)) {
                 return weight(attA.status) - weight(attB.status);
             }
-            return a.number - b.number;
+            return (a.number || 0) - (b.number || 0);
         });
 
         sorted.forEach(p => {
@@ -865,59 +914,85 @@
         modalTitle.textContent = `Sijoita: #${player.number} ${player.name}`;
         modalBody.innerHTML = '';
 
-        lineupConfigs.forEach(cfg => {
-            if (cfg.type === 'drawing_only') return;
-            const lineBox = document.createElement('div');
-            lineBox.style.cssText = 'background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 10px; padding: 10px; margin-bottom: 8px;';
+        const groups = [
+            { title: '🏒 1.–4. Kentät', configs: SIMPLE_LINEUP_CONFIGS.filter(c => c.group === 'standard') },
+            { title: '⚡ Ylivoima & Alivoima (YV / AV)', configs: SIMPLE_LINEUP_CONFIGS.filter(c => c.group === 'yv_av') },
+            { title: '🔥 6 vs 5 (Ilman MV)', configs: SIMPLE_LINEUP_CONFIGS.filter(c => c.group === '6v5') }
+        ];
 
-            const title = document.createElement('div');
-            title.style.cssText = 'font-weight: 800; font-size: 0.9rem; color: #fff; margin-bottom: 8px;';
-            title.textContent = '🏒 ' + cfg.name;
-            lineBox.appendChild(title);
+        groups.forEach(grp => {
+            const grpHeader = document.createElement('div');
+            grpHeader.style.cssText = 'font-weight: 800; font-size: 0.85rem; color: #93c5fd; text-transform: uppercase; letter-spacing: 0.05em; margin: 12px 0 6px; padding-left: 2px;';
+            grpHeader.textContent = grp.title;
+            modalBody.appendChild(grpHeader);
 
-            const btnGrid = document.createElement('div');
-            btnGrid.style.cssText = 'display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;';
+            grp.configs.forEach(cfg => {
+                const lineBox = document.createElement('div');
+                lineBox.style.cssText = 'background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 10px; padding: 8px 10px; margin-bottom: 8px;';
 
-            POS_ORDER.forEach(pos => {
-                const currentOccupant = lineups[cfg.id] ? lineups[cfg.id][pos] : '';
-                const occPlayer = roster.find(p => p.id === currentOccupant);
-                const isThisPlayer = currentOccupant === player.id;
-                const btn = document.createElement('button');
-                btn.className = 'btn-header';
-                btn.style.cssText = `justify-content: center; padding: 8px 4px; font-size: 0.78rem; text-align: center; ${isThisPlayer ? 'background: rgba(16,185,129,0.25); border-color: #10b981;' : ''}`;
-                btn.innerHTML = `<strong>${pos}</strong><br><span style="font-size:0.65rem; color:${isThisPlayer ? '#34d399' : 'var(--text-muted)'};">${occPlayer ? '#' + occPlayer.number : 'Vapaa'}</span>`;
+                const title = document.createElement('div');
+                title.style.cssText = 'font-weight: 700; font-size: 0.85rem; color: #fff; margin-bottom: 6px;';
+                title.textContent = (cfg.icon || '🏒') + ' ' + cfg.name;
+                lineBox.appendChild(title);
 
-                btn.addEventListener('click', () => {
-                    if (!lineups[cfg.id]) lineups[cfg.id] = { MV: '', VP: '', OP: '', VH: '', KH: '', OH: '' };
-                    lineups[cfg.id][pos] = player.id;
-                    saveState();
-                    scheduleRender({ cards: true, roster: true });
-                    modalEl.classList.remove('active');
-                    showToast(`Sijoitettu: ${cfg.name} - ${pos} 👍`);
+                const btnGrid = document.createElement('div');
+                btnGrid.style.cssText = 'display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;';
+
+                const is6v5 = cfg.group === '6v5';
+                const positions = is6v5 ? POS_ORDER_6V5 : POS_ORDER;
+
+                positions.forEach(pos => {
+                    const currentOccupant = lineups[cfg.id] ? (lineups[cfg.id][pos] || (pos === '6P' ? lineups[cfg.id]['VM'] : '')) : '';
+                    const occPlayer = roster.find(p => p.id === currentOccupant);
+                    const isThisPlayer = currentOccupant === player.id;
+                    const btn = document.createElement('button');
+                    btn.className = 'btn-header';
+                    btn.style.cssText = `justify-content: center; padding: 6px 2px; font-size: 0.75rem; text-align: center; ${isThisPlayer ? 'background: rgba(16,185,129,0.25); border-color: #10b981; color: #34d399;' : ''}`;
+                    btn.innerHTML = `<strong>${pos}</strong><br><span style="font-size:0.62rem; color:${isThisPlayer ? '#34d399' : 'var(--text-muted)'}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:80px; display:inline-block;">${occPlayer ? '#' + occPlayer.number + ' ' + occPlayer.name.split(' ')[0] : 'Vapaa'}</span>`;
+
+                    btn.addEventListener('click', () => {
+                        if (!lineups[cfg.id]) {
+                            lineups[cfg.id] = is6v5 
+                                ? { VP: '', OP: '', VH: '', KH: '', OH: '', '6P': '', VM: '' }
+                                : { MV: '', VP: '', OP: '', VH: '', KH: '', OH: '' };
+                        }
+                        lineups[cfg.id][pos] = player.id;
+                        if (pos === '6P') lineups[cfg.id]['VM'] = player.id;
+                        saveState();
+                        scheduleRender({ cards: true, roster: true });
+                        modalEl.classList.remove('active');
+                        showToast(`Sijoitettu: ${cfg.shortName} - ${pos} 👍`);
+                    });
+
+                    btnGrid.appendChild(btn);
                 });
 
-                btnGrid.appendChild(btn);
+                lineBox.appendChild(btnGrid);
+
+                // Reserve button
+                const isAlreadyReserve = getLineupReserves(cfg.id).includes(player.id);
+                const reserveBtn = document.createElement('button');
+                reserveBtn.className = 'btn-header';
+                reserveBtn.style.cssText = `width: 100%; margin-top: 6px; justify-content: center; padding: 6px; font-size: 0.75rem; ${isAlreadyReserve ? 'background: rgba(59, 130, 246, 0.25); border-color: #3b82f6; color: #93c5fd;' : 'background: rgba(255,255,255,0.05); color: #cbd5e1;'}`;
+                reserveBtn.innerHTML = isAlreadyReserve ? `✓ On jo varamiehenä (${cfg.shortName})` : `🪑 Lisää varamieheksi (${cfg.shortName})`;
+                reserveBtn.addEventListener('click', () => {
+                    if (!isAlreadyReserve) {
+                        addLineupReserve(cfg.id, player.id);
+                        saveState();
+                        scheduleRender({ cards: true, roster: true });
+                        showToast(`#${player.number} ${player.name} asetettu varamieheksi (${cfg.shortName}) 🪑`);
+                    } else {
+                        removeLineupReserve(cfg.id, player.id);
+                        saveState();
+                        scheduleRender({ cards: true, roster: true });
+                        showToast(`#${player.number} ${player.name} poistettu varamiehistä (${cfg.shortName})`);
+                    }
+                    modalEl.classList.remove('active');
+                });
+                lineBox.appendChild(reserveBtn);
+
+                modalBody.appendChild(lineBox);
             });
-
-            lineBox.appendChild(btnGrid);
-
-            // Reserve button
-            const isAlreadyReserve = getLineupReserves(cfg.id).includes(player.id);
-            const reserveBtn = document.createElement('button');
-            reserveBtn.className = 'btn-header';
-            reserveBtn.style.cssText = `width: 100%; margin-top: 8px; justify-content: center; padding: 8px; font-size: 0.78rem; ${isAlreadyReserve ? 'background: rgba(59, 130, 246, 0.25); border-color: #3b82f6; color: #93c5fd;' : 'background: rgba(255,255,255,0.05); color: #cbd5e1;'}`;
-            reserveBtn.innerHTML = isAlreadyReserve ? `✓ On jo varamiehenä (${cfg.name})` : `🪑 Lisää varamieheksi (${cfg.name})`;
-            reserveBtn.addEventListener('click', () => {
-                if (!isAlreadyReserve) {
-                    addLineupReserve(cfg.id, player.id);
-                    scheduleRender({ cards: true, roster: true });
-                    showToast(`#${player.number} ${player.name} asetettu varamieheksi (${cfg.name}) 🪑`);
-                }
-                modalEl.classList.remove('active');
-            });
-            lineBox.appendChild(reserveBtn);
-
-            modalBody.appendChild(lineBox);
         });
 
         modalEl.classList.add('active');
@@ -1295,10 +1370,17 @@
             text += '\n';
         }
 
-        lineupConfigs.forEach(cfg => {
-            if (cfg.type === 'drawing_only') return;
+        // 1. Tasakentälliset (1.–4. Kentät)
+        text += `━━━ TASAKENTÄLLISET ━━━\n`;
+        ['1', '2', '3', '4'].forEach(id => {
+            const cfg = SIMPLE_LINEUP_CONFIGS.find(c => c.id === id);
+            if (!cfg) return;
+            const line = lineups[id] || {};
+            const reserves = getLineupReserves(id);
+            const hasPlayers = POS_ORDER.some(p => Boolean(line[p])) || reserves.length > 0;
+            if (!hasPlayers && (id === '3' || id === '4')) return;
+
             text += `*🏒 ${cfg.name}:*\n`;
-            const line = lineups[cfg.id] || {};
             POS_ORDER.forEach(pos => {
                 const pId = line[pos];
                 const p = roster.find(r => r.id === pId);
@@ -1310,9 +1392,6 @@
                     text += `${pos}: -\n`;
                 }
             });
-
-            // Reserves
-            const reserves = getLineupReserves(cfg.id);
             if (reserves.length > 0) {
                 const reserveNames = reserves.map(pId => {
                     const p = roster.find(r => r.id === pId);
@@ -1325,11 +1404,97 @@
                     text += `Varalla: ${reserveNames.join(', ')}\n`;
                 }
             }
-
             text += '\n';
         });
 
-        navigator.clipboard.writeText(text).then(() => {
+        // 2. Ylivoima & Alivoima (vain jos pelaajia asetettu)
+        const yvAvConfigs = SIMPLE_LINEUP_CONFIGS.filter(c => c.group === 'yv_av');
+        const anyYvAv = yvAvConfigs.some(cfg => {
+            const line = lineups[cfg.id] || {};
+            return POS_ORDER.some(p => Boolean(line[p])) || getLineupReserves(cfg.id).length > 0;
+        });
+
+        if (anyYvAv) {
+            text += `━━━ YLIVOIMA & ALIVOIMA ━━━\n`;
+            yvAvConfigs.forEach(cfg => {
+                const line = lineups[cfg.id] || {};
+                const reserves = getLineupReserves(cfg.id);
+                const hasPlayers = POS_ORDER.some(p => Boolean(line[p])) || reserves.length > 0;
+                if (!hasPlayers) return;
+
+                const icon = cfg.id.startsWith('yv') ? '⚡' : '🛡️';
+                text += `*${icon} ${cfg.name}:*\n`;
+                POS_ORDER.forEach(pos => {
+                    const pId = line[pos];
+                    const p = roster.find(r => r.id === pId);
+                    if (p) {
+                        const att = attendeesMap[p.id] || { status: 'unanswered' };
+                        const attIcon = att.status === 'in' ? '🟢' : att.status === 'out' ? '🔴' : att.status === 'maybe' ? '🟡' : '';
+                        text += `${pos}: #${p.number} ${p.name} ${attIcon}\n`;
+                    } else {
+                        text += `${pos}: -\n`;
+                    }
+                });
+                if (reserves.length > 0) {
+                    const reserveNames = reserves.map(pId => {
+                        const p = roster.find(r => r.id === pId);
+                        if (!p) return null;
+                        const att = attendeesMap[p.id] || { status: 'unanswered' };
+                        const attIcon = att.status === 'in' ? '🟢' : att.status === 'out' ? '🔴' : att.status === 'maybe' ? '🟡' : '';
+                        return `#${p.number} ${p.name} ${attIcon}`.trim();
+                    }).filter(Boolean);
+                    if (reserveNames.length > 0) {
+                        text += `Varalla: ${reserveNames.join(', ')}\n`;
+                    }
+                }
+                text += '\n';
+            });
+        }
+
+        // 3. 6 vs 5 (vain jos pelaajia asetettu)
+        const sixConfigs = SIMPLE_LINEUP_CONFIGS.filter(c => c.group === '6v5');
+        const anySix = sixConfigs.some(cfg => {
+            const line = lineups[cfg.id] || {};
+            return POS_ORDER_6V5.some(p => Boolean(line[p] || (p === '6P' && line['VM']))) || getLineupReserves(cfg.id).length > 0;
+        });
+
+        if (anySix) {
+            text += `━━━ 6 vs 5 (ILMAN MAALIVAHTIA) ━━━\n`;
+            sixConfigs.forEach(cfg => {
+                const line = lineups[cfg.id] || {};
+                const reserves = getLineupReserves(cfg.id);
+                const hasPlayers = POS_ORDER_6V5.some(p => Boolean(line[p] || (p === '6P' && line['VM']))) || reserves.length > 0;
+                if (!hasPlayers) return;
+
+                text += `*🔥 ${cfg.name}:*\n`;
+                POS_ORDER_6V5.forEach(pos => {
+                    const pId = line[pos] || (pos === '6P' ? line['VM'] : '');
+                    const p = roster.find(r => r.id === pId);
+                    if (p) {
+                        const att = attendeesMap[p.id] || { status: 'unanswered' };
+                        const attIcon = att.status === 'in' ? '🟢' : att.status === 'out' ? '🔴' : att.status === 'maybe' ? '🟡' : '';
+                        text += `${pos}: #${p.number} ${p.name} ${attIcon}\n`;
+                    } else {
+                        text += `${pos}: -\n`;
+                    }
+                });
+                if (reserves.length > 0) {
+                    const reserveNames = reserves.map(pId => {
+                        const p = roster.find(r => r.id === pId);
+                        if (!p) return null;
+                        const att = attendeesMap[p.id] || { status: 'unanswered' };
+                        const attIcon = att.status === 'in' ? '🟢' : att.status === 'out' ? '🔴' : att.status === 'maybe' ? '🟡' : '';
+                        return `#${p.number} ${p.name} ${attIcon}`.trim();
+                    }).filter(Boolean);
+                    if (reserveNames.length > 0) {
+                        text += `Varalla: ${reserveNames.join(', ')}\n`;
+                    }
+                }
+                text += '\n';
+            });
+        }
+
+        navigator.clipboard.writeText(text.trim()).then(() => {
             showToast('📋 Kokoonpanoteksti kopioitu leikepöydälle!');
         }).catch(() => {
             showToast('Kopiointi epäonnistui');
