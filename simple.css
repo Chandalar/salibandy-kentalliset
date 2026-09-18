@@ -86,19 +86,51 @@ body {
     color: #fff;
     border: 1px solid var(--border-color);
     border-radius: 8px;
-    padding: 6px 10px;
-    font-size: 0.88rem;
+    padding: 6px 8px;
+    font-size: 0.85rem;
     font-weight: 700;
     font-family: var(--font-heading);
-    max-width: 170px;
+    max-width: 140px;
+    min-width: 0;
     outline: none;
+    text-overflow: ellipsis;
 }
 
 .header-right {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 5px;
     flex-shrink: 0;
+}
+
+@media (max-width: 480px) {
+    .simple-header {
+        padding: 6px 8px;
+        gap: 4px;
+    }
+    .header-left {
+        gap: 6px;
+        flex: 0 1 auto;
+        min-width: 0;
+    }
+    .team-logo-badge {
+        width: 30px;
+        height: 30px;
+        font-size: 1rem;
+    }
+    .team-select {
+        max-width: 90px;
+        font-size: 0.78rem;
+        padding: 4px 6px;
+    }
+    .header-right {
+        gap: 3px;
+    }
+    .btn-header {
+        padding: 5px 6px;
+        font-size: 0.7rem;
+        gap: 2px;
+    }
 }
 
 .btn-header {

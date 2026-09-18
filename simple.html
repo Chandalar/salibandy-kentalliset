@@ -40,8 +40,10 @@
             <select class="team-select" id="simple-team-select"></select>
         </div>
         <div class="header-right">
+            <button class="btn-header" id="btn-simple-cloud" title="Pilvisynkronointi & Google-tili">☁️ Pilvi</button>
+            <button class="btn-header" id="btn-simple-share" title="Jaa joukkue linkillä">🔗 Jaa</button>
             <button class="btn-header" id="btn-simple-refresh" title="Päivitä">🔄</button>
-            <a href="index.html?mode=advanced" class="btn-header highlight" title="Siirry taktiseen fläppitauluun (Advanced)">🎨 Taktinen fläppitaulu</a>
+            <a href="index.html?mode=advanced" class="btn-header highlight" title="Siirry taktiseen fläppitauluun (Advanced)">🎨 Fläppi</a>
         </div>
     </header>
 
@@ -128,12 +130,42 @@
         </div>
     </div>
 
+    <!-- CLOUD SYNC & GOOGLE LOGIN MODAL -->
+    <div class="simple-modal" id="simple-cloud-modal">
+        <div class="modal-sheet">
+            <div class="modal-header">
+                <div class="modal-title">☁️ Pilvisynkronointi & Tili</div>
+                <button class="btn-modal-close" id="btn-close-cloud-modal">&times;</button>
+            </div>
+            <div class="modal-body" id="simple-cloud-modal-body">
+                <!-- Dynamic auth status content -->
+            </div>
+        </div>
+    </div>
+
+    <!-- SHARE TEAM MODAL -->
+    <div class="simple-modal" id="simple-share-modal">
+        <div class="modal-sheet">
+            <div class="modal-header">
+                <div class="modal-title">🔗 Jaa joukkue reaaliajassa</div>
+                <button class="btn-modal-close" id="btn-close-share-modal">&times;</button>
+            </div>
+            <div class="modal-body" id="simple-share-modal-body">
+                <!-- Dynamic share links -->
+            </div>
+        </div>
+    </div>
+
     <!-- TOAST NOTIFICATION -->
     <div class="simple-toast" id="simple-toast"></div>
 
-    <!-- Firebase Config & App Engine -->
-    <script src="firebase-config.js?v=53.0"></script>
-    <script src="simple.js?v=53.0"></script>
+    <!-- Firebase SDK v10 Compat -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <!-- Firebase Config & Simple Engine (v55.0) -->
+    <script src="firebase-config.js?v=55.0"></script>
+    <script src="simple.js?v=55.0"></script>
 
 </body>
 </html>

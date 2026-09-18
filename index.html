@@ -46,10 +46,6 @@
     })();
     </script>
 
-    <!-- Firebase SDK v10 (Deferred for instant local/offline boot) -->
-    <script defer src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-    <script defer src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
-    <script defer src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 
     <!-- Service Worker Registration -->
     <script>
@@ -1279,9 +1275,13 @@ Out:
     <!-- TOAST NOTIFICATION CONTAINER -->
     <div id="toast" class="toast-notification"></div>
 
-    <!-- Firebase Config & App Engine (Cache Busted v50.0) -->
-    <script src="firebase-config.js?v=50.0"></script>
-    <script src="app.js?v=50.0"></script>
+    <!-- Firebase SDK v10 Compat -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <!-- Firebase Config & App Engine (Cache Busted v55.0) -->
+    <script src="firebase-config.js?v=55.0"></script>
+    <script src="app.js?v=55.0"></script>
 
 </body>
 </html>

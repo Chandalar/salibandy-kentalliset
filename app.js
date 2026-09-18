@@ -441,21 +441,28 @@
         if (typeof window !== 'undefined' && window.SalibandyFirebase && window.SalibandyFirebase.isReady()) {
             const db = window.SalibandyFirebase.getDb();
             const serverTs = (window.firebase && window.firebase.firestore && window.firebase.firestore.FieldValue) ? window.firebase.firestore.FieldValue.serverTimestamp() : new Date();
+            const cleanTeamName = teamObj ? (teamObj.name || 'Joukkue').replace(/^🤝\s*/, '') : 'Joukkue';
             const payload = {
                 shareId: shareId,
                 teamId: currentTeamId,
-                teamName: teamObj ? teamObj.name : 'Joukkue',
+                teamName: cleanTeamName,
+                _lastModifiedBy: clientInstanceId,
+                _lastModifiedAt: Date.now(),
                 updatedAt: serverTs,
                 roster: roster,
                 lineupConfigs: lineupConfigs,
                 lineups: lineups,
-                drawings: lineupDrawings,
+                reserves: lineupReserves,
+                drawings: sanitizeDrawings({ [currentTeamId]: lineupDrawings })[currentTeamId] || lineupDrawings,
                 positions: lineupCourtPositions,
                 balls: lineupBalls,
                 cones: lineupCones,
                 opponents: lineupOpponents,
                 extraPlayers: lineupExtraPlayers,
-                pages: lineupPages
+                textNotes: lineupTextNotes,
+                gridPaper: lineupGridPaper,
+                pages: lineupPages,
+                events: teamEvents
             };
             db.collection('shared_teams').doc(shareId).set(payload, { merge: true }).catch(err => {
                 console.warn('Share Firestore write warning:', err);
@@ -485,7 +492,11 @@
 
     function listenToSharedTeamFirestore(shareId) {
         if (!window.SalibandyFirebase || !window.SalibandyFirebase.isReady()) {
-            setTimeout(() => listenToSharedTeamFirestore(shareId), 500);
+            if (window.SalibandyFirebase && window.SalibandyFirebase.whenReady) {
+                window.SalibandyFirebase.whenReady().then(() => listenToSharedTeamFirestore(shareId));
+            } else {
+                setTimeout(() => listenToSharedTeamFirestore(shareId), 500);
+            }
             return;
         }
 
@@ -500,26 +511,36 @@
             const data = doc.data();
             if (!data) return;
 
+            // Skip re-rendering if this snapshot was triggered by our own client instance!
+            if (data._lastModifiedBy === clientInstanceId) {
+                return;
+            }
+
             const sharedTeamName = data.teamName || 'Jaettu joukkue';
-            let foundTeam = teams.find(t => t.id === 'shared_' + shareId);
+            let foundTeam = teams.find(t => t.id === 'shared_' + shareId || (t.shareId && t.shareId === shareId));
             if (!foundTeam) {
                 foundTeam = { id: 'shared_' + shareId, name: '🤝 ' + sharedTeamName, shareId: shareId };
                 teams.push(foundTeam);
             } else {
                 foundTeam.name = '🤝 ' + sharedTeamName;
+                foundTeam.shareId = shareId;
             }
             currentTeamId = foundTeam.id;
 
             if (data.roster) roster = data.roster;
             if (data.lineupConfigs) lineupConfigs = data.lineupConfigs;
             if (data.lineups) lineups = data.lineups;
+            if (data.reserves) lineupReserves = data.reserves;
             if (data.drawings) lineupDrawings = sanitizeDrawings(data.drawings);
             if (data.positions) lineupCourtPositions = data.positions;
             if (data.balls) lineupBalls = data.balls;
             if (data.cones) lineupCones = data.cones;
             if (data.opponents) lineupOpponents = data.opponents;
             if (data.extraPlayers) lineupExtraPlayers = data.extraPlayers;
+            if (data.textNotes) lineupTextNotes = data.textNotes;
+            if (data.gridPaper) lineupGridPaper = data.gridPaper;
             if (data.pages) lineupPages = data.pages;
+            if (data.events) teamEvents = data.events;
 
             saveStateLocalOnly();
 
@@ -817,6 +838,8 @@
                 document.getElementById('settings-modal')?.classList.add('active');
             } else if (action === 'open-auth-modal') {
                 document.getElementById('auth-modal')?.classList.add('active');
+            } else if (action === 'user-logout') {
+                handleLogout();
             } else if (action === 'open-share-modal') {
                 document.getElementById('share-modal')?.classList.add('active');
             } else if (action === 'add-player') {
@@ -951,20 +974,23 @@
     }
 
     function initFirebaseAuth() {
-        if (typeof window !== 'undefined' && window.SalibandyFirebase && window.SalibandyFirebase.isReady()) {
-            const auth = window.SalibandyFirebase.getAuth();
-            
-            auth.getRedirectResult().then((result) => {
-                if (result && result.user) {
-                    currentUser = result.user;
+        if (typeof window === 'undefined' || !window.SalibandyFirebase) {
+            updateCloudSyncBadge(false);
+            return;
+        }
+
+        window.SalibandyFirebase.whenReady().then(({ auth }) => {
+            // Check redirect result first (mobile Google login redirect)
+            window.SalibandyFirebase.handleRedirectResult().then((redirectUser) => {
+                if (redirectUser) {
+                    currentUser = redirectUser;
                     updateAuthUI();
-                    showToast(`Kirjauduttu sisään Google-tilillä: ${result.user.email} 🎉`);
-                    listenToCloudFirestore(result.user);
+                    showToast(`Kirjauduttu sisään Google-tilillä: ${redirectUser.email} 🎉`);
+                    listenToCloudFirestore(redirectUser);
                 }
-            }).catch((error) => {
-                console.warn('Redirect auth result error:', error);
             });
 
+            // Listen to persistent auth state
             auth.onAuthStateChanged((user) => {
                 currentUser = user;
                 updateAuthUI();
@@ -978,63 +1004,89 @@
                     updateCloudSyncBadge(false);
                 }
             });
-        } else {
+        }).catch(err => {
+            console.warn('[Auth] Firebase ready wait error:', err);
             updateCloudSyncBadge(false);
-        }
+        });
     }
 
     function updateAuthUI() {
+        // 1. Desktop / Header auth widget
         const userAuthStatusWrapper = document.getElementById('user-auth-status');
-        if (!userAuthStatusWrapper) return;
-        if (currentUser) {
-            userAuthStatusWrapper.innerHTML = `
-                <div class="user-profile-badge">
-                    <span>👤</span>
-                    <span class="user-email-text" title="${escapeHtml(currentUser.email)}">${escapeHtml(currentUser.email)}</span>
-                    <button class="btn-xs btn-outline danger-text" id="btn-user-logout" title="Kirjaudu ulos">🔴 Ulos</button>
-                </div>
-            `;
-            document.getElementById('btn-user-logout')?.addEventListener('click', handleLogout);
-            updateCloudSyncBadge(true);
-        } else {
-            userAuthStatusWrapper.innerHTML = `
-                <button class="btn btn-sm btn-outline" id="btn-open-auth-modal">
-                    🔑 Kirjaudu pilveen
-                </button>
-            `;
-            document.getElementById('btn-open-auth-modal')?.addEventListener('click', () => {
-                document.getElementById('auth-modal')?.classList.add('active');
-            });
-            updateCloudSyncBadge(false);
+        if (userAuthStatusWrapper) {
+            if (currentUser) {
+                userAuthStatusWrapper.innerHTML = `
+                    <div class="user-profile-badge">
+                        <span>👤</span>
+                        <span class="user-email-text" title="${escapeHtml(currentUser.email)}">${escapeHtml(currentUser.email)}</span>
+                        <button class="btn-xs btn-outline danger-text" id="btn-user-logout" title="Kirjaudu ulos">🔴 Ulos</button>
+                    </div>
+                `;
+                document.getElementById('btn-user-logout')?.addEventListener('click', handleLogout);
+                updateCloudSyncBadge(true);
+            } else {
+                userAuthStatusWrapper.innerHTML = `
+                    <button class="btn btn-sm btn-outline" id="btn-open-auth-modal">
+                        🔑 Kirjaudu pilveen
+                    </button>
+                `;
+                document.getElementById('btn-open-auth-modal')?.addEventListener('click', () => {
+                    document.getElementById('auth-modal')?.classList.add('active');
+                });
+                updateCloudSyncBadge(false);
+            }
+        }
+
+        // 2. Mobile More Panel auth button
+        const mobileAuthBtn = document.querySelector('#mobile-more-panel [data-action="open-auth-modal"], #mobile-more-panel [data-action="user-logout"]');
+        if (mobileAuthBtn) {
+            if (currentUser) {
+                mobileAuthBtn.innerHTML = `<span class="mobile-action-icon">👤</span> ${escapeHtml(currentUser.email)} (Kirjaudu ulos)`;
+                mobileAuthBtn.setAttribute('data-action', 'user-logout');
+                mobileAuthBtn.style.color = '#93c5fd';
+            } else {
+                mobileAuthBtn.innerHTML = `<span class="mobile-action-icon">🔑</span> Kirjaudu pilveen`;
+                mobileAuthBtn.setAttribute('data-action', 'open-auth-modal');
+                mobileAuthBtn.style.color = '';
+            }
         }
     }
 
     function updateCloudSyncBadge(isCloudActive) {
         const cloudSyncBadge = document.getElementById('cloud-sync-badge');
-        if (!cloudSyncBadge) return;
-        if (isCloudActive) {
-            cloudSyncBadge.className = 'cloud-sync-badge';
-            cloudSyncBadge.innerHTML = '☁️ Synkronoi nyt';
-            cloudSyncBadge.title = 'Klikkaa tästä tallentaaksesi kaikki koneen joukkueet ja kentälliset pilveen!';
-            cloudSyncBadge.style.cursor = 'pointer';
-        } else {
-            cloudSyncBadge.className = 'cloud-sync-badge is-offline';
-            cloudSyncBadge.innerHTML = '💻 Paikallinen';
-            cloudSyncBadge.title = 'Kirjaudu sisään synkronoidaksesi pilveen';
-            cloudSyncBadge.style.cursor = 'pointer';
+        if (cloudSyncBadge) {
+            if (isCloudActive) {
+                cloudSyncBadge.className = 'cloud-sync-badge';
+                cloudSyncBadge.innerHTML = '☁️ Synkronoitu';
+                cloudSyncBadge.title = 'Pilvisynkronointi on aktiivinen. Kaikki muutokset tallentuvat automaattisesti!';
+                cloudSyncBadge.style.cursor = 'pointer';
+            } else {
+                cloudSyncBadge.className = 'cloud-sync-badge is-offline';
+                cloudSyncBadge.innerHTML = '💻 Paikallinen';
+                cloudSyncBadge.title = 'Kirjaudu sisään synkronoidaksesi pilveen';
+                cloudSyncBadge.style.cursor = 'pointer';
+            }
+        }
+
+        const altBadge = document.getElementById('cloudSyncBadge');
+        if (altBadge) {
+            altBadge.className = isCloudActive ? 'cloud-sync-badge' : 'cloud-sync-badge is-offline';
         }
     }
 
     function handleLogout() {
-        if (typeof window !== 'undefined' && window.SalibandyFirebase && window.SalibandyFirebase.isReady()) {
+        if (typeof window !== 'undefined' && window.SalibandyFirebase) {
             if (unsubscribeFirestore) {
                 unsubscribeFirestore();
                 unsubscribeFirestore = null;
             }
-            window.SalibandyFirebase.getAuth().signOut().then(() => {
+            window.SalibandyFirebase.logout().then(() => {
                 showToast('Kirjauduttu ulos pilvipalvelusta.');
                 currentUser = null;
                 updateAuthUI();
+                updateCloudSyncBadge(false);
+            }).catch(err => {
+                console.warn('Logout error:', err);
             });
         }
     }
@@ -1479,10 +1531,12 @@
     }
 
     let cloudSyncDebounceTimer = null;
+    let sharedTeamSyncDebounceTimer = null;
 
     function saveState() {
         saveStateLocalOnly();
 
+        // 1. Synchronize to user's personal Firestore document if logged in
         if (currentUser && typeof window !== 'undefined' && window.SalibandyFirebase && window.SalibandyFirebase.isReady()) {
             if (cloudSyncDebounceTimer) clearTimeout(cloudSyncDebounceTimer);
             cloudSyncDebounceTimer = setTimeout(() => {
@@ -1497,7 +1551,17 @@
                     .catch(err => {
                         console.warn('Cloud Firestore save error:', err);
                     });
-            }, 3000);
+            }, 1000);
+        }
+
+        // 2. Synchronize to shared team document if current team is shared or has shareId
+        const curTeam = teams.find(t => t.id === currentTeamId);
+        const activeShareId = (curTeam && curTeam.shareId) ? curTeam.shareId : currentSharedTeamId;
+        if (activeShareId && !isViewerMode && window.SalibandyFirebase && window.SalibandyFirebase.isReady()) {
+            if (sharedTeamSyncDebounceTimer) clearTimeout(sharedTeamSyncDebounceTimer);
+            sharedTeamSyncDebounceTimer = setTimeout(() => {
+                pushSharedTeamToCloud(activeShareId, curTeam);
+            }, 800);
         }
     }
 
@@ -7609,84 +7673,61 @@
         document.getElementById('cloudSyncBadge')?.addEventListener('click', forceCloudSync);
 
         // Firebase Auth Modal & Google Sign-In
-        document.getElementById('btn-google-login')?.addEventListener('click', () => {
-            if (!window.SalibandyFirebase || !window.SalibandyFirebase.isReady()) {
-                showToast('Pilvipalvelua alustetaan... Yritä hetken kuluttua.');
-                return;
-            }
-            const auth = window.SalibandyFirebase.getAuth();
-            const provider = new firebase.auth.GoogleAuthProvider();
-            provider.addScope('profile');
-            provider.addScope('email');
-
-            auth.signInWithPopup(provider)
-                .then((result) => {
-                    currentUser = result.user;
+        document.getElementById('btn-google-login')?.addEventListener('click', async () => {
+            showToast('Avataan Google-kirjautuminen...');
+            try {
+                const user = await window.SalibandyFirebase.loginWithGoogle();
+                if (user) {
+                    currentUser = user;
                     updateAuthUI();
                     document.getElementById('auth-modal')?.classList.remove('active');
-                    showToast(`Kirjauduttu sisään Google-tilillä: ${result.user.email} 🎉`);
-                    listenToCloudFirestore(result.user);
-                })
-                .catch((error) => {
-                    console.warn('Google Popup sign-in error, trying redirect:', error);
-                    if (error.code === 'auth/popup-blocked' || error.code === 'auth/cancelled-popup-request' || error.code === 'auth/popup-closed-by-user') {
-                        auth.signInWithRedirect(provider).catch(e => {
-                            showToast('Kirjautumisvirhe: ' + e.message);
-                        });
-                    } else {
-                        showToast('Google-kirjautumisvirhe: ' + error.message);
-                    }
-                });
+                    showToast(`Kirjauduttu sisään Google-tilillä: ${user.email} 🎉`);
+                    listenToCloudFirestore(user);
+                }
+            } catch (error) {
+                console.error('Google login error:', error);
+                showToast('Google-kirjautumisvirhe: ' + error.message);
+            }
         });
 
         // Email Login
-        document.getElementById('login-form')?.addEventListener('submit', (e) => {
+        document.getElementById('login-form')?.addEventListener('submit', async (e) => {
             e.preventDefault();
             const email = document.getElementById('login-email')?.value.trim();
             const password = document.getElementById('login-password')?.value;
             if (!email || !password) return;
 
-            if (!window.SalibandyFirebase || !window.SalibandyFirebase.isReady()) {
-                showToast('Pilvipalvelu ei ole valmis.');
-                return;
+            try {
+                const { auth } = await window.SalibandyFirebase.whenReady();
+                const result = await auth.signInWithEmailAndPassword(email, password);
+                currentUser = result.user;
+                updateAuthUI();
+                document.getElementById('auth-modal')?.classList.remove('active');
+                showToast(`Kirjauduttu sisään: ${result.user.email} 👍`);
+                listenToCloudFirestore(result.user);
+            } catch (err) {
+                showToast('Kirjautuminen epäonnistui: ' + err.message);
             }
-            const auth = window.SalibandyFirebase.getAuth();
-            auth.signInWithEmailAndPassword(email, password)
-                .then((result) => {
-                    currentUser = result.user;
-                    updateAuthUI();
-                    document.getElementById('auth-modal')?.classList.remove('active');
-                    showToast(`Kirjauduttu sisään: ${result.user.email} 👍`);
-                    listenToCloudFirestore(result.user);
-                })
-                .catch((err) => {
-                    showToast('Kirjautuminen epäonnistui: ' + err.message);
-                });
         });
 
         // Email Register
-        document.getElementById('register-form')?.addEventListener('submit', (e) => {
+        document.getElementById('register-form')?.addEventListener('submit', async (e) => {
             e.preventDefault();
             const email = document.getElementById('reg-email')?.value.trim();
             const password = document.getElementById('reg-password')?.value;
             if (!email || !password) return;
 
-            if (!window.SalibandyFirebase || !window.SalibandyFirebase.isReady()) {
-                showToast('Pilvipalvelu ei ole valmis.');
-                return;
+            try {
+                const { auth } = await window.SalibandyFirebase.whenReady();
+                const result = await auth.createUserWithEmailAndPassword(email, password);
+                currentUser = result.user;
+                updateAuthUI();
+                document.getElementById('auth-modal')?.classList.remove('active');
+                showToast(`Tili luotu onnistuneesti: ${result.user.email} 🎉`);
+                listenToCloudFirestore(result.user);
+            } catch (err) {
+                showToast('Tilin luonti epäonnistui: ' + err.message);
             }
-            const auth = window.SalibandyFirebase.getAuth();
-            auth.createUserWithEmailAndPassword(email, password)
-                .then((result) => {
-                    currentUser = result.user;
-                    updateAuthUI();
-                    document.getElementById('auth-modal')?.classList.remove('active');
-                    showToast(`Tili luotu onnistuneesti: ${result.user.email} 🎉`);
-                    listenToCloudFirestore(result.user);
-                })
-                .catch((err) => {
-                    showToast('Tilin luonti epäonnistui: ' + err.message);
-                });
         });
 
         // Auth Tabs

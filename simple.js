@@ -19,6 +19,17 @@
     let activeLineupTab = 'all'; // Default to 'all' so multiple lines are visible at once!
     let activeRosterFilter = 'all';
 
+    // Firebase & Cloud State
+    const clientInstanceId = 'simple_' + Date.now() + '_' + Math.random().toString(36).substr(2, 8);
+    let currentUser = null;
+    let unsubscribeFirestore = null;
+    let unsubscribeSharedTeam = null;
+    let currentSharedTeamId = null;
+    let isCloudLoading = false;
+    let lastLoadedCloudPayloadString = '';
+    let cloudSyncDebounceTimer = null;
+    let sharedTeamSyncDebounceTimer = null;
+
     // DOM Elements
     const teamSelect = document.getElementById('simple-team-select');
     const eventSelect = document.getElementById('simple-event-select');
@@ -32,6 +43,16 @@
     const modalTitle = document.getElementById('modal-title');
     const modalBody = document.getElementById('modal-body');
     const modalClose = document.getElementById('btn-modal-close');
+
+    // Cloud & Share DOM Elements
+    const btnSimpleCloud = document.getElementById('btn-simple-cloud');
+    const btnSimpleShare = document.getElementById('btn-simple-share');
+    const cloudModal = document.getElementById('simple-cloud-modal');
+    const cloudModalBody = document.getElementById('simple-cloud-modal-body');
+    const btnCloseCloudModal = document.getElementById('btn-close-cloud-modal');
+    const shareModal = document.getElementById('simple-share-modal');
+    const shareModalBody = document.getElementById('simple-share-modal-body');
+    const btnCloseShareModal = document.getElementById('btn-close-share-modal');
 
     // Sync Modal
     const syncModal = document.getElementById('event-sync-modal');
@@ -274,7 +295,16 @@
         }
     }
 
-    function saveState() {
+    function loadFromStorage(key, defaultVal) {
+        try {
+            const v = localStorage.getItem(key);
+            return v ? JSON.parse(v) : defaultVal;
+        } catch (e) {
+            return defaultVal;
+        }
+    }
+
+    function saveToStorageLocalOnly() {
         try {
             // Keep legacy keys in sync for advanced mode compatibility
             if (lineups['yv1']) lineups['yv'] = { ...lineups['yv1'] };
@@ -299,23 +329,454 @@
             if (activeEventId) {
                 localStorage.setItem('salibandy_active_event_id_' + currentTeamId, JSON.stringify(activeEventId));
             }
+        } catch (e) {
+            console.error('Error saving local state:', e);
+        }
+    }
 
-            // Sync with Firebase if available
-            if (window.SalibandyFirebase && window.SalibandyFirebase.isReady()) {
-                const db = window.SalibandyFirebase.getDb();
-                const auth = window.SalibandyFirebase.getAuth();
-                const user = auth.currentUser;
-                if (user && db) {
-                    db.collection('users').doc(user.uid).collection('teams').doc(currentTeamId).set({
-                        roster: roster,
-                        lineups: lineups,
-                        events: teamEvents,
-                        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                    }, { merge: true }).catch(err => console.warn('Cloud save error:', err));
+    function buildFullCloudPayload() {
+        const rostersMap = {};
+        const configsMap = {};
+        const lineupsMap = {};
+        const reservesMap = {};
+        const eventsMap = {};
+
+        teams.forEach(t => {
+            const tId = t.id;
+            rostersMap[tId] = (tId === currentTeamId) ? roster : loadFromStorage(`salibandy_roster_${tId}`, []);
+            configsMap[tId] = loadFromStorage(`salibandy_lineup_configs_${tId}`, SIMPLE_LINEUP_CONFIGS);
+            lineupsMap[tId] = (tId === currentTeamId) ? lineups : loadFromStorage(`salibandy_lineups_${tId}`, {});
+            reservesMap[tId] = (tId === currentTeamId) ? lineupReserves : loadFromStorage(`salibandy_reserves_${tId}`, {});
+            eventsMap[tId] = (tId === currentTeamId) ? teamEvents : loadFromStorage(`salibandy_events_${tId}`, []);
+        });
+
+        const serverTs = (window.firebase && window.firebase.firestore && window.firebase.firestore.FieldValue)
+            ? window.firebase.firestore.FieldValue.serverTimestamp() : new Date();
+
+        return {
+            email: currentUser ? currentUser.email : '',
+            updatedAt: serverTs,
+            _lastModifiedBy: clientInstanceId,
+            _lastModifiedAt: Date.now(),
+            teams: teams,
+            currentTeamId: currentTeamId,
+            rosters: rostersMap,
+            lineupConfigs: configsMap,
+            lineups: lineupsMap,
+            reserves: reservesMap,
+            events: eventsMap
+        };
+    }
+
+    function pushSharedTeamToCloud(shareId, teamObj) {
+        if (typeof window !== 'undefined' && window.SalibandyFirebase && window.SalibandyFirebase.isReady()) {
+            const db = window.SalibandyFirebase.getDb();
+            const serverTs = (window.firebase && window.firebase.firestore && window.firebase.firestore.FieldValue)
+                ? window.firebase.firestore.FieldValue.serverTimestamp() : new Date();
+            const cleanTeamName = teamObj ? (teamObj.name || 'Joukkue').replace(/^🤝\s*/, '') : 'Joukkue';
+            const payload = {
+                shareId: shareId,
+                teamId: currentTeamId,
+                teamName: cleanTeamName,
+                _lastModifiedBy: clientInstanceId,
+                _lastModifiedAt: Date.now(),
+                updatedAt: serverTs,
+                roster: roster,
+                lineups: lineups,
+                reserves: lineupReserves,
+                events: teamEvents
+            };
+            db.collection('shared_teams').doc(shareId).set(payload, { merge: true }).catch(err => {
+                console.warn('[Simple] Share Firestore write warning:', err);
+            });
+        }
+    }
+
+    function listenToSharedTeamFirestore(shareId) {
+        if (!window.SalibandyFirebase || !window.SalibandyFirebase.isReady()) {
+            if (window.SalibandyFirebase && window.SalibandyFirebase.whenReady) {
+                window.SalibandyFirebase.whenReady().then(() => listenToSharedTeamFirestore(shareId));
+            } else {
+                setTimeout(() => listenToSharedTeamFirestore(shareId), 500);
+            }
+            return;
+        }
+
+        const db = window.SalibandyFirebase.getDb();
+        if (unsubscribeSharedTeam) unsubscribeSharedTeam();
+
+        unsubscribeSharedTeam = db.collection('shared_teams').doc(shareId).onSnapshot(doc => {
+            if (!doc.exists) {
+                showToast('Jaettua joukkuetta ei löytynyt pilvestä.');
+                return;
+            }
+            const data = doc.data();
+            if (!data) return;
+
+            // Skip snapshot from this exact client instance to prevent stutter
+            if (data._lastModifiedBy === clientInstanceId) {
+                return;
+            }
+
+            const sharedTeamName = data.teamName || 'Jaettu joukkue';
+            let foundTeam = teams.find(t => t.id === 'shared_' + shareId || (t.shareId && t.shareId === shareId));
+            if (!foundTeam) {
+                foundTeam = { id: 'shared_' + shareId, name: '🤝 ' + sharedTeamName, shareId: shareId };
+                teams.push(foundTeam);
+            } else {
+                foundTeam.name = '🤝 ' + sharedTeamName;
+                foundTeam.shareId = shareId;
+            }
+            currentTeamId = foundTeam.id;
+
+            if (data.roster) roster = data.roster;
+            if (data.lineups) lineups = data.lineups;
+            if (data.reserves) lineupReserves = data.reserves;
+            if (data.events) teamEvents = data.events;
+
+            saveToStorageLocalOnly();
+            renderAll();
+            updateCloudButtonUI(true);
+            showToast(`Joukkue '${sharedTeamName}' synkronoitu reaaliajassa! ⚡`);
+        }, err => {
+            console.warn('[Simple] Shared team listener error:', err);
+        });
+    }
+
+    function listenToCloudFirestore(user) {
+        if (!window.SalibandyFirebase || !window.SalibandyFirebase.isReady()) return;
+        const db = window.SalibandyFirebase.getDb();
+        const userRef = db.collection('users').doc(user.uid);
+
+        if (unsubscribeFirestore) unsubscribeFirestore();
+
+        unsubscribeFirestore = userRef.onSnapshot({ includeMetadataChanges: true }, (doc) => {
+            if (doc.metadata && doc.metadata.hasPendingWrites) return;
+            if (isCloudLoading) return;
+
+            if (!doc.exists) {
+                isCloudLoading = true;
+                const initialPayload = buildFullCloudPayload();
+                lastLoadedCloudPayloadString = JSON.stringify(initialPayload);
+                userRef.set(initialPayload, { merge: true }).then(() => {
+                    updateCloudButtonUI(true);
+                    isCloudLoading = false;
+                }).catch(err => {
+                    console.warn('[Simple] First-time Firestore doc error:', err);
+                    isCloudLoading = false;
+                });
+                return;
+            }
+
+            const cloudData = doc.data();
+            if (!cloudData) return;
+
+            if (cloudData._lastModifiedBy === clientInstanceId) {
+                updateCloudButtonUI(true);
+                return;
+            }
+
+            const incomingStr = JSON.stringify(cloudData);
+            if (incomingStr === lastLoadedCloudPayloadString) return;
+            lastLoadedCloudPayloadString = incomingStr;
+
+            isCloudLoading = true;
+
+            if (cloudData.teams && Array.isArray(cloudData.teams)) {
+                const mergedTeams = [...cloudData.teams];
+                teams.forEach(localT => {
+                    if (!mergedTeams.some(cT => cT.id === localT.id)) {
+                        mergedTeams.push(localT);
+                    }
+                });
+                teams = mergedTeams;
+                if (cloudData.currentTeamId && teams.some(t => t.id === cloudData.currentTeamId)) {
+                    currentTeamId = cloudData.currentTeamId;
                 }
             }
-        } catch (e) {
-            console.error('Error saving state:', e);
+
+            if (cloudData.rosters) {
+                Object.keys(cloudData.rosters).forEach(tId => {
+                    localStorage.setItem(`salibandy_roster_${tId}`, JSON.stringify(cloudData.rosters[tId]));
+                });
+            }
+            if (cloudData.lineups) {
+                Object.keys(cloudData.lineups).forEach(tId => {
+                    localStorage.setItem(`salibandy_lineups_${tId}`, JSON.stringify(cloudData.lineups[tId]));
+                });
+            }
+            if (cloudData.reserves) {
+                Object.keys(cloudData.reserves).forEach(tId => {
+                    localStorage.setItem(`salibandy_reserves_${tId}`, JSON.stringify(cloudData.reserves[tId]));
+                });
+            }
+            if (cloudData.events) {
+                Object.keys(cloudData.events).forEach(tId => {
+                    localStorage.setItem(`salibandy_events_${tId}`, JSON.stringify(cloudData.events[tId]));
+                });
+            }
+
+            loadState();
+            renderAll();
+            updateCloudButtonUI(true);
+            setTimeout(() => { isCloudLoading = false; }, 300);
+        }, (err) => {
+            console.warn('[Simple] Cloud snapshot error:', err);
+            updateCloudButtonUI(false);
+            isCloudLoading = false;
+        });
+    }
+
+    function updateCloudButtonUI(isSynced) {
+        if (!btnSimpleCloud) return;
+        if (currentUser) {
+            const shortName = currentUser.email ? currentUser.email.split('@')[0] : 'Käyttäjä';
+            btnSimpleCloud.innerHTML = `👤 ${escapeHtml(shortName)}`;
+            btnSimpleCloud.classList.add('highlight');
+            btnSimpleCloud.title = `Kirjautuneena: ${currentUser.email} (Klikkaa asetuksia tai synkronointia varten)`;
+        } else {
+            btnSimpleCloud.innerHTML = `☁️ Pilvi`;
+            btnSimpleCloud.classList.remove('highlight');
+            btnSimpleCloud.title = 'Kirjaudu Google-tilillä tai aloita pilvisynkronointi';
+        }
+    }
+
+    function forceCloudSync() {
+        if (!currentUser || !window.SalibandyFirebase || !window.SalibandyFirebase.isReady()) {
+            showToast('Kirjaudu ensin Google-tilillä.');
+            openCloudModal();
+            return;
+        }
+
+        const db = window.SalibandyFirebase.getDb();
+        const payload = buildFullCloudPayload();
+        db.collection('users').doc(currentUser.uid).set(payload, { merge: true })
+            .then(() => {
+                updateCloudButtonUI(true);
+                showToast(`🎉 Kaikki ${teams.length} joukkuetta tallennettu pilveen!`);
+            })
+            .catch(err => {
+                console.error('[Simple] Force sync error:', err);
+                showToast('Pilvitallennusvirhe: ' + err.message);
+            });
+    }
+
+    function handleLogout() {
+        if (window.SalibandyFirebase) {
+            if (unsubscribeFirestore) {
+                unsubscribeFirestore();
+                unsubscribeFirestore = null;
+            }
+            window.SalibandyFirebase.logout().then(() => {
+                currentUser = null;
+                updateCloudButtonUI(false);
+                showToast('Kirjauduttu ulos pilvipalvelusta.');
+            }).catch(err => {
+                console.warn('Logout error:', err);
+            });
+        }
+    }
+
+    function getShareIdForCurrentTeam() {
+        let curTeam = teams.find(t => t.id === currentTeamId);
+        if (!curTeam) return 'team_share_' + currentTeamId;
+        if (!curTeam.shareId) {
+            curTeam.shareId = 'st_' + currentTeamId.replace(/[^a-zA-Z0-9]/g, '') + '_' + Math.random().toString(36).substr(2, 6);
+            saveToStorageLocalOnly();
+        }
+        return curTeam.shareId;
+    }
+
+    function openShareModal() {
+        if (!shareModal || !shareModalBody) return;
+        const curTeam = teams.find(t => t.id === currentTeamId) || { name: 'Joukkue' };
+        const teamName = curTeam.name || 'Joukkue';
+        const shareId = getShareIdForCurrentTeam();
+        pushSharedTeamToCloud(shareId, curTeam);
+
+        const baseUrl = window.location.origin + window.location.pathname.replace(/[^\/]*$/, '');
+        const simpleUrl = `${baseUrl}simple.html?teamShare=${shareId}&role=coach`;
+        const advUrl = `${baseUrl}index.html?mode=advanced&teamShare=${shareId}&role=coach`;
+
+        shareModalBody.innerHTML = `
+            <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 12px;">
+                Jaa joukkue <strong>${escapeHtml(teamName)}</strong> toiselle valmentajalle. Kaikki kentälliset ja pelaajat synkronoituu reaaliajassa laitteiden välillä!
+            </p>
+            <div style="background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; margin-bottom: 12px;">
+                <label style="display: block; font-size: 0.75rem; color: #94a3b8; margin-bottom: 4px;">Kevytversio (Kännykkä & Tabletti)</label>
+                <input type="text" value="${escapeHtml(simpleUrl)}" readonly style="width: 100%; background: #0b1120; border: 1px solid var(--border-color); border-radius: 6px; padding: 8px; color: #fff; font-size: 0.8rem; margin-bottom: 8px;">
+                <div style="display: flex; gap: 6px;">
+                    <button class="btn-tool primary" id="btn-copy-simple-link" style="flex: 1; padding: 8px 12px; font-size: 0.82rem;">📋 Kopioi linkki</button>
+                    <button class="btn-header highlight" id="btn-wa-simple-link" style="padding: 8px 14px; font-size: 0.82rem; background: #22c55e; color: #fff;">💬 WhatsApp</button>
+                </div>
+            </div>
+            <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 8px; padding: 10px;">
+                <label style="display: block; font-size: 0.75rem; color: #94a3b8; margin-bottom: 4px;">Taktinen fläppitaulu (Advanced)</label>
+                <div style="display: flex; gap: 6px;">
+                    <input type="text" value="${escapeHtml(advUrl)}" readonly style="flex: 1; background: #0b1120; border: 1px solid var(--border-color); border-radius: 6px; padding: 6px 8px; color: #fff; font-size: 0.75rem;">
+                    <button class="btn-header" id="btn-copy-adv-link" style="padding: 6px 12px; font-size: 0.78rem;">📋 Kopioi</button>
+                </div>
+            </div>
+        `;
+
+        document.getElementById('btn-copy-simple-link')?.addEventListener('click', () => {
+            navigator.clipboard.writeText(simpleUrl).then(() => showToast('Kevytversion linkki kopioitu! 📋'));
+        });
+        document.getElementById('btn-wa-simple-link')?.addEventListener('click', () => {
+            const text = encodeURIComponent(`Tässä ${teamName} kokoonpanot ja kentälliset reaaliaikaisena:\n${simpleUrl}`);
+            window.open(`https://api.whatsapp.com/send?text=${text}`, '_blank');
+        });
+        document.getElementById('btn-copy-adv-link')?.addEventListener('click', () => {
+            navigator.clipboard.writeText(advUrl).then(() => showToast('Fläppitaulun linkki kopioitu! 📋'));
+        });
+
+        shareModal.classList.add('active');
+    }
+
+    function openCloudModal() {
+        if (!cloudModal || !cloudModalBody) return;
+
+        if (currentUser) {
+            cloudModalBody.innerHTML = `
+                <div style="text-align: center; padding: 10px 0 16px;">
+                    <div style="font-size: 2rem; margin-bottom: 6px;">👤</div>
+                    <div style="font-weight: 700; font-size: 1rem; color: #fff; margin-bottom: 2px;">${escapeHtml(currentUser.email)}</div>
+                    <div style="font-size: 0.75rem; color: #10b981;">● Kirjautuneena Google-tilillä (Pilvisynkronointi aktiivinen)</div>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 8px;">
+                    <button class="btn-tool primary" id="btn-cloud-force-sync" style="width: 100%; padding: 12px; font-size: 0.9rem;">
+                        ☁️ Synkronoi kaikki joukkueet nyt pilveen
+                    </button>
+                    <button class="btn-tool" id="btn-cloud-open-share" style="width: 100%; padding: 10px; font-size: 0.85rem; background: rgba(255,255,255,0.08);">
+                        🔗 Jaa nykyinen joukkue linkillä
+                    </button>
+                    <button class="btn-tool" id="btn-cloud-logout" style="width: 100%; padding: 10px; font-size: 0.85rem; background: rgba(239,68,68,0.15); color: #ef4444; border: 1px solid rgba(239,68,68,0.3); margin-top: 8px;">
+                        🔴 Kirjaudu ulos
+                    </button>
+                </div>
+            `;
+
+            document.getElementById('btn-cloud-force-sync')?.addEventListener('click', () => {
+                forceCloudSync();
+            });
+            document.getElementById('btn-cloud-open-share')?.addEventListener('click', () => {
+                cloudModal.classList.remove('active');
+                openShareModal();
+            });
+            document.getElementById('btn-cloud-logout')?.addEventListener('click', () => {
+                handleLogout();
+                cloudModal.classList.remove('active');
+            });
+        } else {
+            cloudModalBody.innerHTML = `
+                <div style="text-align: center; padding: 8px 0 16px;">
+                    <div style="font-size: 2.2rem; margin-bottom: 8px;">☁️</div>
+                    <div style="font-weight: 700; font-size: 1.05rem; color: #fff; margin-bottom: 6px;">Google-pilvisynkronointi</div>
+                    <p style="font-size: 0.82rem; color: var(--text-secondary); line-height: 1.4;">
+                        Kirjaudu Google-tililläsi, niin joukkueesi, kentällisesi ja pelaajasi tallentuvat automaattisesti pilveen ja pysyvät aina synkassa puhelimen, tabletin ja tietokoneen välillä.
+                    </p>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 10px;">
+                    <button class="btn-tool primary" id="btn-do-google-login" style="width: 100%; padding: 12px; font-size: 0.95rem; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                        <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" width="20" height="20" alt="Google">
+                        <span>Kirjaudu Google-tilillä</span>
+                    </button>
+                </div>
+            `;
+
+            document.getElementById('btn-do-google-login')?.addEventListener('click', async () => {
+                showToast('Avataan Google-kirjautuminen...');
+                try {
+                    const user = await window.SalibandyFirebase.loginWithGoogle();
+                    if (user) {
+                        currentUser = user;
+                        updateCloudButtonUI(true);
+                        cloudModal.classList.remove('active');
+                        showToast(`Kirjauduttu: ${user.email} 🎉`);
+                        listenToCloudFirestore(user);
+                    }
+                } catch (err) {
+                    console.error('Login error:', err);
+                    showToast('Kirjautumisvirhe: ' + err.message);
+                }
+            });
+        }
+
+        cloudModal.classList.add('active');
+    }
+
+    function checkUrlSharing() {
+        if (typeof window === 'undefined' || !window.location.search) return;
+        const params = new URLSearchParams(window.location.search);
+        const teamShareId = params.get('teamShare');
+        if (teamShareId) {
+            currentSharedTeamId = teamShareId;
+            listenToSharedTeamFirestore(teamShareId);
+        }
+    }
+
+    function initSimpleFirebase() {
+        if (typeof window === 'undefined' || !window.SalibandyFirebase) return;
+
+        window.SalibandyFirebase.whenReady().then(({ auth }) => {
+            // Check mobile redirect result
+            window.SalibandyFirebase.handleRedirectResult().then(redirectUser => {
+                if (redirectUser) {
+                    currentUser = redirectUser;
+                    updateCloudButtonUI(true);
+                    showToast(`Kirjauduttu sisään Google-tilillä: ${redirectUser.email} 🎉`);
+                    listenToCloudFirestore(redirectUser);
+                }
+            });
+
+            // Listen to auth state
+            auth.onAuthStateChanged(user => {
+                currentUser = user;
+                updateCloudButtonUI(!!user);
+                if (user) {
+                    listenToCloudFirestore(user);
+                } else {
+                    if (unsubscribeFirestore) {
+                        unsubscribeFirestore();
+                        unsubscribeFirestore = null;
+                    }
+                }
+            });
+
+            // Check shared team URL
+            checkUrlSharing();
+        });
+    }
+
+    function saveState() {
+        saveToStorageLocalOnly();
+
+        // 1. Sync to User's Personal Cloud if logged in
+        if (currentUser && window.SalibandyFirebase && window.SalibandyFirebase.isReady()) {
+            if (cloudSyncDebounceTimer) clearTimeout(cloudSyncDebounceTimer);
+            cloudSyncDebounceTimer = setTimeout(() => {
+                if (isCloudLoading) return;
+                const db = window.SalibandyFirebase.getDb();
+                const payload = buildFullCloudPayload();
+                lastLoadedCloudPayloadString = JSON.stringify(payload);
+                db.collection('users').doc(currentUser.uid).set(payload, { merge: true })
+                    .then(() => {
+                        updateCloudButtonUI(true);
+                    })
+                    .catch(err => {
+                        console.warn('[Simple] Cloud save error:', err);
+                    });
+            }, 1000);
+        }
+
+        // 2. Sync to Shared Team Cloud if team is shared
+        const curTeam = teams.find(t => t.id === currentTeamId);
+        const activeShareId = (curTeam && curTeam.shareId) ? curTeam.shareId : currentSharedTeamId;
+        if (activeShareId && window.SalibandyFirebase && window.SalibandyFirebase.isReady()) {
+            if (sharedTeamSyncDebounceTimer) clearTimeout(sharedTeamSyncDebounceTimer);
+            sharedTeamSyncDebounceTimer = setTimeout(() => {
+                pushSharedTeamToCloud(activeShareId, curTeam);
+            }, 800);
         }
     }
 
@@ -1586,6 +2047,21 @@
         syncModal?.addEventListener('click', (e) => {
             if (e.target === syncModal) closeSyncModal();
         });
+
+        // Cloud & Share Modals
+        btnSimpleCloud?.addEventListener('click', openCloudModal);
+        btnSimpleShare?.addEventListener('click', openShareModal);
+        btnCloseCloudModal?.addEventListener('click', () => cloudModal?.classList.remove('active'));
+        cloudModal?.addEventListener('click', (e) => {
+            if (e.target === cloudModal) cloudModal.classList.remove('active');
+        });
+        btnCloseShareModal?.addEventListener('click', () => shareModal?.classList.remove('active'));
+        shareModal?.addEventListener('click', (e) => {
+            if (e.target === shareModal) shareModal.classList.remove('active');
+        });
+
+        // Initialize Firebase Auth & Real-Time Sync
+        initSimpleFirebase();
 
         // ── MOBILE FOREGROUND RESUME FIX ─────────────────────────────────
         // On foldable/tablet: when app comes back from background, browser
