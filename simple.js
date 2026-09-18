@@ -30,6 +30,11 @@
     let cloudSyncDebounceTimer = null;
     let sharedTeamSyncDebounceTimer = null;
 
+    // Test & diagnostic helper
+    if (typeof window !== 'undefined') {
+        window.__getSimpleState = () => ({ lineups, roster, teams, currentTeamId, clientInstanceId, currentSharedTeamId });
+    }
+
     // DOM Elements
     const teamSelect = document.getElementById('simple-team-select');
     const eventSelect = document.getElementById('simple-event-select');
@@ -125,7 +130,17 @@
         });
     }
 
-    function renderAll() {
+    function renderAll(immediate = false) {
+        if (immediate) {
+            _renderScheduled = false;
+            _renderFlags = { header: false, eventBar: false, tabs: false, cards: false, roster: false };
+            renderTeamHeader();
+            renderEventBar();
+            renderLineupTabs();
+            renderLineupCards();
+            renderRosterList();
+            return;
+        }
         scheduleRender({ header: true, eventBar: true, tabs: true, cards: true, roster: true });
     }
 
@@ -416,10 +431,44 @@
             const serverTs = (window.firebase && window.firebase.firestore && window.firebase.firestore.FieldValue)
                 ? window.firebase.firestore.FieldValue.serverTimestamp() : new Date();
             const cleanTeamName = teamObj ? (teamObj.name || 'Joukkue').replace(/^🤝\s*/, '') : 'Joukkue';
+
+            // Complete team visuals & branding metadata
+            const teamMeta = {
+                name: cleanTeamName,
+                logo: (teamObj && teamObj.logo) ? teamObj.logo : '🏑',
+                primaryColor: (teamObj && teamObj.primaryColor) ? teamObj.primaryColor : '#2563eb',
+                secondaryColor: (teamObj && teamObj.secondaryColor) ? teamObj.secondaryColor : '#1e40af',
+                mvColor: (teamObj && teamObj.mvColor) ? teamObj.mvColor : '#10b981',
+                arena: (teamObj && (teamObj.arena || teamObj.arenaName)) ? (teamObj.arena || teamObj.arenaName) : 'Kotiareena',
+                arenaName: (teamObj && (teamObj.arenaName || teamObj.arena)) ? (teamObj.arenaName || teamObj.arena) : 'Kotiareena',
+                rinkColor: (teamObj && teamObj.rinkColor) ? teamObj.rinkColor : 'black',
+                tokenStyle: (teamObj && teamObj.tokenStyle) ? teamObj.tokenStyle : 'circle',
+                showCourtLogo: (teamObj && typeof teamObj.showCourtLogo === 'boolean') ? teamObj.showCourtLogo : true,
+                courtColor: (teamObj && teamObj.courtColor) ? teamObj.courtColor : 'default'
+            };
+
+            // Mirror canonical Simple mode keys to Advanced mode keys for full cross-compatibility
+            if (lineups['yv1']) lineups['yv'] = { ...lineups['yv1'] };
+            if (lineups['av1']) lineups['av'] = { ...lineups['av1'] };
+            if (lineups['6v5_1']) {
+                lineups['6v5'] = {
+                    VP: lineups['6v5_1'].VP || '',
+                    OP: lineups['6v5_1'].OP || '',
+                    VH: lineups['6v5_1'].VH || '',
+                    KH: lineups['6v5_1'].KH || '',
+                    OH: lineups['6v5_1'].OH || '',
+                    VM: lineups['6v5_1']['6P'] || lineups['6v5_1']['VM'] || ''
+                };
+            }
+            if (lineupReserves['yv1']) lineupReserves['yv'] = [...lineupReserves['yv1']];
+            if (lineupReserves['av1']) lineupReserves['av'] = [...lineupReserves['av1']];
+            if (lineupReserves['6v5_1']) lineupReserves['6v5'] = [...lineupReserves['6v5_1']];
+
             const payload = {
                 shareId: shareId,
                 teamId: currentTeamId,
                 teamName: cleanTeamName,
+                teamMeta: teamMeta,
                 _lastModifiedBy: clientInstanceId,
                 _lastModifiedAt: Date.now(),
                 updatedAt: serverTs,
@@ -429,9 +478,9 @@
                 events: teamEvents
             };
             db.collection('shared_teams').doc(shareId).set(payload, { merge: true }).then(() => {
-                console.log(`[Simple] Shared team '${cleanTeamName}' synced to cloud (${shareId})`);
+                console.log(`[Simple][${clientInstanceId}] Shared team '${cleanTeamName}' synced to cloud (${shareId})`);
             }).catch(err => {
-                console.warn('[Simple] Share Firestore write warning:', err);
+                console.warn(`[Simple][${clientInstanceId}] Share Firestore write warning:`, err);
             });
         };
 
@@ -458,35 +507,105 @@
 
         unsubscribeSharedTeam = db.collection('shared_teams').doc(shareId).onSnapshot(doc => {
             if (!doc.exists) {
-                console.log('[Simple] Shared team doc does not exist yet on cloud.');
+                console.log(`[Simple][${clientInstanceId}] Shared team doc does not exist yet on cloud (${shareId}).`);
                 return;
             }
             const data = doc.data();
             if (!data) return;
 
+            console.log(`[Simple][${clientInstanceId}] Snapshot received for ${shareId}. DocModifiedBy: ${data._lastModifiedBy}, MyId: ${clientInstanceId}`);
+
             // Skip snapshot from this exact client instance to prevent stutter
             if (data._lastModifiedBy === clientInstanceId) {
+                console.log(`[Simple][${clientInstanceId}] Ignoring snapshot from self.`);
                 return;
             }
+            console.log(`[Simple][${clientInstanceId}] Applying remote update from ${data._lastModifiedBy}!`);
 
-            const sharedTeamName = data.teamName || 'Jaettu joukkue';
+            const meta = data.teamMeta || {};
+            const sharedTeamName = meta.name || data.teamName || 'Jaettu joukkue';
             let foundTeam = teams.find(t => t.id === 'shared_' + shareId || (t.shareId && t.shareId === shareId));
             if (!foundTeam) {
-                foundTeam = { id: 'shared_' + shareId, name: '🤝 ' + sharedTeamName, shareId: shareId };
+                foundTeam = { 
+                    id: 'shared_' + shareId, 
+                    name: '🤝 ' + sharedTeamName, 
+                    shareId: shareId,
+                    logo: meta.logo || '🏑',
+                    primaryColor: meta.primaryColor || '#2563eb',
+                    secondaryColor: meta.secondaryColor || '#1e40af',
+                    mvColor: meta.mvColor || '#10b981',
+                    arena: meta.arena || 'Kotiareena',
+                    arenaName: meta.arenaName || meta.arena || 'Kotiareena',
+                    rinkColor: meta.rinkColor || 'black',
+                    tokenStyle: meta.tokenStyle || 'circle',
+                    showCourtLogo: meta.showCourtLogo !== false
+                };
                 teams.push(foundTeam);
             } else {
                 foundTeam.name = '🤝 ' + sharedTeamName;
                 foundTeam.shareId = shareId;
+                if (meta.logo) foundTeam.logo = meta.logo;
+                if (meta.primaryColor) foundTeam.primaryColor = meta.primaryColor;
+                if (meta.secondaryColor) foundTeam.secondaryColor = meta.secondaryColor;
+                if (meta.mvColor) foundTeam.mvColor = meta.mvColor;
+                if (meta.arena || meta.arenaName) {
+                    foundTeam.arena = meta.arena || meta.arenaName;
+                    foundTeam.arenaName = meta.arenaName || meta.arena;
+                }
+                if (meta.rinkColor) foundTeam.rinkColor = meta.rinkColor;
+                if (meta.tokenStyle) foundTeam.tokenStyle = meta.tokenStyle;
+                if (typeof meta.showCourtLogo === 'boolean') foundTeam.showCourtLogo = meta.showCourtLogo;
             }
             currentTeamId = foundTeam.id;
 
             if (data.roster) roster = data.roster;
-            if (data.lineups) lineups = data.lineups;
-            if (data.reserves) lineupReserves = data.reserves;
+            if (data.lineups) {
+                lineups = data.lineups;
+                // Lineup bridging: if incoming came from Advanced mode (yv/av/6v5) and Simple keys are empty
+                if (lineups['yv'] && (!lineups['yv1'] || !Object.values(lineups['yv1']).some(Boolean))) {
+                    lineups['yv1'] = { ...lineups['yv'] };
+                }
+                if (lineups['av'] && (!lineups['av1'] || !Object.values(lineups['av1']).some(Boolean))) {
+                    lineups['av1'] = { ...lineups['av'] };
+                }
+                if (lineups['6v5'] && (!lineups['6v5_1'] || !Object.values(lineups['6v5_1']).some(Boolean))) {
+                    lineups['6v5_1'] = {
+                        VP: lineups['6v5'].VP || '',
+                        OP: lineups['6v5'].OP || '',
+                        VH: lineups['6v5'].VH || '',
+                        KH: lineups['6v5'].KH || '',
+                        OH: lineups['6v5'].OH || '',
+                        '6P': lineups['6v5']['6P'] || lineups['6v5']['VM'] || ''
+                    };
+                }
+                // Ensure all 10 canonical Simple lineups exist
+                SIMPLE_LINEUP_CONFIGS.forEach(cfg => {
+                    if (!lineups[cfg.id]) {
+                        lineups[cfg.id] = cfg.group === '6v5'
+                            ? { VP: '', OP: '', VH: '', KH: '', OH: '', '6P': '' }
+                            : { MV: '', VP: '', OP: '', VH: '', KH: '', OH: '' };
+                    }
+                });
+            }
+            if (data.reserves) {
+                lineupReserves = data.reserves;
+                if (lineupReserves['yv'] && !lineupReserves['yv1']) lineupReserves['yv1'] = [...lineupReserves['yv']];
+                if (lineupReserves['av'] && !lineupReserves['av1']) lineupReserves['av1'] = [...lineupReserves['av']];
+                if (lineupReserves['6v5'] && !lineupReserves['6v5_1']) lineupReserves['6v5_1'] = [...lineupReserves['6v5']];
+            }
             if (data.events) teamEvents = data.events;
 
+            // Apply primary color to CSS
+            if (foundTeam.primaryColor) {
+                document.documentElement.style.setProperty('--color-primary', foundTeam.primaryColor);
+                document.documentElement.style.setProperty('--team-primary-color', foundTeam.primaryColor);
+            }
+            if (foundTeam.mvColor) {
+                document.documentElement.style.setProperty('--team-mv-color', foundTeam.mvColor);
+            }
+
             saveToStorageLocalOnly();
-            renderAll();
+            renderAll(true);
             updateCloudButtonUI(true);
             showToast(`Joukkue '${sharedTeamName}' synkronoitu reaaliajassa! ⚡`);
         }, err => {
@@ -573,7 +692,7 @@
             }
 
             loadState();
-            renderAll();
+            renderAll(true);
             updateCloudButtonUI(true);
             setTimeout(() => { isCloudLoading = false; }, 300);
         }, (err) => {
@@ -650,6 +769,8 @@
         const teamName = (curTeam.name || 'Joukkue').replace(/^🤝\s*/, '');
         const shareId = getShareIdForCurrentTeam();
         pushSharedTeamToCloud(shareId, curTeam);
+        // Start listening immediately so Coach A receives changes made by Coach B live!
+        listenToSharedTeamFirestore(shareId);
 
         const baseUrl = window.location.origin + window.location.pathname.replace(/[^\/]*$/, '');
         const simpleUrl = `${baseUrl}simple.html?teamShare=${shareId}&role=coach`;
@@ -790,12 +911,18 @@
     }
 
     function checkUrlSharing() {
-        if (typeof window === 'undefined' || !window.location.search) return;
-        const params = new URLSearchParams(window.location.search);
-        const teamShareId = params.get('teamShare');
+        if (typeof window === 'undefined') return;
+        const params = (window.location && window.location.search) ? new URLSearchParams(window.location.search) : null;
+        const teamShareId = params ? params.get('teamShare') : null;
         if (teamShareId) {
             currentSharedTeamId = teamShareId;
             listenToSharedTeamFirestore(teamShareId);
+        } else {
+            const curTeam = teams.find(t => t.id === currentTeamId);
+            if (curTeam && curTeam.shareId) {
+                currentSharedTeamId = curTeam.shareId;
+                listenToSharedTeamFirestore(curTeam.shareId);
+            }
         }
     }
 
@@ -864,6 +991,169 @@
         }
     }
 
+    function openTeamCustomizeModal() {
+        if (!modalEl || !modalBody || !modalTitle) return;
+        const curTeam = teams.find(t => t.id === currentTeamId) || teams[0];
+        if (!curTeam) return;
+
+        modalTitle.textContent = 'Joukkueen ilme & kustomointi';
+
+        let tempLogo = curTeam.logo || '🏑';
+        let tempPrimaryColor = curTeam.primaryColor || '#2563eb';
+        let tempMvColor = curTeam.mvColor || '#10b981';
+
+        const emojiPresets = ['🏑', '🦁', '⚡', '🦅', '🐻', '🐺', '🦈', '👑', '🔥', '⚔️', '🦉', '🐯'];
+        const colorPresets = [
+            { name: 'Sininen', hex: '#2563eb' },
+            { name: 'Punainen', hex: '#dc2626' },
+            { name: 'Vihreä', hex: '#16a34a' },
+            { name: 'Oranssi', hex: '#ea580c' },
+            { name: 'Violetti', hex: '#7c3aed' },
+            { name: 'Musta/Tumma', hex: '#1e293b' },
+            { name: 'Kulta', hex: '#d97706' },
+            { name: 'Navy', hex: '#1e3a8a' }
+        ];
+
+        modalBody.innerHTML = `
+            <div style="display: flex; flex-direction: column; gap: 14px;">
+                <div>
+                    <label style="display: block; font-size: 0.78rem; font-weight: 700; color: #94a3b8; margin-bottom: 4px;">Joukkueen nimi</label>
+                    <input type="text" id="cust-simple-team-name" value="${escapeHtml((curTeam.name || '').replace(/^🤝\s*/, ''))}" style="width: 100%; background: #0b1120; border: 1px solid var(--border-color); border-radius: 6px; padding: 8px 10px; color: #fff; font-size: 0.9rem; font-weight: 600;">
+                </div>
+
+                <div>
+                    <label style="display: block; font-size: 0.78rem; font-weight: 700; color: #94a3b8; margin-bottom: 6px;">Joukkueen logo / tunnus</label>
+                    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 10px;">
+                        <div id="cust-simple-logo-preview" style="width: 52px; height: 52px; border-radius: 10px; background: #0b1120; border: 2px solid var(--color-primary); display: flex; align-items: center; justify-content: center; font-size: 1.8rem; overflow: hidden; flex-shrink: 0;">
+                            ${(tempLogo.startsWith('data:') || tempLogo.startsWith('http')) ? `<img src="${tempLogo}" style="width:100%;height:100%;object-fit:cover;">` : tempLogo}
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 6px; flex: 1;">
+                            <button type="button" class="btn-tool primary" id="btn-cust-simple-upload" style="padding: 6px 12px; font-size: 0.8rem;">📁 Lataa joukkueen kuva...</button>
+                            <input type="file" id="cust-simple-file-input" accept="image/*" style="display: none;">
+                            <button type="button" class="btn-tool" id="btn-cust-simple-reset-logo" style="padding: 4px 8px; font-size: 0.72rem; background: rgba(255,255,255,0.06);">Palauta peruslogo</button>
+                        </div>
+                    </div>
+                    <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+                        ${emojiPresets.map(em => `<button type="button" class="cust-emoji-btn" data-emoji="${em}" style="width: 34px; height: 34px; border-radius: 6px; background: #0b1120; border: 1px solid var(--border-color); font-size: 1.15rem; cursor: pointer; display: flex; align-items: center; justify-content: center;">${em}</button>`).join('')}
+                    </div>
+                </div>
+
+                <div>
+                    <label style="display: block; font-size: 0.78rem; font-weight: 700; color: #94a3b8; margin-bottom: 6px;">Pelipaidan pääväri</label>
+                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                        <input type="color" id="cust-simple-primary-color" value="${tempPrimaryColor}" style="width: 40px; height: 34px; border: none; border-radius: 6px; cursor: pointer; background: none;">
+                        <span id="cust-simple-color-label" style="font-family: monospace; font-size: 0.85rem; color: #fff;">${tempPrimaryColor}</span>
+                    </div>
+                    <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+                        ${colorPresets.map(c => `<button type="button" class="cust-color-swatch" data-color="${c.hex}" style="width: 28px; height: 28px; border-radius: 50%; background: ${c.hex}; border: 2px solid ${c.hex === tempPrimaryColor ? '#fff' : 'transparent'}; cursor: pointer;" title="${c.name}"></button>`).join('')}
+                    </div>
+                </div>
+
+                <div>
+                    <label style="display: block; font-size: 0.78rem; font-weight: 700; color: #94a3b8; margin-bottom: 4px;">Kotiareena / Halli</label>
+                    <input type="text" id="cust-simple-arena" value="${escapeHtml(curTeam.arena || curTeam.arenaName || 'Kotiareena')}" placeholder="esim. Kotiareena, Kupittaa" style="width: 100%; background: #0b1120; border: 1px solid var(--border-color); border-radius: 6px; padding: 8px 10px; color: #fff; font-size: 0.85rem;">
+                </div>
+
+                <div style="display: flex; gap: 8px; margin-top: 6px;">
+                    <button class="btn-tool primary" id="btn-cust-simple-save" style="flex: 1; padding: 10px; font-size: 0.9rem;">💾 Tallenna muutokset</button>
+                    <button class="btn-tool" id="btn-cust-simple-cancel" style="padding: 10px 14px; font-size: 0.85rem;">Peruuta</button>
+                </div>
+            </div>
+        `;
+
+        const previewEl = document.getElementById('cust-simple-logo-preview');
+        const colorInput = document.getElementById('cust-simple-primary-color');
+        const colorLabel = document.getElementById('cust-simple-color-label');
+        const fileInput = document.getElementById('cust-simple-file-input');
+
+        document.querySelectorAll('.cust-emoji-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                tempLogo = btn.dataset.emoji;
+                if (previewEl) previewEl.innerHTML = tempLogo;
+            });
+        });
+
+        document.getElementById('btn-cust-simple-upload')?.addEventListener('click', () => {
+            fileInput?.click();
+        });
+
+        fileInput?.addEventListener('change', (e) => {
+            const file = e.target.files?.[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (evt) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        const size = 200;
+                        canvas.width = size;
+                        canvas.height = size;
+                        const ctx = canvas.getContext('2d');
+                        const minDim = Math.min(img.width, img.height);
+                        const sx = (img.width - minDim) / 2;
+                        const sy = (img.height - minDim) / 2;
+                        ctx.drawImage(img, sx, sy, minDim, minDim, 0, 0, size, size);
+                        tempLogo = canvas.toDataURL('image/jpeg', 0.85);
+                        if (previewEl) previewEl.innerHTML = `<img src="${tempLogo}" style="width:100%;height:100%;object-fit:cover;">`;
+                    };
+                    img.src = evt.target.result;
+                };
+                reader.readAsDataURL(file);
+                e.target.value = '';
+            }
+        });
+
+        document.getElementById('btn-cust-simple-reset-logo')?.addEventListener('click', () => {
+            tempLogo = '🏑';
+            if (previewEl) previewEl.innerHTML = tempLogo;
+        });
+
+        colorInput?.addEventListener('input', (e) => {
+            tempPrimaryColor = e.target.value;
+            if (colorLabel) colorLabel.textContent = tempPrimaryColor;
+            if (previewEl) previewEl.style.borderColor = tempPrimaryColor;
+        });
+
+        document.querySelectorAll('.cust-color-swatch').forEach(btn => {
+            btn.addEventListener('click', () => {
+                tempPrimaryColor = btn.dataset.color;
+                if (colorInput) colorInput.value = tempPrimaryColor;
+                if (colorLabel) colorLabel.textContent = tempPrimaryColor;
+                if (previewEl) previewEl.style.borderColor = tempPrimaryColor;
+                document.querySelectorAll('.cust-color-swatch').forEach(b => {
+                    b.style.borderColor = (b.dataset.color === tempPrimaryColor) ? '#fff' : 'transparent';
+                });
+            });
+        });
+
+        document.getElementById('btn-cust-simple-cancel')?.addEventListener('click', () => {
+            modalEl.classList.remove('active');
+        });
+
+        document.getElementById('btn-cust-simple-save')?.addEventListener('click', () => {
+            const nameInput = document.getElementById('cust-simple-team-name');
+            const arenaInput = document.getElementById('cust-simple-arena');
+            const newName = nameInput ? nameInput.value.trim() : '';
+            if (newName) {
+                const prefix = curTeam.name.startsWith('🤝') ? '🤝 ' : '';
+                curTeam.name = prefix + newName;
+            }
+            curTeam.logo = tempLogo;
+            curTeam.primaryColor = tempPrimaryColor;
+            if (arenaInput) {
+                curTeam.arena = arenaInput.value.trim() || 'Kotiareena';
+                curTeam.arenaName = curTeam.arena;
+            }
+
+            saveState();
+            renderAll();
+            modalEl.classList.remove('active');
+            showToast('Joukkueen ilme ja värit päivitetty! 🎨');
+        });
+
+        modalEl.classList.add('active');
+    }
+
     function renderTeamHeader() {
         if (!teamSelect) return;
         teamSelect.innerHTML = '';
@@ -891,12 +1181,27 @@
         teamSelect.appendChild(addOpt);
 
         const curTeam = teams.find(t => t.id === currentTeamId) || teams[0];
+        if (curTeam) {
+            if (curTeam.primaryColor) {
+                document.documentElement.style.setProperty('--color-primary', curTeam.primaryColor);
+                document.documentElement.style.setProperty('--team-primary-color', curTeam.primaryColor);
+            }
+            if (curTeam.mvColor) {
+                document.documentElement.style.setProperty('--team-mv-color', curTeam.mvColor);
+            }
+        }
         if (teamLogoBadge) {
+            teamLogoBadge.style.cursor = 'pointer';
+            teamLogoBadge.title = 'Muokkaa joukkueen ilmettä ja värejä 🎨';
             const isBase64 = (curTeam.logo && (curTeam.logo.startsWith('data:') || curTeam.logo.startsWith('http')));
             if (isBase64) {
                 teamLogoBadge.innerHTML = `<img src="${curTeam.logo}" alt="Logo" style="width: 100%; height: 100%; object-fit: cover; border-radius: 6px;">`;
             } else {
                 teamLogoBadge.textContent = curTeam.logo || '🏑';
+            }
+            if (!teamLogoBadge._hasCustListener) {
+                teamLogoBadge._hasCustListener = true;
+                teamLogoBadge.addEventListener('click', openTeamCustomizeModal);
             }
         }
     }
@@ -1074,11 +1379,15 @@
 
                 if (player) {
                     let badgeDot = att.status === 'in' ? '🟢' : att.status === 'out' ? '🔴' : att.status === 'maybe' ? '🟡' : '⚪';
+                    const photoHtml = player.photo 
+                        ? `<div class="slot-photo-thumb" style="width: 22px; height: 22px; border-radius: 50%; background-image: url('${player.photo}'); background-size: cover; background-position: center; flex-shrink: 0; margin-right: 5px; border: 1px solid rgba(255,255,255,0.25);"></div>` 
+                        : '';
 
                     slotsHtml += `
                         <div class="slot-item" data-lineup="${cfg.id}" data-pos="${pos}">
                             <div class="slot-left">
                                 <span class="pos-tag ${posClass}">${pos}</span>
+                                ${photoHtml}
                                 <div class="slot-player-name" title="${escapeHtml(player.name)}">#${player.number} ${escapeHtml(player.name)}</div>
                             </div>
                             <div class="slot-right">
@@ -1200,6 +1509,168 @@
         });
     }
 
+    function openPlayerEditModal(player) {
+        if (!modalEl || !modalBody || !modalTitle) return;
+        const isNew = !player;
+        const pData = player ? { ...player } : { id: 'p_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4), name: '', number: '', position: 'H', photo: '' };
+        
+        modalTitle.textContent = isNew ? 'Lisää uusi pelaaja' : `Muokkaa pelaajaa #${pData.number ?? ''} ${pData.name || ''}`;
+
+        let tempPhoto = pData.photo || '';
+        let activePos = (pData.position || 'H').toUpperCase();
+
+        const posList = ['VH', 'KH', 'OH', 'VP', 'OP', 'MV', 'H'];
+
+        modalBody.innerHTML = `
+            <div style="display: flex; flex-direction: column; gap: 12px;">
+                <div style="display: flex; gap: 10px;">
+                    <div style="flex: 2;">
+                        <label style="display: block; font-size: 0.78rem; font-weight: 700; color: #94a3b8; margin-bottom: 4px;">Pelaajan nimi</label>
+                        <input type="text" id="cust-player-name" value="${escapeHtml(pData.name || '')}" placeholder="esim. Matti Meikäläinen" style="width: 100%; background: #0b1120; border: 1px solid var(--border-color); border-radius: 6px; padding: 8px 10px; color: #fff; font-size: 0.9rem;">
+                    </div>
+                    <div style="flex: 1;">
+                        <label style="display: block; font-size: 0.78rem; font-weight: 700; color: #94a3b8; margin-bottom: 4px;">Numero</label>
+                        <input type="number" id="cust-player-num" value="${pData.number !== undefined ? pData.number : ''}" placeholder="19" style="width: 100%; background: #0b1120; border: 1px solid var(--border-color); border-radius: 6px; padding: 8px 10px; color: #fff; font-size: 0.9rem;">
+                    </div>
+                </div>
+
+                <div>
+                    <label style="display: block; font-size: 0.78rem; font-weight: 700; color: #94a3b8; margin-bottom: 6px;">Pelipaikka</label>
+                    <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+                        ${posList.map(pos => `<button type="button" class="cust-pos-btn ${pos === activePos ? 'active' : ''}" data-pos="${pos}" style="padding: 6px 12px; border-radius: 6px; background: ${pos === activePos ? 'var(--color-primary)' : '#0b1120'}; color: #fff; border: 1px solid var(--border-color); font-weight: 700; font-size: 0.82rem; cursor: pointer;">${pos}</button>`).join('')}
+                    </div>
+                </div>
+
+                <div>
+                    <label style="display: block; font-size: 0.78rem; font-weight: 700; color: #94a3b8; margin-bottom: 6px;">Pelaajan kuva</label>
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <div id="cust-player-photo-preview" style="width: 48px; height: 48px; border-radius: 50%; background: #0b1120; border: 1px solid var(--border-color); display: flex; align-items: center; justify-content: center; font-size: 1.5rem; overflow: hidden; flex-shrink: 0; background-size: cover; background-position: center; ${tempPhoto ? `background-image: url('${tempPhoto}');` : ''}">
+                            ${!tempPhoto ? '👤' : ''}
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 6px; flex: 1;">
+                            <button type="button" class="btn-tool primary" id="btn-cust-photo-upload" style="padding: 6px 12px; font-size: 0.8rem;">📷 Valitse kuva...</button>
+                            <input type="file" id="cust-player-file-input" accept="image/*" style="display: none;">
+                            <button type="button" class="btn-tool" id="btn-cust-photo-remove" style="padding: 4px 8px; font-size: 0.72rem; background: rgba(255,255,255,0.06); ${!tempPhoto ? 'display:none;' : ''}">Poista kuva</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 8px; margin-top: 10px;">
+                    <button class="btn-tool primary" id="btn-cust-player-save" style="flex: 1; padding: 10px; font-size: 0.9rem;">💾 Tallenna</button>
+                    ${!isNew ? '<button class="btn-tool" id="btn-cust-player-delete" style="padding: 10px 12px; font-size: 0.85rem; background: rgba(239,68,68,0.15); color: #ef4444; border: 1px solid rgba(239,68,68,0.3);">🗑️ Poista</button>' : ''}
+                    <button class="btn-tool" id="btn-cust-player-cancel" style="padding: 10px 12px; font-size: 0.85rem;">Peruuta</button>
+                </div>
+            </div>
+        `;
+
+        const photoPreview = document.getElementById('cust-player-photo-preview');
+        const fileInput = document.getElementById('cust-player-file-input');
+        const removePhotoBtn = document.getElementById('btn-cust-photo-remove');
+
+        document.querySelectorAll('.cust-pos-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                activePos = btn.dataset.pos;
+                document.querySelectorAll('.cust-pos-btn').forEach(b => {
+                    b.style.background = (b.dataset.pos === activePos) ? 'var(--color-primary)' : '#0b1120';
+                });
+            });
+        });
+
+        document.getElementById('btn-cust-photo-upload')?.addEventListener('click', () => {
+            fileInput?.click();
+        });
+
+        fileInput?.addEventListener('change', (e) => {
+            const file = e.target.files?.[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (evt) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        const size = 160;
+                        canvas.width = size;
+                        canvas.height = size;
+                        const ctx = canvas.getContext('2d');
+                        const minDim = Math.min(img.width, img.height);
+                        const sx = (img.width - minDim) / 2;
+                        const sy = (img.height - minDim) / 2;
+                        ctx.drawImage(img, sx, sy, minDim, minDim, 0, 0, size, size);
+                        tempPhoto = canvas.toDataURL('image/jpeg', 0.85);
+                        if (photoPreview) {
+                            photoPreview.style.backgroundImage = `url('${tempPhoto}')`;
+                            photoPreview.textContent = '';
+                        }
+                        if (removePhotoBtn) removePhotoBtn.style.display = 'block';
+                    };
+                    img.src = evt.target.result;
+                };
+                reader.readAsDataURL(file);
+                e.target.value = '';
+            }
+        });
+
+        removePhotoBtn?.addEventListener('click', () => {
+            tempPhoto = '';
+            if (photoPreview) {
+                photoPreview.style.backgroundImage = 'none';
+                photoPreview.textContent = '👤';
+            }
+            if (removePhotoBtn) removePhotoBtn.style.display = 'none';
+        });
+
+        document.getElementById('btn-cust-player-cancel')?.addEventListener('click', () => {
+            modalEl.classList.remove('active');
+        });
+
+        document.getElementById('btn-cust-player-delete')?.addEventListener('click', () => {
+            if (confirm(`Poistetaanko pelaaja ${pData.name} ringistä?`)) {
+                roster = roster.filter(p => p.id !== pData.id);
+                Object.keys(lineups).forEach(k => {
+                    Object.keys(lineups[k] || {}).forEach(pos => {
+                        if (lineups[k][pos] === pData.id) lineups[k][pos] = '';
+                    });
+                });
+                saveState();
+                renderAll();
+                modalEl.classList.remove('active');
+                showToast(`Pelaaja ${pData.name} poistettu!`);
+            }
+        });
+
+        document.getElementById('btn-cust-player-save')?.addEventListener('click', () => {
+            const nameInput = document.getElementById('cust-player-name');
+            const numInput = document.getElementById('cust-player-num');
+            const name = nameInput ? nameInput.value.trim() : '';
+            const num = numInput ? parseInt(numInput.value, 10) : 0;
+
+            if (!name) {
+                showToast('Syötä pelaajan nimi.');
+                return;
+            }
+
+            pData.name = name;
+            pData.number = isNaN(num) ? 0 : num;
+            pData.position = activePos;
+            pData.photo = tempPhoto;
+
+            if (isNew) {
+                roster.push(pData);
+                showToast(`Pelaaja #${pData.number} ${pData.name} lisätty! 🎉`);
+            } else {
+                const idx = roster.findIndex(p => p.id === pData.id);
+                if (idx >= 0) roster[idx] = pData;
+                showToast(`Pelaajan tiedot tallennettu! 👍`);
+            }
+
+            saveState();
+            renderAll();
+            modalEl.classList.remove('active');
+        });
+
+        modalEl.classList.add('active');
+    }
+
     function renderRosterList() {
         if (!rosterListContainer) return;
         rosterListContainer.innerHTML = '';
@@ -1266,8 +1737,13 @@
                 assignHtml = `<div class="player-assigned-badges">${pAssigns.map(a => `<span class="player-assigned-badge">${escapeHtml(a)}</span>`).join('')}</div>`;
             }
 
+            const photoHtml = player.photo 
+                ? `<div class="roster-photo-thumb" style="width: 28px; height: 28px; border-radius: 50%; background-image: url('${player.photo}'); background-size: cover; background-position: center; flex-shrink: 0; border: 1px solid rgba(255,255,255,0.25);"></div>` 
+                : '';
+
             row.innerHTML = `
-                <div class="player-row-left">
+                <div class="player-row-left" data-action="edit-player" data-player-id="${player.id}" style="cursor: pointer;" title="Klikkaa muokataksesi pelaajaa tai kuvaa">
+                    ${photoHtml}
                     <span class="player-num">#${player.number}</span>
                     <span class="player-name-text">${escapeHtml(player.name)}</span>
                     <span class="player-pos-badge">${player.position || 'H'}</span>
@@ -1278,6 +1754,11 @@
                     <button class="btn-assign-quick" data-action="assign-player" data-player-id="${player.id}">+ Sijoita</button>
                 </div>
             `;
+
+            // Click left side to edit player
+            row.querySelector('.player-row-left')?.addEventListener('click', () => {
+                openPlayerEditModal(player);
+            });
 
             // Toggle attendance status on click
             row.querySelector('[data-action="toggle-status"]').addEventListener('click', () => {
@@ -2124,6 +2605,9 @@
             const selectedTeam = teams.find(t => t.id === currentTeamId);
             if (selectedTeam && selectedTeam.shareId) {
                 listenToSharedTeamFirestore(selectedTeam.shareId);
+            } else if (unsubscribeSharedTeam) {
+                unsubscribeSharedTeam();
+                unsubscribeSharedTeam = null;
             }
             showToast('Joukkue vaihdettu: ' + (selectedTeam?.name || ''));
         });
@@ -2202,23 +2686,7 @@
 
         // Add Player to Roster
         document.getElementById('btn-simple-add-player')?.addEventListener('click', () => {
-            const name = prompt('Pelaajan nimi:');
-            if (!name || !name.trim()) return;
-            const numStr = prompt('Pelinumero (esim. 19):', '');
-            const num = numStr ? parseInt(numStr.replace(/[^0-9]/g, ''), 10) : 0;
-            const pos = prompt('Pelipaikka (VH, KH, OH, VP, OP, MV tai H):', 'H') || 'H';
-            const cleanPos = pos.trim().toUpperCase();
-
-            const newP = {
-                id: 'p_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
-                name: name.trim(),
-                number: isNaN(num) ? 0 : num,
-                position: cleanPos
-            };
-            roster.push(newP);
-            saveState();
-            renderAll();
-            showToast(`Pelaaja #${newP.number} ${newP.name} lisätty! 🎉`);
+            openPlayerEditModal(null);
         });
 
         // Initialize Firebase Auth & Real-Time Sync

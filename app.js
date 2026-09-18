@@ -434,6 +434,8 @@
         if (viewerInput) viewerInput.value = viewerUrl;
 
         pushSharedTeamToCloud(shareId, curTeam);
+        // Start listening immediately so changes from other coaches arrive live!
+        listenToSharedTeamFirestore(shareId);
 
         document.getElementById('share-modal')?.classList.add('active');
     }
@@ -447,10 +449,45 @@
             if (!db) return;
             const serverTs = (window.firebase && window.firebase.firestore && window.firebase.firestore.FieldValue) ? window.firebase.firestore.FieldValue.serverTimestamp() : new Date();
             const cleanTeamName = teamObj ? (teamObj.name || 'Joukkue').replace(/^🤝\s*/, '') : 'Joukkue';
+
+            // Complete team visuals & branding metadata
+            const teamMeta = {
+                name: cleanTeamName,
+                logo: (teamObj && teamObj.logo) ? teamObj.logo : '🦁',
+                primaryColor: (teamObj && teamObj.primaryColor) ? teamObj.primaryColor : '#2563eb',
+                secondaryColor: (teamObj && teamObj.secondaryColor) ? teamObj.secondaryColor : '#1e40af',
+                mvColor: (teamObj && teamObj.mvColor) ? teamObj.mvColor : '#10b981',
+                arena: (teamObj && (teamObj.arenaName || teamObj.arena)) ? (teamObj.arenaName || teamObj.arena) : 'Kotiareena',
+                arenaName: (teamObj && (teamObj.arenaName || teamObj.arena)) ? (teamObj.arenaName || teamObj.arena) : 'Kotiareena',
+                rinkColor: (teamObj && teamObj.rinkColor) ? teamObj.rinkColor : 'black',
+                tokenStyle: (teamObj && teamObj.tokenStyle) ? teamObj.tokenStyle : 'circle',
+                showCourtLogo: (teamObj && typeof teamObj.showCourtLogo === 'boolean') ? teamObj.showCourtLogo : true,
+                courtColor: (typeof courtColor !== 'undefined') ? courtColor : 'default',
+                matchInfo: (teamObj && teamObj.matchInfo) ? teamObj.matchInfo : null
+            };
+
+            // Mirror Simple mode keys for lineup compatibility
+            if (lineups['yv']) lineups['yv1'] = { ...lineups['yv'] };
+            if (lineups['av']) lineups['av1'] = { ...lineups['av'] };
+            if (lineups['6v5']) {
+                lineups['6v5_1'] = {
+                    VP: lineups['6v5'].VP || '',
+                    OP: lineups['6v5'].OP || '',
+                    VH: lineups['6v5'].VH || '',
+                    KH: lineups['6v5'].KH || '',
+                    OH: lineups['6v5'].OH || '',
+                    '6P': lineups['6v5']['VM'] || lineups['6v5']['6P'] || ''
+                };
+            }
+            if (lineupReserves['yv']) lineupReserves['yv1'] = [...lineupReserves['yv']];
+            if (lineupReserves['av']) lineupReserves['av1'] = [...lineupReserves['av']];
+            if (lineupReserves['6v5']) lineupReserves['6v5_1'] = [...lineupReserves['6v5']];
+
             const payload = {
                 shareId: shareId,
                 teamId: currentTeamId,
                 teamName: cleanTeamName,
+                teamMeta: teamMeta,
                 _lastModifiedBy: clientInstanceId,
                 _lastModifiedAt: Date.now(),
                 updatedAt: serverTs,
@@ -484,10 +521,10 @@
     }
 
     function checkUrlSharing() {
-        if (typeof window === 'undefined' || !window.location.search) return;
-        const params = new URLSearchParams(window.location.search);
-        const teamShareId = params.get('teamShare');
-        const role = params.get('role') || 'coach';
+        if (typeof window === 'undefined') return;
+        const params = (window.location && window.location.search) ? new URLSearchParams(window.location.search) : null;
+        const teamShareId = params ? params.get('teamShare') : null;
+        const role = params ? (params.get('role') || 'coach') : 'coach';
 
         if (teamShareId) {
             currentSharedTeamId = teamShareId;
@@ -500,6 +537,12 @@
             }
 
             listenToSharedTeamFirestore(teamShareId);
+        } else {
+            const curTeam = teams.find(t => t.id === currentTeamId);
+            if (curTeam && curTeam.shareId) {
+                currentSharedTeamId = curTeam.shareId;
+                listenToSharedTeamFirestore(curTeam.shareId);
+            }
         }
     }
 
@@ -529,21 +572,74 @@
                 return;
             }
 
-            const sharedTeamName = data.teamName || 'Jaettu joukkue';
+            const meta = data.teamMeta || {};
+            const sharedTeamName = meta.name || data.teamName || 'Jaettu joukkue';
             let foundTeam = teams.find(t => t.id === 'shared_' + shareId || (t.shareId && t.shareId === shareId));
             if (!foundTeam) {
-                foundTeam = { id: 'shared_' + shareId, name: '🤝 ' + sharedTeamName, shareId: shareId };
+                foundTeam = { 
+                    id: 'shared_' + shareId, 
+                    name: '🤝 ' + sharedTeamName, 
+                    shareId: shareId,
+                    logo: meta.logo || '🦁',
+                    primaryColor: meta.primaryColor || '#2563eb',
+                    secondaryColor: meta.secondaryColor || '#1e40af',
+                    mvColor: meta.mvColor || '#10b981',
+                    arenaName: meta.arenaName || meta.arena || 'Kotiareena',
+                    arena: meta.arena || meta.arenaName || 'Kotiareena',
+                    tokenStyle: meta.tokenStyle || 'circle',
+                    rinkColor: meta.rinkColor || 'black',
+                    showCourtLogo: meta.showCourtLogo !== false,
+                    courtColor: meta.courtColor || courtColor || 'default',
+                    matchInfo: meta.matchInfo || { opponent: '', time: '', meta: '', showBanner: false }
+                };
                 teams.push(foundTeam);
             } else {
                 foundTeam.name = '🤝 ' + sharedTeamName;
                 foundTeam.shareId = shareId;
+                if (meta.logo) foundTeam.logo = meta.logo;
+                if (meta.primaryColor) foundTeam.primaryColor = meta.primaryColor;
+                if (meta.secondaryColor) foundTeam.secondaryColor = meta.secondaryColor;
+                if (meta.mvColor) foundTeam.mvColor = meta.mvColor;
+                if (meta.arenaName || meta.arena) {
+                    foundTeam.arenaName = meta.arenaName || meta.arena;
+                    foundTeam.arena = foundTeam.arenaName;
+                }
+                if (meta.tokenStyle) foundTeam.tokenStyle = meta.tokenStyle;
+                if (meta.rinkColor) foundTeam.rinkColor = meta.rinkColor;
+                if (typeof meta.showCourtLogo === 'boolean') foundTeam.showCourtLogo = meta.showCourtLogo;
+                if (meta.courtColor) courtColor = meta.courtColor;
+                if (meta.matchInfo) foundTeam.matchInfo = meta.matchInfo;
             }
             currentTeamId = foundTeam.id;
 
             if (data.roster) roster = data.roster;
             if (data.lineupConfigs) lineupConfigs = data.lineupConfigs;
-            if (data.lineups) lineups = data.lineups;
-            if (data.reserves) lineupReserves = data.reserves;
+            if (data.lineups) {
+                lineups = data.lineups;
+                // Lineup bridging: if incoming came from Simple mode (yv1/av1/6v5_1) and Advanced keys are empty
+                if (lineups['yv1'] && (!lineups['yv'] || !Object.values(lineups['yv']).some(Boolean))) {
+                    lineups['yv'] = { ...lineups['yv1'] };
+                }
+                if (lineups['av1'] && (!lineups['av'] || !Object.values(lineups['av']).some(Boolean))) {
+                    lineups['av'] = { ...lineups['av1'] };
+                }
+                if (lineups['6v5_1'] && (!lineups['6v5'] || !Object.values(lineups['6v5']).some(Boolean))) {
+                    lineups['6v5'] = {
+                        VP: lineups['6v5_1'].VP || '',
+                        OP: lineups['6v5_1'].OP || '',
+                        VH: lineups['6v5_1'].VH || '',
+                        KH: lineups['6v5_1'].KH || '',
+                        OH: lineups['6v5_1'].OH || '',
+                        VM: lineups['6v5_1']['6P'] || lineups['6v5_1']['VM'] || ''
+                    };
+                }
+            }
+            if (data.reserves) {
+                lineupReserves = data.reserves;
+                if (lineupReserves['yv1'] && !lineupReserves['yv']) lineupReserves['yv'] = [...lineupReserves['yv1']];
+                if (lineupReserves['av1'] && !lineupReserves['av']) lineupReserves['av'] = [...lineupReserves['av1']];
+                if (lineupReserves['6v5_1'] && !lineupReserves['6v5']) lineupReserves['6v5'] = [...lineupReserves['6v5_1']];
+            }
             if (data.drawings) lineupDrawings = sanitizeDrawings(data.drawings);
             if (data.positions) lineupCourtPositions = data.positions;
             if (data.balls) lineupBalls = data.balls;
@@ -557,6 +653,7 @@
 
             saveStateLocalOnly();
 
+            applyThemeAndSettings();
             renderTeamDropdown();
             renderTabs();
             renderTacticalPageBadges();
@@ -1652,6 +1749,15 @@
             renderActiveLineupSlots();
             renderCourtBoards();
         }
+
+        const activeTeam = teams.find(t => t.id === currentTeamId);
+        if (activeTeam && activeTeam.shareId) {
+            listenToSharedTeamFirestore(activeTeam.shareId);
+        } else if (unsubscribeSharedTeam) {
+            unsubscribeSharedTeam();
+            unsubscribeSharedTeam = null;
+        }
+
         showToast(`Joukkue vaihdettu: ${teams.find(t => t.id === currentTeamId)?.name || ''}`);
     }
 
@@ -8938,8 +9044,21 @@
             if (file) {
                 const reader = new FileReader();
                 reader.onload = (evt) => {
-                    tempTeamLogo = evt.target.result;
-                    updateLogoPreviewDisplay();
+                    const img = new Image();
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        const size = 256;
+                        canvas.width = size;
+                        canvas.height = size;
+                        const ctx = canvas.getContext('2d');
+                        const minDim = Math.min(img.width, img.height);
+                        const sx = (img.width - minDim) / 2;
+                        const sy = (img.height - minDim) / 2;
+                        ctx.drawImage(img, sx, sy, minDim, minDim, 0, 0, size, size);
+                        tempTeamLogo = canvas.toDataURL('image/jpeg', 0.85);
+                        updateLogoPreviewDisplay();
+                    };
+                    img.src = evt.target.result;
                 };
                 reader.readAsDataURL(file);
                 e.target.value = '';
