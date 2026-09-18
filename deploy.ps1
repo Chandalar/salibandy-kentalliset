@@ -4,7 +4,7 @@ Write-Host "Aloitetaan paivitysten julkaisu osoitteeseen https://kokoonpano.web.
 
 # 1. Tallenna ja tyonna GitHubiin (main & gh-pages)
 git add .
-git commit -m "Korjattu Google-kirjautuminen ja pilvisynkronointi reaaliajassa (v55.0)"
+git commit -m "Korjattu joukkueen jakolinkki ja pysyvat jakotunnisteet (v56.0)"
 git push origin main
 git checkout gh-pages
 git merge main
@@ -13,8 +13,8 @@ git checkout main
 
 Write-Host "GitHub Pages paivitetty!" -ForegroundColor Green
 
-# 2. Julkaise Firebase Hostingiin (kokoonpano.web.app)
+# 2. Julkaise Firebaseen (kokoonpano.web.app & Firestore rules)
 Write-Host "Julkaistaan osoitteeseen https://kokoonpano.web.app ..." -ForegroundColor Yellow
-npx --yes firebase-tools deploy --only hosting
+npx --yes firebase-tools deploy --only hosting,firestore:rules
 
 Write-Host "Valmis! Sovellus julkaistu osoitteessa https://kokoonpano.web.app !" -ForegroundColor Green

@@ -18,7 +18,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
 
     <!-- Stylesheet -->
-    <link rel="stylesheet" href="simple.css?v=53.0">
+    <link rel="stylesheet" href="simple.css?v=56.0">
 
     <script>
     (function() {
@@ -80,8 +80,9 @@
 
         <!-- LIVE ROSTER BANK -->
         <div class="roster-card">
-            <div class="roster-card-header">
+            <div class="roster-card-header" style="display: flex; justify-content: space-between; align-items: center;">
                 <div class="roster-title">👥 Pelaajat & Live-status</div>
+                <button class="btn-header highlight" id="btn-simple-add-player" style="font-size: 0.78rem; padding: 5px 10px;" title="Lisää uusi pelaaja joukkueeseen">➕ Lisää pelaaja</button>
             </div>
             <div class="player-list" id="simple-roster-list">
                 <!-- Dynamic Player Rows -->
@@ -163,9 +164,9 @@
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
-    <!-- Firebase Config & Simple Engine (v55.0) -->
-    <script src="firebase-config.js?v=55.0"></script>
-    <script src="simple.js?v=55.0"></script>
+    <!-- Firebase Config & Simple Engine (v56.0) -->
+    <script src="firebase-config.js?v=56.0"></script>
+    <script src="simple.js?v=56.0"></script>
 
 </body>
 </html>

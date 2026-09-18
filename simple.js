@@ -9,7 +9,7 @@
 
     // State
     let teams = [];
-    let currentTeamId = 'default_team';
+    let currentTeamId = null;
     let roster = [];
     let lineups = {};
     let lineupConfigs = [];
@@ -129,7 +129,7 @@
         scheduleRender({ header: true, eventBar: true, tabs: true, cards: true, roster: true });
     }
 
-    function loadState() {
+    function loadState(targetTeamId) {
         try {
             const rawTeams = localStorage.getItem('salibandy_teams_v1');
             teams = rawTeams ? JSON.parse(rawTeams) : [
@@ -152,16 +152,46 @@
                 localStorage.setItem('salibandy_teams_v1', JSON.stringify(teams));
             }
 
-            const rawActiveTeam = localStorage.getItem('salibandy_active_team_id');
-            currentTeamId = rawActiveTeam ? JSON.parse(rawActiveTeam) : teams[0].id;
+            // Check if URL has ?teamShare=
+            const urlParams = (typeof window !== 'undefined' && window.location.search) ? new URLSearchParams(window.location.search) : null;
+            const urlShareId = urlParams ? urlParams.get('teamShare') : null;
+
+            if (urlShareId) {
+                currentSharedTeamId = urlShareId;
+                const existing = teams.find(t => t.id === 'shared_' + urlShareId || (t.shareId && t.shareId === urlShareId));
+                if (existing) {
+                    currentTeamId = existing.id;
+                } else {
+                    const placeholderTeam = { id: 'shared_' + urlShareId, name: '🤝 Jaettu joukkue', shareId: urlShareId };
+                    teams.push(placeholderTeam);
+                    currentTeamId = placeholderTeam.id;
+                }
+            } else if (targetTeamId && teams.some(t => t.id === targetTeamId)) {
+                currentTeamId = targetTeamId;
+            } else {
+                const rawActiveTeam = localStorage.getItem('salibandy_active_team_id');
+                let storedId = null;
+                try { storedId = rawActiveTeam ? JSON.parse(rawActiveTeam) : null; } catch(e){}
+                if (storedId && teams.some(t => t.id === storedId)) {
+                    currentTeamId = storedId;
+                } else if (currentTeamId && teams.some(t => t.id === currentTeamId)) {
+                    // Keep in-memory
+                } else {
+                    currentTeamId = teams[0].id;
+                }
+            }
+
             if (!teams.some(t => t.id === currentTeamId) || (typeof currentTeamId === 'string' && currentTeamId.startsWith('data:'))) {
                 currentTeamId = teams[0].id;
             }
+            localStorage.setItem('salibandy_active_team_id', JSON.stringify(currentTeamId));
 
             const curTeam = teams.find(t => t.id === currentTeamId);
+            const isSektaTeam = currentTeamId === 'default_team' || currentTeamId === 'team_sekta' || (curTeam && (curTeam.name || '').toLowerCase().includes('sekta'));
+
             // Default Sekta events URL if team name matches
             if (curTeam && !curTeam.eventsUrl && !curTeam.nimenhuutoUrl) {
-                if ((curTeam.name || '').toLowerCase().includes('sekta')) {
+                if (isSektaTeam) {
                     curTeam.eventsUrl = 'https://sekta.nimenhuuto.com/events';
                     curTeam.nimenhuutoUrl = 'https://sekta.nimenhuuto.com/events';
                 }
@@ -170,40 +200,44 @@
             const rawRoster = localStorage.getItem('salibandy_roster_' + currentTeamId);
             roster = rawRoster ? JSON.parse(rawRoster) : [];
 
-            // If current team roster is empty, try default_team or team_sekta or fallback to DEFAULT_ROSTER
+            // ONLY provide default SekTa roster if current team is SekTa and roster is empty!
             if (!roster || roster.length === 0) {
-                const altRoster1 = localStorage.getItem('salibandy_roster_default_team');
-                const altRoster2 = localStorage.getItem('salibandy_roster_team_sekta');
-                if (altRoster1 && JSON.parse(altRoster1).length > 0) {
-                    roster = JSON.parse(altRoster1);
-                } else if (altRoster2 && JSON.parse(altRoster2).length > 0) {
-                    roster = JSON.parse(altRoster2);
+                if (isSektaTeam) {
+                    const altRoster1 = localStorage.getItem('salibandy_roster_default_team');
+                    const altRoster2 = localStorage.getItem('salibandy_roster_team_sekta');
+                    if (altRoster1 && JSON.parse(altRoster1).length > 0) {
+                        roster = JSON.parse(altRoster1);
+                    } else if (altRoster2 && JSON.parse(altRoster2).length > 0) {
+                        roster = JSON.parse(altRoster2);
+                    } else {
+                        roster = [
+                            { id: 'p_mv23', name: 'Matias V', number: 23, position: 'MV' },
+                            { id: 'p_mv45', name: 'Jussi V', number: 45, position: 'MV' },
+                            { id: 'p_mv7', name: 'Sami P', number: 7, position: 'MV' },
+                            { id: 'p_mv3', name: 'Mika A', number: 3, position: 'MV' },
+                            { id: 'p_19', name: 'Aaltonen', number: 19, position: 'VP' },
+                            { id: 'p_20', name: 'Veikka', number: 20, position: 'OP' },
+                            { id: 'p_42', name: 'Henri K', number: 42, position: 'KH' },
+                            { id: 'p_64', name: 'Onni V', number: 64, position: 'VH' },
+                            { id: 'p_71', name: 'Masto', number: 71, position: 'VP' },
+                            { id: 'p_4', name: 'Joona R', number: 4, position: 'OP' },
+                            { id: 'p_55', name: 'Vesa H', number: 55, position: 'KH' },
+                            { id: 'p_11', name: 'Juki', number: 11, position: 'VH' },
+                            { id: 'p_2', name: 'Nikou', number: 2, position: 'OH' },
+                            { id: 'p_88', name: 'Jerker B', number: 88, position: 'OH' },
+                            { id: 'p_21', name: 'Niko A', number: 21, position: 'VH' },
+                            { id: 'p_13', name: 'Joni V', number: 13, position: 'OH' },
+                            { id: 'p_10', name: 'Eino A', number: 10, position: 'KH' },
+                            { id: 'p_15', name: 'Akseli', number: 15, position: 'VH' },
+                            { id: 'p_22', name: 'Petri V', number: 22, position: 'VP' },
+                            { id: 'p_87', name: 'Heikki H', number: 87, position: 'OH' },
+                            { id: 'p_44', name: 'Jesse', number: 44, position: 'H' },
+                            { id: 'p_62', name: 'Ilmari O', number: 62, position: 'H' },
+                            { id: 'p_66', name: 'Miika', number: 66, position: 'H' }
+                        ];
+                    }
                 } else {
-                    roster = [
-                        { id: 'p_mv23', name: 'Matias V', number: 23, position: 'MV' },
-                        { id: 'p_mv45', name: 'Jussi V', number: 45, position: 'MV' },
-                        { id: 'p_mv7', name: 'Sami P', number: 7, position: 'MV' },
-                        { id: 'p_mv3', name: 'Mika A', number: 3, position: 'MV' },
-                        { id: 'p_19', name: 'Aaltonen', number: 19, position: 'VP' },
-                        { id: 'p_20', name: 'Veikka', number: 20, position: 'OP' },
-                        { id: 'p_42', name: 'Henri K', number: 42, position: 'KH' },
-                        { id: 'p_64', name: 'Onni V', number: 64, position: 'VH' },
-                        { id: 'p_71', name: 'Masto', number: 71, position: 'VP' },
-                        { id: 'p_4', name: 'Joona R', number: 4, position: 'OP' },
-                        { id: 'p_55', name: 'Vesa H', number: 55, position: 'KH' },
-                        { id: 'p_11', name: 'Juki', number: 11, position: 'VH' },
-                        { id: 'p_2', name: 'Nikou', number: 2, position: 'OH' },
-                        { id: 'p_88', name: 'Jerker B', number: 88, position: 'OH' },
-                        { id: 'p_21', name: 'Niko A', number: 21, position: 'VH' },
-                        { id: 'p_13', name: 'Joni V', number: 13, position: 'OH' },
-                        { id: 'p_10', name: 'Eino A', number: 10, position: 'KH' },
-                        { id: 'p_15', name: 'Akseli', number: 15, position: 'VH' },
-                        { id: 'p_22', name: 'Petri V', number: 22, position: 'VP' },
-                        { id: 'p_87', name: 'Heikki H', number: 87, position: 'OH' },
-                        { id: 'p_44', name: 'Jesse', number: 44, position: 'H' },
-                        { id: 'p_62', name: 'Ilmari O', number: 62, position: 'H' },
-                        { id: 'p_66', name: 'Miika', number: 66, position: 'H' }
-                    ];
+                    roster = [];
                 }
             }
 
@@ -245,9 +279,9 @@
             if (lineupReserves['av'] && !lineupReserves['av1']) lineupReserves['av1'] = [...lineupReserves['av']];
             if (lineupReserves['6v5'] && !lineupReserves['6v5_1']) lineupReserves['6v5_1'] = [...lineupReserves['6v5']];
 
-            // If completely empty lineups, seed with initial realistic starters & bench
+            // If completely empty lineups, seed with initial realistic starters & bench ONLY for SekTa
             const isAnyAssigned = Object.values(lineups).some(l => Object.values(l).some(Boolean));
-            if (!isAnyAssigned && roster.length >= 12) {
+            if (!isAnyAssigned && roster.length >= 12 && isSektaTeam) {
                 lineups['1'] = { MV: 'p_mv23', VP: 'p_19', OP: 'p_20', VH: 'p_11', KH: 'p_42', OH: 'p_64' };
                 lineups['2'] = { MV: 'p_mv45', VP: 'p_71', OP: 'p_4', VH: 'p_21', KH: 'p_55', OH: 'p_2' };
                 if (!lineupReserves['1']) lineupReserves['1'] = ['p_88'];
@@ -260,31 +294,35 @@
             const rawEvents = localStorage.getItem('salibandy_events_' + currentTeamId);
             teamEvents = rawEvents ? JSON.parse(rawEvents) : [];
             if (!teamEvents || teamEvents.length === 0) {
-                const altEvents1 = localStorage.getItem('salibandy_events_default_team');
-                const altEvents2 = localStorage.getItem('salibandy_events_team_sekta');
-                if (altEvents1 && JSON.parse(altEvents1).length > 0) {
-                    teamEvents = JSON.parse(altEvents1);
-                } else if (altEvents2 && JSON.parse(altEvents2).length > 0) {
-                    teamEvents = JSON.parse(altEvents2);
-                }
-            }
-
-            // Default event with attendees if empty
-            if (teamEvents.length === 0) {
-                const sampleAttendees = {};
-                roster.forEach((p, idx) => {
-                    const st = idx < 12 ? 'in' : (idx < 17 ? 'out' : 'maybe');
-                    sampleAttendees[p.id] = { status: st, reason: '' };
-                });
-                teamEvents = [
-                    {
-                        id: 'default_event_1',
-                        title: 'SekTa - Seuraava Ottelu',
-                        date: 'Klo 19:00',
-                        location: 'Kotiareena',
-                        attendees: sampleAttendees
+                if (isSektaTeam) {
+                    const altEvents1 = localStorage.getItem('salibandy_events_default_team');
+                    const altEvents2 = localStorage.getItem('salibandy_events_team_sekta');
+                    if (altEvents1 && JSON.parse(altEvents1).length > 0) {
+                        teamEvents = JSON.parse(altEvents1);
+                    } else if (altEvents2 && JSON.parse(altEvents2).length > 0) {
+                        teamEvents = JSON.parse(altEvents2);
+                    } else {
+                        teamEvents = [
+                            {
+                                id: 'default_event_1',
+                                title: 'SekTa - Seuraava Ottelu',
+                                date: 'Klo 19:00',
+                                location: 'Kotiareena',
+                                attendees: {}
+                            }
+                        ];
                     }
-                ];
+                } else {
+                    teamEvents = [
+                        {
+                            id: 'event_' + Date.now(),
+                            title: 'Seuraava Tapahtuma',
+                            date: 'Klo 19:00',
+                            location: 'Kotiareena',
+                            attendees: {}
+                        }
+                    ];
+                }
             }
 
             const rawActiveEvent = localStorage.getItem('salibandy_active_event_id_' + currentTeamId);
@@ -369,8 +407,12 @@
     }
 
     function pushSharedTeamToCloud(shareId, teamObj) {
-        if (typeof window !== 'undefined' && window.SalibandyFirebase && window.SalibandyFirebase.isReady()) {
+        if (!shareId) return;
+        if (typeof window === 'undefined' || !window.SalibandyFirebase) return;
+
+        const writeNow = () => {
             const db = window.SalibandyFirebase.getDb();
+            if (!db) return;
             const serverTs = (window.firebase && window.firebase.firestore && window.firebase.firestore.FieldValue)
                 ? window.firebase.firestore.FieldValue.serverTimestamp() : new Date();
             const cleanTeamName = teamObj ? (teamObj.name || 'Joukkue').replace(/^🤝\s*/, '') : 'Joukkue';
@@ -386,13 +428,22 @@
                 reserves: lineupReserves,
                 events: teamEvents
             };
-            db.collection('shared_teams').doc(shareId).set(payload, { merge: true }).catch(err => {
+            db.collection('shared_teams').doc(shareId).set(payload, { merge: true }).then(() => {
+                console.log(`[Simple] Shared team '${cleanTeamName}' synced to cloud (${shareId})`);
+            }).catch(err => {
                 console.warn('[Simple] Share Firestore write warning:', err);
             });
+        };
+
+        if (window.SalibandyFirebase.isReady()) {
+            writeNow();
+        } else if (window.SalibandyFirebase.whenReady) {
+            window.SalibandyFirebase.whenReady().then(writeNow);
         }
     }
 
     function listenToSharedTeamFirestore(shareId) {
+        if (!shareId) return;
         if (!window.SalibandyFirebase || !window.SalibandyFirebase.isReady()) {
             if (window.SalibandyFirebase && window.SalibandyFirebase.whenReady) {
                 window.SalibandyFirebase.whenReady().then(() => listenToSharedTeamFirestore(shareId));
@@ -407,7 +458,7 @@
 
         unsubscribeSharedTeam = db.collection('shared_teams').doc(shareId).onSnapshot(doc => {
             if (!doc.exists) {
-                showToast('Jaettua joukkuetta ei löytynyt pilvestä.');
+                console.log('[Simple] Shared team doc does not exist yet on cloud.');
                 return;
             }
             const data = doc.data();
@@ -485,8 +536,13 @@
             if (cloudData.teams && Array.isArray(cloudData.teams)) {
                 const mergedTeams = [...cloudData.teams];
                 teams.forEach(localT => {
-                    if (!mergedTeams.some(cT => cT.id === localT.id)) {
+                    const existing = mergedTeams.find(cT => cT.id === localT.id);
+                    if (!existing) {
                         mergedTeams.push(localT);
+                    } else {
+                        if (!existing.shareId && localT.shareId) existing.shareId = localT.shareId;
+                        if (!existing.eventsUrl && localT.eventsUrl) existing.eventsUrl = localT.eventsUrl;
+                        if (!existing.nimenhuutoUrl && localT.nimenhuutoUrl) existing.nimenhuutoUrl = localT.nimenhuutoUrl;
                     }
                 });
                 teams = mergedTeams;
@@ -579,10 +635,11 @@
 
     function getShareIdForCurrentTeam() {
         let curTeam = teams.find(t => t.id === currentTeamId);
-        if (!curTeam) return 'team_share_' + currentTeamId;
+        if (!curTeam) return 'st_' + (currentTeamId || 'team').replace(/[^a-zA-Z0-9_]/g, '');
         if (!curTeam.shareId) {
-            curTeam.shareId = 'st_' + currentTeamId.replace(/[^a-zA-Z0-9]/g, '') + '_' + Math.random().toString(36).substr(2, 6);
-            saveToStorageLocalOnly();
+            const cleanId = (curTeam.id || 'team').replace(/[^a-zA-Z0-9_]/g, '');
+            curTeam.shareId = 'st_' + cleanId;
+            saveState();
         }
         return curTeam.shareId;
     }
@@ -590,7 +647,7 @@
     function openShareModal() {
         if (!shareModal || !shareModalBody) return;
         const curTeam = teams.find(t => t.id === currentTeamId) || { name: 'Joukkue' };
-        const teamName = curTeam.name || 'Joukkue';
+        const teamName = (curTeam.name || 'Joukkue').replace(/^🤝\s*/, '');
         const shareId = getShareIdForCurrentTeam();
         pushSharedTeamToCloud(shareId, curTeam);
 
@@ -599,35 +656,62 @@
         const advUrl = `${baseUrl}index.html?mode=advanced&teamShare=${shareId}&role=coach`;
 
         shareModalBody.innerHTML = `
-            <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 12px;">
-                Jaa joukkue <strong>${escapeHtml(teamName)}</strong> toiselle valmentajalle. Kaikki kentälliset ja pelaajat synkronoituu reaaliajassa laitteiden välillä!
-            </p>
-            <div style="background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; margin-bottom: 12px;">
-                <label style="display: block; font-size: 0.75rem; color: #94a3b8; margin-bottom: 4px;">Kevytversio (Kännykkä & Tabletti)</label>
-                <input type="text" value="${escapeHtml(simpleUrl)}" readonly style="width: 100%; background: #0b1120; border: 1px solid var(--border-color); border-radius: 6px; padding: 8px; color: #fff; font-size: 0.8rem; margin-bottom: 8px;">
-                <div style="display: flex; gap: 6px;">
-                    <button class="btn-tool primary" id="btn-copy-simple-link" style="flex: 1; padding: 8px 12px; font-size: 0.82rem;">📋 Kopioi linkki</button>
-                    <button class="btn-header highlight" id="btn-wa-simple-link" style="padding: 8px 14px; font-size: 0.82rem; background: #22c55e; color: #fff;">💬 WhatsApp</button>
+            <div style="margin-bottom: 12px; background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.25); border-radius: 8px; padding: 10px 12px;">
+                <div style="font-size: 0.72rem; color: #93c5fd; text-transform: uppercase; font-weight: 700; letter-spacing: 0.05em; margin-bottom: 2px;">Jaettava joukkue</div>
+                <div style="font-size: 1.15rem; font-weight: 800; color: #fff; display: flex; align-items: center; justify-content: space-between;">
+                    <span>${escapeHtml(teamName)}</span>
+                    <span style="font-size: 0.72rem; padding: 3px 8px; border-radius: 999px; background: rgba(16,185,129,0.2); color: #10b981; font-weight: 600;">⚡ Pysyvä linkki</span>
                 </div>
             </div>
-            <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 8px; padding: 10px;">
-                <label style="display: block; font-size: 0.75rem; color: #94a3b8; margin-bottom: 4px;">Taktinen fläppitaulu (Advanced)</label>
+
+            <p style="color: var(--text-secondary); font-size: 0.82rem; line-height: 1.4; margin-bottom: 14px;">
+                Tämä linkki pysyy samana tälle joukkueelle, joten voit lähettää sen kerran toiselle valmentajalle tai joukkueelle. Kaikki kentälliset ja pelaajat synkronoituvat reaaliajassa laitteiden välillä!
+            </p>
+
+            <div style="background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; margin-bottom: 12px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                    <label style="font-size: 0.78rem; font-weight: 600; color: #60a5fa;">📱 Kevytversio (Kännykkä & Tabletti)</label>
+                    <span style="font-size: 0.7rem; color: var(--text-muted);">Suositeltu</span>
+                </div>
+                <input type="text" id="input-simple-share-url" value="${escapeHtml(simpleUrl)}" readonly style="width: 100%; background: #0b1120; border: 1px solid var(--border-color); border-radius: 6px; padding: 8px; color: #fff; font-size: 0.8rem; margin-bottom: 8px;">
                 <div style="display: flex; gap: 6px;">
-                    <input type="text" value="${escapeHtml(advUrl)}" readonly style="flex: 1; background: #0b1120; border: 1px solid var(--border-color); border-radius: 6px; padding: 6px 8px; color: #fff; font-size: 0.75rem;">
+                    <button class="btn-tool primary" id="btn-copy-simple-link" style="flex: 1; padding: 9px 12px; font-size: 0.84rem;">📋 Kopioi linkki</button>
+                    <button class="btn-header highlight" id="btn-wa-simple-link" style="padding: 9px 14px; font-size: 0.84rem; background: #22c55e; color: #fff;">💬 WhatsApp</button>
+                </div>
+            </div>
+
+            <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 8px; padding: 10px; margin-bottom: 12px;">
+                <label style="display: block; font-size: 0.75rem; color: #94a3b8; margin-bottom: 4px;">💻 Taktinen fläppitaulu (Advanced / Läppäri)</label>
+                <div style="display: flex; gap: 6px;">
+                    <input type="text" id="input-adv-share-url" value="${escapeHtml(advUrl)}" readonly style="flex: 1; background: #0b1120; border: 1px solid var(--border-color); border-radius: 6px; padding: 6px 8px; color: #fff; font-size: 0.75rem;">
                     <button class="btn-header" id="btn-copy-adv-link" style="padding: 6px 12px; font-size: 0.78rem;">📋 Kopioi</button>
                 </div>
+            </div>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 6px;">
+                <button type="button" id="btn-simple-regenerate-link" style="background: none; border: none; color: #ef4444; font-size: 0.75rem; cursor: pointer; padding: 4px 0; text-decoration: underline;">
+                    🔄 Luo uusi jakotunniste (jos haluat mitätöidä vanhan)
+                </button>
             </div>
         `;
 
         document.getElementById('btn-copy-simple-link')?.addEventListener('click', () => {
-            navigator.clipboard.writeText(simpleUrl).then(() => showToast('Kevytversion linkki kopioitu! 📋'));
+            navigator.clipboard.writeText(simpleUrl).then(() => showToast('Kevytversion jakolinkki kopioitu! 📋'));
         });
         document.getElementById('btn-wa-simple-link')?.addEventListener('click', () => {
-            const text = encodeURIComponent(`Tässä ${teamName} kokoonpanot ja kentälliset reaaliaikaisena:\n${simpleUrl}`);
+            const text = encodeURIComponent(`Tässä joukkueen ${teamName} kokoonpanot ja kentälliset reaaliaikaisena:\n${simpleUrl}`);
             window.open(`https://api.whatsapp.com/send?text=${text}`, '_blank');
         });
         document.getElementById('btn-copy-adv-link')?.addEventListener('click', () => {
-            navigator.clipboard.writeText(advUrl).then(() => showToast('Fläppitaulun linkki kopioitu! 📋'));
+            navigator.clipboard.writeText(advUrl).then(() => showToast('Fläppitaulun jakolinkki kopioitu! 📋'));
+        });
+        document.getElementById('btn-simple-regenerate-link')?.addEventListener('click', () => {
+            if (confirm(`Haluatko luoda uuden jakotunnisteen joukkueelle '${teamName}'? Vanhat jakolinkit lakkaavat toimimasta.`)) {
+                curTeam.shareId = 'st_' + (curTeam.id || 'team').replace(/[^a-zA-Z0-9_]/g, '') + '_' + Math.random().toString(36).substr(2, 6);
+                saveState();
+                openShareModal();
+                showToast('Uusi jakotunniste luotu! 🔗');
+            }
         });
 
         shareModal.classList.add('active');
@@ -800,6 +884,11 @@
             if (t.id === currentTeamId) opt.selected = true;
             teamSelect.appendChild(opt);
         });
+
+        const addOpt = document.createElement('option');
+        addOpt.value = '__new_team__';
+        addOpt.textContent = '➕ Uusi joukkue...';
+        teamSelect.appendChild(addOpt);
 
         const curTeam = teams.find(t => t.id === currentTeamId) || teams[0];
         if (teamLogoBadge) {
@@ -1982,10 +2071,61 @@
 
         // Team change
         teamSelect?.addEventListener('change', (e) => {
-            currentTeamId = e.target.value;
-            loadState();
+            const val = e.target.value;
+            if (val === '__new_team__') {
+                teamSelect.value = currentTeamId;
+                const name = prompt('Anna uuden joukkueen nimi:');
+                if (name && name.trim()) {
+                    saveToStorageLocalOnly();
+                    const newTeamId = 'team_' + Date.now();
+                    const cleanName = name.trim();
+                    const newTeam = {
+                        id: newTeamId,
+                        name: cleanName,
+                        logo: '🏑',
+                        primaryColor: '#2563eb',
+                        shareId: 'st_' + newTeamId
+                    };
+                    teams.push(newTeam);
+                    currentTeamId = newTeamId;
+                    roster = [];
+                    lineups = {};
+                    SIMPLE_LINEUP_CONFIGS.forEach(cfg => {
+                        lineups[cfg.id] = cfg.group === '6v5'
+                            ? { VP: '', OP: '', VH: '', KH: '', OH: '', '6P': '' }
+                            : { MV: '', VP: '', OP: '', VH: '', KH: '', OH: '' };
+                    });
+                    lineupReserves = {};
+                    teamEvents = [
+                        {
+                            id: 'event_' + Date.now(),
+                            title: 'Seuraava Ottelu',
+                            date: 'Klo 19:00',
+                            location: 'Kotiareena',
+                            attendees: {}
+                        }
+                    ];
+                    activeEventId = teamEvents[0].id;
+                    saveState();
+                    renderAll();
+                    showToast(`Uusi joukkue '${cleanName}' luotu! 🎉`);
+                }
+                return;
+            }
+
+            // Save previous team state first
+            saveToStorageLocalOnly();
+
+            currentTeamId = val;
+            localStorage.setItem('salibandy_active_team_id', JSON.stringify(currentTeamId));
+            loadState(currentTeamId);
             renderAll();
-            showToast('Joukkue vaihdettu');
+
+            const selectedTeam = teams.find(t => t.id === currentTeamId);
+            if (selectedTeam && selectedTeam.shareId) {
+                listenToSharedTeamFirestore(selectedTeam.shareId);
+            }
+            showToast('Joukkue vaihdettu: ' + (selectedTeam?.name || ''));
         });
 
         // Event change
@@ -2058,6 +2198,27 @@
         btnCloseShareModal?.addEventListener('click', () => shareModal?.classList.remove('active'));
         shareModal?.addEventListener('click', (e) => {
             if (e.target === shareModal) shareModal.classList.remove('active');
+        });
+
+        // Add Player to Roster
+        document.getElementById('btn-simple-add-player')?.addEventListener('click', () => {
+            const name = prompt('Pelaajan nimi:');
+            if (!name || !name.trim()) return;
+            const numStr = prompt('Pelinumero (esim. 19):', '');
+            const num = numStr ? parseInt(numStr.replace(/[^0-9]/g, ''), 10) : 0;
+            const pos = prompt('Pelipaikka (VH, KH, OH, VP, OP, MV tai H):', 'H') || 'H';
+            const cleanPos = pos.trim().toUpperCase();
+
+            const newP = {
+                id: 'p_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+                name: name.trim(),
+                number: isNaN(num) ? 0 : num,
+                position: cleanPos
+            };
+            roster.push(newP);
+            saveState();
+            renderAll();
+            showToast(`Pelaaja #${newP.number} ${newP.name} lisätty! 🎉`);
         });
 
         // Initialize Firebase Auth & Real-Time Sync

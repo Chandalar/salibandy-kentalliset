@@ -16,8 +16,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 
-    <!-- CSS Stylesheet (Cache Busted v50.0) -->
-    <link rel="stylesheet" href="styles.css?v=50.0">
+    <!-- CSS Stylesheet (Cache Busted v56.0) -->
+    <link rel="stylesheet" href="styles.css?v=56.0">
 
     <!-- Smart Mobile/Tablet Auto-Routing to Simple Mode -->
     <script>
@@ -31,14 +31,14 @@
             }
             if (mode === 'simple') {
                 localStorage.setItem('salibandy_app_mode', 'simple');
-                window.location.replace('simple.html');
+                window.location.replace('simple.html' + window.location.search);
                 return;
             }
             const pref = localStorage.getItem('salibandy_app_mode');
             const isMobileOrTablet = (window.innerWidth <= 1024) || /Android|iPhone|iPad|iPod|Mobile|Tablet/i.test(navigator.userAgent);
             // Default to ultra-fast, robust simple mode on mobile & tablets unless user explicitly chose advanced
             if (pref === 'simple' || (!pref && isMobileOrTablet)) {
-                window.location.replace('simple.html');
+                window.location.replace('simple.html' + window.location.search);
             }
         } catch(e) {
             console.warn('Mode route error:', e);
@@ -1279,9 +1279,9 @@ Out:
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
-    <!-- Firebase Config & App Engine (Cache Busted v55.0) -->
-    <script src="firebase-config.js?v=55.0"></script>
-    <script src="app.js?v=55.0"></script>
+    <!-- Core Application Logic (Cache Busted v56.0) -->
+    <script src="firebase-config.js?v=56.0"></script>
+    <script src="app.js?v=56.0"></script>
 
 </body>
 </html>

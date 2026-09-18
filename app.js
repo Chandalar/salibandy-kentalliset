@@ -407,25 +407,26 @@
 
     function getShareIdForCurrentTeam() {
         let curTeam = teams.find(t => t.id === currentTeamId);
-        if (!curTeam) return 'team_share_' + currentTeamId;
+        if (!curTeam) return 'st_' + (currentTeamId || 'team').replace(/[^a-zA-Z0-9_]/g, '');
         if (!curTeam.shareId) {
-            curTeam.shareId = 'st_' + currentTeamId.replace(/[^a-zA-Z0-9]/g, '') + '_' + Math.random().toString(36).substr(2, 6);
-            saveStateLocalOnly();
+            const cleanId = (curTeam.id || 'team').replace(/[^a-zA-Z0-9_]/g, '');
+            curTeam.shareId = 'st_' + cleanId;
+            saveState();
         }
         return curTeam.shareId;
     }
 
     function openShareModal() {
         const curTeam = teams.find(t => t.id === currentTeamId);
-        const teamName = curTeam ? curTeam.name : 'Joukkue';
+        const teamName = curTeam ? curTeam.name.replace(/^🤝\s*/, '') : 'Joukkue';
         const shareId = getShareIdForCurrentTeam();
 
         const teamLabel = document.getElementById('share-team-name-label');
         if (teamLabel) teamLabel.textContent = teamName;
 
-        const baseUrl = (typeof window !== 'undefined') ? `${window.location.origin}${window.location.pathname}` : 'https://kokoonpano.web.app/';
-        const coachUrl = `${baseUrl}?teamShare=${shareId}&role=coach`;
-        const viewerUrl = `${baseUrl}?teamShare=${shareId}&role=viewer`;
+        const baseUrl = (typeof window !== 'undefined') ? `${window.location.origin}${window.location.pathname.replace(/[^\/]*$/, '')}` : 'https://kokoonpano.web.app/';
+        const coachUrl = `${baseUrl}simple.html?teamShare=${shareId}&role=coach`;
+        const viewerUrl = `${baseUrl}simple.html?teamShare=${shareId}&role=viewer`;
 
         const coachInput = document.getElementById('share-link-coach');
         const viewerInput = document.getElementById('share-link-viewer');
@@ -438,8 +439,12 @@
     }
 
     function pushSharedTeamToCloud(shareId, teamObj) {
-        if (typeof window !== 'undefined' && window.SalibandyFirebase && window.SalibandyFirebase.isReady()) {
+        if (!shareId) return;
+        if (typeof window === 'undefined' || !window.SalibandyFirebase) return;
+
+        const writeNow = () => {
             const db = window.SalibandyFirebase.getDb();
+            if (!db) return;
             const serverTs = (window.firebase && window.firebase.firestore && window.firebase.firestore.FieldValue) ? window.firebase.firestore.FieldValue.serverTimestamp() : new Date();
             const cleanTeamName = teamObj ? (teamObj.name || 'Joukkue').replace(/^🤝\s*/, '') : 'Joukkue';
             const payload = {
@@ -464,9 +469,17 @@
                 pages: lineupPages,
                 events: teamEvents
             };
-            db.collection('shared_teams').doc(shareId).set(payload, { merge: true }).catch(err => {
+            db.collection('shared_teams').doc(shareId).set(payload, { merge: true }).then(() => {
+                console.log(`[Advanced] Shared team '${cleanTeamName}' synced to cloud (${shareId})`);
+            }).catch(err => {
                 console.warn('Share Firestore write warning:', err);
             });
+        };
+
+        if (window.SalibandyFirebase.isReady()) {
+            writeNow();
+        } else if (window.SalibandyFirebase.whenReady) {
+            window.SalibandyFirebase.whenReady().then(writeNow);
         }
     }
 
@@ -1246,9 +1259,15 @@
             if (cloudData.teams && Array.isArray(cloudData.teams)) {
                 const mergedTeams = [...cloudData.teams];
                 teams.forEach(localT => {
-                    if (!mergedTeams.some(cT => cT.id === localT.id)) {
+                    const existing = mergedTeams.find(cT => cT.id === localT.id);
+                    if (!existing) {
                         mergedTeams.push(localT);
                         needCloudUpdateBack = true;
+                    } else {
+                        if (!existing.shareId && localT.shareId) {
+                            existing.shareId = localT.shareId;
+                            needCloudUpdateBack = true;
+                        }
                     }
                 });
                 teams = mergedTeams;
