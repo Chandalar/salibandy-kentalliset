@@ -8,6 +8,11 @@
     'use strict';
 
     // State
+    let deletedTeamIds = [];
+    try {
+        const rawDel = localStorage.getItem('salibandy_deleted_team_ids');
+        deletedTeamIds = rawDel ? JSON.parse(rawDel) : [];
+    } catch(e) { deletedTeamIds = []; }
     let teams = [];
     let currentTeamId = null;
     let roster = [];
@@ -146,26 +151,34 @@
 
     function loadState(targetTeamId) {
         try {
+            const rawDel = localStorage.getItem('salibandy_deleted_team_ids');
+            deletedTeamIds = rawDel ? JSON.parse(rawDel) : [];
+
             const rawTeams = localStorage.getItem('salibandy_teams_v1');
             teams = rawTeams ? JSON.parse(rawTeams) : [
                 { id: 'default_team', name: 'SekTa', logo: '🏑', primaryColor: '#2563eb' }
             ];
 
-            // Clean any base64 image data that was accidentally saved as team name or id
-            let teamsCleaned = false;
+            // Filter out deleted teams, clean corrupt names/IDs, and deduplicate by ID
+            const seenTeamIds = new Set();
+            const validTeams = [];
             teams.forEach(t => {
-                if (!t.name || t.name.startsWith('data:') || t.name.length > 40) {
-                    t.name = 'SekTa';
-                    teamsCleaned = true;
-                }
-                if (t.id && (t.id.startsWith('data:') || t.id.length > 50)) {
-                    t.id = 'team_sekta';
-                    teamsCleaned = true;
+                if (!t || !t.id || deletedTeamIds.includes(t.id)) return;
+                if (!seenTeamIds.has(t.id)) {
+                    seenTeamIds.add(t.id);
+                    if (!t.name || t.name.startsWith('data:') || t.name.length > 40) {
+                        t.name = 'SekTa';
+                    }
+                    if (t.id && (t.id.startsWith('data:') || t.id.length > 50)) {
+                        t.id = 'team_sekta';
+                    }
+                    validTeams.push(t);
                 }
             });
-            if (teamsCleaned) {
-                localStorage.setItem('salibandy_teams_v1', JSON.stringify(teams));
-            }
+            teams = validTeams.length > 0 ? validTeams : [
+                { id: 'default_team', name: 'SekTa', logo: '🏑', primaryColor: '#2563eb' }
+            ];
+            localStorage.setItem('salibandy_teams_v1', JSON.stringify(teams));
 
             // Check if URL has ?teamShare=
             const urlParams = (typeof window !== 'undefined' && window.location.search) ? new URLSearchParams(window.location.search) : null;
@@ -395,6 +408,7 @@
         const eventsMap = {};
 
         teams.forEach(t => {
+            if (!t || !t.id || deletedTeamIds.includes(t.id)) return;
             const tId = t.id;
             rostersMap[tId] = (tId === currentTeamId) ? roster : loadFromStorage(`salibandy_roster_${tId}`, []);
             configsMap[tId] = loadFromStorage(`salibandy_lineup_configs_${tId}`, SIMPLE_LINEUP_CONFIGS);
@@ -411,7 +425,8 @@
             updatedAt: serverTs,
             _lastModifiedBy: clientInstanceId,
             _lastModifiedAt: Date.now(),
-            teams: teams,
+            deletedTeamIds: deletedTeamIds,
+            teams: teams.filter(t => t && t.id && !deletedTeamIds.includes(t.id)),
             currentTeamId: currentTeamId,
             rosters: rostersMap,
             lineupConfigs: configsMap,
@@ -650,43 +665,74 @@
             if (incomingStr === lastLoadedCloudPayloadString) return;
             lastLoadedCloudPayloadString = incomingStr;
 
-            isCloudLoading = true;
+            // 1. Merge deletedTeamIds
+            if (cloudData.deletedTeamIds && Array.isArray(cloudData.deletedTeamIds)) {
+                deletedTeamIds = Array.from(new Set([...deletedTeamIds, ...cloudData.deletedTeamIds]));
+                localStorage.setItem('salibandy_deleted_team_ids', JSON.stringify(deletedTeamIds));
+            }
 
             if (cloudData.teams && Array.isArray(cloudData.teams)) {
-                const mergedTeams = [...cloudData.teams];
+                const cleanCloudTeams = cloudData.teams.filter(t => t && t.id && !deletedTeamIds.includes(t.id));
+                const mergedMap = new Map();
+                cleanCloudTeams.forEach(t => {
+                    if (!mergedMap.has(t.id)) mergedMap.set(t.id, t);
+                });
+
                 teams.forEach(localT => {
-                    const existing = mergedTeams.find(cT => cT.id === localT.id);
-                    if (!existing) {
-                        mergedTeams.push(localT);
+                    if (!localT || !localT.id || deletedTeamIds.includes(localT.id)) return;
+                    if (!mergedMap.has(localT.id)) {
+                        mergedMap.set(localT.id, localT);
                     } else {
+                        const existing = mergedMap.get(localT.id);
                         if (!existing.shareId && localT.shareId) existing.shareId = localT.shareId;
                         if (!existing.eventsUrl && localT.eventsUrl) existing.eventsUrl = localT.eventsUrl;
                         if (!existing.nimenhuutoUrl && localT.nimenhuutoUrl) existing.nimenhuutoUrl = localT.nimenhuutoUrl;
                     }
                 });
-                teams = mergedTeams;
+                teams = Array.from(mergedMap.values());
+                if (teams.length === 0) {
+                    teams = [{ id: 'default_team', name: 'SekTa', logo: '🏑', primaryColor: '#2563eb' }];
+                }
                 if (cloudData.currentTeamId && teams.some(t => t.id === cloudData.currentTeamId)) {
                     currentTeamId = cloudData.currentTeamId;
+                } else if (!teams.some(t => t.id === currentTeamId)) {
+                    currentTeamId = teams[0].id;
                 }
             }
 
             if (cloudData.rosters) {
                 Object.keys(cloudData.rosters).forEach(tId => {
+                    if (deletedTeamIds.includes(tId)) {
+                        localStorage.removeItem(`salibandy_roster_${tId}`);
+                        return;
+                    }
                     localStorage.setItem(`salibandy_roster_${tId}`, JSON.stringify(cloudData.rosters[tId]));
                 });
             }
             if (cloudData.lineups) {
                 Object.keys(cloudData.lineups).forEach(tId => {
+                    if (deletedTeamIds.includes(tId)) {
+                        localStorage.removeItem(`salibandy_lineups_${tId}`);
+                        return;
+                    }
                     localStorage.setItem(`salibandy_lineups_${tId}`, JSON.stringify(cloudData.lineups[tId]));
                 });
             }
             if (cloudData.reserves) {
                 Object.keys(cloudData.reserves).forEach(tId => {
+                    if (deletedTeamIds.includes(tId)) {
+                        localStorage.removeItem(`salibandy_reserves_${tId}`);
+                        return;
+                    }
                     localStorage.setItem(`salibandy_reserves_${tId}`, JSON.stringify(cloudData.reserves[tId]));
                 });
             }
             if (cloudData.events) {
                 Object.keys(cloudData.events).forEach(tId => {
+                    if (deletedTeamIds.includes(tId)) {
+                        localStorage.removeItem(`salibandy_events_${tId}`);
+                        return;
+                    }
                     localStorage.setItem(`salibandy_events_${tId}`, JSON.stringify(cloudData.events[tId]));
                 });
             }
@@ -725,7 +771,7 @@
 
         const db = window.SalibandyFirebase.getDb();
         const payload = buildFullCloudPayload();
-        db.collection('users').doc(currentUser.uid).set(payload, { merge: true })
+        db.collection('users').doc(currentUser.uid).set(payload)
             .then(() => {
                 updateCloudButtonUI(true);
                 showToast(`🎉 Kaikki ${teams.length} joukkuetta tallennettu pilveen!`);
@@ -991,6 +1037,84 @@
         }
     }
 
+    function deleteActiveTeam() {
+        if (teams.length <= 1) {
+            showToast('Et voi poistaa ainoaa joukkuetta.');
+            return;
+        }
+
+        const team = teams.find(t => t.id === currentTeamId);
+        if (!team) return;
+
+        if (confirm(`Haluatko varmasti poistaa joukkueen '${team.name}' kaikkine pelaajineen ja kentällisineen?`)) {
+            const deleteId = currentTeamId;
+
+            // 1. Stop shared listener
+            if (unsubscribeSharedTeam && (team.shareId || currentSharedTeamId === team.shareId)) {
+                unsubscribeSharedTeam();
+                unsubscribeSharedTeam = null;
+            }
+
+            // 2. Add to deletedTeamIds
+            if (!deletedTeamIds.includes(deleteId)) {
+                deletedTeamIds.push(deleteId);
+            }
+            if (team.shareId) {
+                if (!deletedTeamIds.includes('shared_' + team.shareId)) {
+                    deletedTeamIds.push('shared_' + team.shareId);
+                }
+                if (!deletedTeamIds.includes(team.shareId)) {
+                    deletedTeamIds.push(team.shareId);
+                }
+            }
+            localStorage.setItem('salibandy_deleted_team_ids', JSON.stringify(deletedTeamIds));
+
+            // 3. Filter teams
+            teams = teams.filter(t => t.id !== deleteId && !deletedTeamIds.includes(t.id));
+            if (teams.length === 0) {
+                teams = [{ id: 'default_team', name: 'SekTa', logo: '🏑', primaryColor: '#2563eb' }];
+            }
+
+            // 4. Remove localStorage items
+            localStorage.removeItem(`salibandy_roster_${deleteId}`);
+            localStorage.removeItem(`salibandy_lineups_${deleteId}`);
+            localStorage.removeItem(`salibandy_reserves_${deleteId}`);
+            localStorage.removeItem(`salibandy_events_${deleteId}`);
+            localStorage.removeItem(`salibandy_active_event_id_${deleteId}`);
+
+            // 5. Select next team
+            const nextTeamId = teams[0].id;
+            currentTeamId = nextTeamId;
+            localStorage.setItem('salibandy_active_team_id', JSON.stringify(currentTeamId));
+            loadState(currentTeamId);
+
+            // 6. Cancel pending debounce
+            if (cloudSyncDebounceTimer) {
+                clearTimeout(cloudSyncDebounceTimer);
+                cloudSyncDebounceTimer = null;
+            }
+
+            // 7. Write to Firestore immediately without merge: true
+            if (currentUser && window.SalibandyFirebase && window.SalibandyFirebase.isReady()) {
+                const db = window.SalibandyFirebase.getDb();
+                const payload = buildFullCloudPayload();
+                lastLoadedCloudPayloadString = JSON.stringify(payload);
+                db.collection('users').doc(currentUser.uid).set(payload)
+                    .then(() => updateCloudButtonUI(true))
+                    .catch(err => console.warn('[Simple] Immediate Firestore delete write error:', err));
+            }
+
+            // 8. Re-render
+            renderAll(true);
+            const activeTeam = teams.find(t => t.id === currentTeamId);
+            if (activeTeam && activeTeam.shareId) {
+                listenToSharedTeamFirestore(activeTeam.shareId);
+            }
+
+            showToast(`Joukkue '${team.name}' poistettu pysyvästi.`);
+        }
+    }
+
     function openTeamCustomizeModal() {
         if (!modalEl || !modalBody || !modalTitle) return;
         const curTeam = teams.find(t => t.id === currentTeamId) || teams[0];
@@ -1055,8 +1179,9 @@
                 </div>
 
                 <div style="display: flex; gap: 8px; margin-top: 6px;">
-                    <button class="btn-tool primary" id="btn-cust-simple-save" style="flex: 1; padding: 10px; font-size: 0.9rem;">💾 Tallenna muutokset</button>
-                    <button class="btn-tool" id="btn-cust-simple-cancel" style="padding: 10px 14px; font-size: 0.85rem;">Peruuta</button>
+                    <button type="button" class="btn-tool" id="btn-cust-simple-delete" style="padding: 10px 14px; font-size: 0.85rem; background: rgba(239,68,68,0.15); color: #f87171; border: 1px solid rgba(239,68,68,0.4);" title="Poista tämä joukkue">🗑️ Poista</button>
+                    <button type="button" class="btn-tool primary" id="btn-cust-simple-save" style="flex: 1; padding: 10px; font-size: 0.9rem;">💾 Tallenna muutokset</button>
+                    <button type="button" class="btn-tool" id="btn-cust-simple-cancel" style="padding: 10px 14px; font-size: 0.85rem;">Peruuta</button>
                 </div>
             </div>
         `;
@@ -1130,6 +1255,11 @@
             modalEl.classList.remove('active');
         });
 
+        document.getElementById('btn-cust-simple-delete')?.addEventListener('click', () => {
+            modalEl.classList.remove('active');
+            deleteActiveTeam();
+        });
+
         document.getElementById('btn-cust-simple-save')?.addEventListener('click', () => {
             const nameInput = document.getElementById('cust-simple-team-name');
             const arenaInput = document.getElementById('cust-simple-arena');
@@ -1158,6 +1288,7 @@
         if (!teamSelect) return;
         teamSelect.innerHTML = '';
         teams.forEach(t => {
+            if (!t || !t.id || deletedTeamIds.includes(t.id)) return;
             const opt = document.createElement('option');
             opt.value = t.id;
             
@@ -2611,6 +2742,8 @@
             }
             showToast('Joukkue vaihdettu: ' + (selectedTeam?.name || ''));
         });
+
+        document.getElementById('btn-simple-delete-team')?.addEventListener('click', deleteActiveTeam);
 
         // Event change
         eventSelect?.addEventListener('change', (e) => {

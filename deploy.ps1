@@ -4,7 +4,7 @@ Write-Host "Aloitetaan paivitysten julkaisu osoitteeseen https://kokoonpano.web.
 
 # 1. Tallenna ja tyonna GitHubiin (main & gh-pages)
 git add .
-git commit -m "Joukkueen visuaalit (logo, värit, kuvat) ja reaaliaikainen valmentajasynkronointi (v57.0)"
+git commit -m "Korjattu joukkueiden poistaminen pysyvästi ilman palaamista, lisätty poistopainikkeet ja tombstone-seuranta (v58.0)"
 git push origin main
 git checkout gh-pages
 git merge main

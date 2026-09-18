@@ -129,26 +129,39 @@
     }
 
     // Global State
+    let deletedTeamIds = loadFromStorage('salibandy_deleted_team_ids', []);
     let teams = loadFromStorage('salibandy_teams_v1', DEFAULT_TEAMS);
     let currentTeamId = loadFromStorage('salibandy_active_team_id', 'team_edustus');
 
     if (Array.isArray(teams)) {
+        // Filter out deleted teams and deduplicate by ID
+        const seenTeamIds = new Set();
+        const validTeams = [];
         teams.forEach(t => {
-            if (!t.name || t.name.startsWith('data:') || t.name.length > 40) {
-                t.name = 'SekTa';
+            if (!t || !t.id || deletedTeamIds.includes(t.id)) return;
+            if (!seenTeamIds.has(t.id)) {
+                seenTeamIds.add(t.id);
+                if (!t.name || t.name.startsWith('data:') || t.name.length > 40) {
+                    t.name = 'SekTa';
+                }
+                if (t.id && (t.id.startsWith('data:') || t.id.length > 50)) {
+                    t.id = 'team_sekta';
+                }
+                if (!t.logo) {
+                    t.logo = (t.id === 'team_edustus') ? '🦁' : ((t.id === 'team_junnut') ? '⚡' : '🏑');
+                }
+                if (!t.primaryColor) t.primaryColor = (t.id === 'team_junnut') ? '#dc2626' : '#2563eb';
+                if (!t.mvColor) t.mvColor = (t.id === 'team_junnut') ? '#eab308' : '#10b981';
+                if (!t.tokenStyle) t.tokenStyle = 'circle';
+                if (!t.rinkColor) t.rinkColor = 'black';
+                if (t.showCourtLogo === undefined) t.showCourtLogo = true;
+                validTeams.push(t);
             }
-            if (t.id && (t.id.startsWith('data:') || t.id.length > 50)) {
-                t.id = 'team_sekta';
-            }
-            if (!t.logo) {
-                t.logo = (t.id === 'team_edustus') ? '🦁' : ((t.id === 'team_junnut') ? '⚡' : '🏑');
-            }
-            if (!t.primaryColor) t.primaryColor = (t.id === 'team_junnut') ? '#dc2626' : '#2563eb';
-            if (!t.mvColor) t.mvColor = (t.id === 'team_junnut') ? '#eab308' : '#10b981';
-            if (!t.tokenStyle) t.tokenStyle = 'circle';
-            if (!t.rinkColor) t.rinkColor = 'black';
-            if (t.showCourtLogo === undefined) t.showCourtLogo = true;
         });
+        teams = validTeams.length > 0 ? validTeams : DEFAULT_TEAMS;
+        if (!teams.some(t => t.id === currentTeamId)) {
+            currentTeamId = teams[0].id;
+        }
     }
 
     cleanCorruptedUserTeams();
@@ -1221,6 +1234,7 @@
         const eventsMap = {};
 
         teams.forEach(t => {
+            if (!t || !t.id || deletedTeamIds.includes(t.id)) return;
             const tId = t.id;
             rostersMap[tId] = (tId === currentTeamId) ? roster : loadRosterForTeam(tId);
             configsMap[tId] = (tId === currentTeamId) ? lineupConfigs : loadLineupConfigs(tId);
@@ -1246,7 +1260,8 @@
             updatedAt: serverTs,
             _lastModifiedBy: clientInstanceId,
             _lastModifiedAt: Date.now(),
-            teams: teams,
+            deletedTeamIds: deletedTeamIds,
+            teams: teams.filter(t => t && t.id && !deletedTeamIds.includes(t.id)),
             currentTeamId: currentTeamId,
             rosters: rostersMap,
             lineupConfigs: configsMap,
@@ -1281,7 +1296,7 @@
             totalPlayersCount += r.length;
         });
 
-        db.collection('users').doc(currentUser.uid).set(payload, { merge: true })
+        db.collection('users').doc(currentUser.uid).set(payload)
             .then(() => {
                 updateCloudSyncBadge(true);
                 showToast(`🎉 Kaikki ${teams.length} joukkuetta, ${totalPlayersCount} pelaajaa ja kentälliset tallennettu pilveen!`);
@@ -1345,29 +1360,52 @@
             }
             lastLoadedCloudPayloadString = incomingStr;
 
+            // 1. Sync tombstones (deletedTeamIds)
+            if (cloudData.deletedTeamIds && Array.isArray(cloudData.deletedTeamIds)) {
+                const incomingDeleted = new Set([...deletedTeamIds, ...cloudData.deletedTeamIds]);
+                deletedTeamIds = Array.from(incomingDeleted);
+                localStorage.setItem('salibandy_deleted_team_ids', JSON.stringify(deletedTeamIds));
+            }
+
             if (!cloudData.rosters || !cloudData.lineups) {
                 const fullPayload = buildFullCloudPayload();
-                userRef.set(fullPayload, { merge: true });
+                userRef.set(fullPayload);
             }
 
             isCloudLoading = true;
             let needCloudUpdateBack = false;
 
             if (cloudData.teams && Array.isArray(cloudData.teams)) {
-                const mergedTeams = [...cloudData.teams];
+                const cleanCloudTeams = cloudData.teams.filter(t => t && t.id && !deletedTeamIds.includes(t.id));
+                const mergedMap = new Map();
+                cleanCloudTeams.forEach(t => {
+                    if (!mergedMap.has(t.id)) {
+                        mergedMap.set(t.id, t);
+                    }
+                });
+
                 teams.forEach(localT => {
-                    const existing = mergedTeams.find(cT => cT.id === localT.id);
-                    if (!existing) {
-                        mergedTeams.push(localT);
+                    if (!localT || !localT.id || deletedTeamIds.includes(localT.id)) return;
+                    if (!mergedMap.has(localT.id)) {
+                        mergedMap.set(localT.id, localT);
                         needCloudUpdateBack = true;
                     } else {
+                        const existing = mergedMap.get(localT.id);
                         if (!existing.shareId && localT.shareId) {
                             existing.shareId = localT.shareId;
                             needCloudUpdateBack = true;
                         }
                     }
                 });
-                teams = mergedTeams;
+
+                teams = Array.from(mergedMap.values());
+                if (teams.length === 0) {
+                    teams = DEFAULT_TEAMS.filter(t => !deletedTeamIds.includes(t.id));
+                    if (teams.length === 0) {
+                        teams = [{ id: 'team_edustus', name: 'Edustusjoukkue', logo: '🦁', primaryColor: '#2563eb', mvColor: '#10b981', tokenStyle: 'circle', rinkColor: 'black', showCourtLogo: true }];
+                    }
+                }
+
                 if (cloudData.currentTeamId && teams.some(t => t.id === cloudData.currentTeamId)) {
                     currentTeamId = cloudData.currentTeamId;
                 } else if (!teams.some(t => t.id === currentTeamId)) {
@@ -1377,6 +1415,10 @@
 
             if (cloudData.rosters) {
                 Object.keys(cloudData.rosters).forEach(tId => {
+                    if (deletedTeamIds.includes(tId)) {
+                        localStorage.removeItem(`salibandy_roster_${tId}`);
+                        return;
+                    }
                     let cloudRoster = cloudData.rosters[tId] || [];
                     let localRoster = loadFromStorage(`salibandy_roster_${tId}`, []);
 
@@ -1396,57 +1438,101 @@
 
             if (cloudData.lineupConfigs) {
                 Object.keys(cloudData.lineupConfigs).forEach(tId => {
+                    if (deletedTeamIds.includes(tId)) {
+                        localStorage.removeItem(`salibandy_lineup_configs_${tId}`);
+                        return;
+                    }
                     localStorage.setItem(`salibandy_lineup_configs_${tId}`, JSON.stringify(cloudData.lineupConfigs[tId]));
                 });
             }
             if (cloudData.lineups) {
                 Object.keys(cloudData.lineups).forEach(tId => {
+                    if (deletedTeamIds.includes(tId)) {
+                        localStorage.removeItem(`salibandy_lineups_${tId}`);
+                        return;
+                    }
                     localStorage.setItem(`salibandy_lineups_${tId}`, JSON.stringify(cloudData.lineups[tId]));
                 });
             }
             if (cloudData.reserves) {
                 Object.keys(cloudData.reserves).forEach(tId => {
+                    if (deletedTeamIds.includes(tId)) {
+                        localStorage.removeItem(`salibandy_reserves_${tId}`);
+                        return;
+                    }
                     localStorage.setItem(`salibandy_reserves_${tId}`, JSON.stringify(cloudData.reserves[tId]));
                 });
             }
             if (cloudData.drawings) {
                 Object.keys(cloudData.drawings).forEach(tId => {
+                    if (deletedTeamIds.includes(tId)) {
+                        localStorage.removeItem(`salibandy_drawings_${tId}`);
+                        return;
+                    }
                     const sanitized = sanitizeDrawings({ [tId]: cloudData.drawings[tId] });
                     localStorage.setItem(`salibandy_drawings_${tId}`, JSON.stringify(sanitized[tId]));
                 });
             }
             if (cloudData.positions) {
                 Object.keys(cloudData.positions).forEach(tId => {
+                    if (deletedTeamIds.includes(tId)) {
+                        localStorage.removeItem(`salibandy_positions_${tId}`);
+                        return;
+                    }
                     localStorage.setItem(`salibandy_positions_${tId}`, JSON.stringify(cloudData.positions[tId]));
                 });
             }
             if (cloudData.balls) {
                 Object.keys(cloudData.balls).forEach(tId => {
+                    if (deletedTeamIds.includes(tId)) {
+                        localStorage.removeItem(`salibandy_balls_${tId}`);
+                        return;
+                    }
                     localStorage.setItem(`salibandy_balls_${tId}`, JSON.stringify(cloudData.balls[tId]));
                 });
             }
             if (cloudData.cones) {
                 Object.keys(cloudData.cones).forEach(tId => {
+                    if (deletedTeamIds.includes(tId)) {
+                        localStorage.removeItem(`salibandy_cones_${tId}`);
+                        return;
+                    }
                     localStorage.setItem(`salibandy_cones_${tId}`, JSON.stringify(cloudData.cones[tId]));
                 });
             }
             if (cloudData.opponents) {
                 Object.keys(cloudData.opponents).forEach(tId => {
+                    if (deletedTeamIds.includes(tId)) {
+                        localStorage.removeItem(`salibandy_opponents_${tId}`);
+                        return;
+                    }
                     localStorage.setItem(`salibandy_opponents_${tId}`, JSON.stringify(cloudData.opponents[tId]));
                 });
             }
             if (cloudData.extraPlayers) {
                 Object.keys(cloudData.extraPlayers).forEach(tId => {
+                    if (deletedTeamIds.includes(tId)) {
+                        localStorage.removeItem(`salibandy_extra_players_${tId}`);
+                        return;
+                    }
                     localStorage.setItem(`salibandy_extra_players_${tId}`, JSON.stringify(cloudData.extraPlayers[tId]));
                 });
             }
             if (cloudData.textNotes) {
                 Object.keys(cloudData.textNotes).forEach(tId => {
+                    if (deletedTeamIds.includes(tId)) {
+                        localStorage.removeItem(`salibandy_text_notes_${tId}`);
+                        return;
+                    }
                     localStorage.setItem(`salibandy_text_notes_${tId}`, JSON.stringify(cloudData.textNotes[tId]));
                 });
             }
             if (cloudData.pages) {
                 Object.keys(cloudData.pages).forEach(tId => {
+                    if (deletedTeamIds.includes(tId)) {
+                        localStorage.removeItem(`salibandy_pages_${tId}`);
+                        return;
+                    }
                     localStorage.setItem(`salibandy_pages_${tId}`, JSON.stringify(cloudData.pages[tId]));
                 });
             }
@@ -1485,7 +1571,7 @@
 
             if (needCloudUpdateBack) {
                 const mergedPayload = buildFullCloudPayload();
-                userRef.set(mergedPayload, { merge: true }).then(() => {
+                userRef.set(mergedPayload).then(() => {
                     isCloudLoading = false;
                 }).catch(() => {
                     isCloudLoading = false;
@@ -1772,8 +1858,34 @@
 
         if (confirm(`Haluatko varmasti poistaa joukkueen '${team.name}' kaikkine pelaajineen ja kentällisineen?`)) {
             const deleteId = currentTeamId;
-            teams = teams.filter(t => t.id !== deleteId);
 
+            // 1. Disconnect any active shared team listener
+            if (unsubscribeSharedTeam && (team.shareId || currentSharedTeamId === team.shareId)) {
+                unsubscribeSharedTeam();
+                unsubscribeSharedTeam = null;
+            }
+
+            // 2. Add to deletedTeamIds tombstones
+            if (!deletedTeamIds.includes(deleteId)) {
+                deletedTeamIds.push(deleteId);
+            }
+            if (team.shareId) {
+                if (!deletedTeamIds.includes('shared_' + team.shareId)) {
+                    deletedTeamIds.push('shared_' + team.shareId);
+                }
+                if (!deletedTeamIds.includes(team.shareId)) {
+                    deletedTeamIds.push(team.shareId);
+                }
+            }
+            localStorage.setItem('salibandy_deleted_team_ids', JSON.stringify(deletedTeamIds));
+
+            // 3. Remove from teams array
+            teams = teams.filter(t => t.id !== deleteId && !deletedTeamIds.includes(t.id));
+            if (teams.length === 0) {
+                teams = [{ id: 'team_edustus', name: 'Edustusjoukkue', logo: '🦁', primaryColor: '#2563eb', mvColor: '#10b981', tokenStyle: 'circle', rinkColor: 'black', showCourtLogo: true }];
+            }
+
+            // 4. Remove all localStorage entries for this team
             localStorage.removeItem(`salibandy_roster_${deleteId}`);
             localStorage.removeItem(`salibandy_lineup_configs_${deleteId}`);
             localStorage.removeItem(`salibandy_lineups_${deleteId}`);
@@ -1787,11 +1899,79 @@
             localStorage.removeItem(`salibandy_text_notes_${deleteId}`);
             localStorage.removeItem(`salibandy_grid_paper_${deleteId}`);
             localStorage.removeItem(`salibandy_pages_${deleteId}`);
+            localStorage.removeItem(`salibandy_events_${deleteId}`);
 
+            // 5. Select next team
             const nextTeamId = teams[0].id;
+            currentTeamId = nextTeamId;
+
+            // 6. Reload next team state
+            roster = loadRosterForTeam(currentTeamId);
+            lineupConfigs = loadLineupConfigs(currentTeamId);
+            lineups = loadLineupsForTeam(currentTeamId, lineupConfigs);
+            lineupReserves = loadFromStorage(`salibandy_reserves_${currentTeamId}`, {});
+            lineupDrawings = loadFromStorage(`salibandy_drawings_${currentTeamId}`, {});
+            lineupDrawings = sanitizeDrawings(lineupDrawings);
+            lineupCourtPositions = loadFromStorage(`salibandy_positions_${currentTeamId}`, {});
+            lineupBalls = loadFromStorage(`salibandy_balls_${currentTeamId}`, {});
+            lineupCones = loadFromStorage(`salibandy_cones_${currentTeamId}`, {});
+            lineupOpponents = loadFromStorage(`salibandy_opponents_${currentTeamId}`, {});
+            lineupExtraPlayers = loadFromStorage(`salibandy_extra_players_${currentTeamId}`, {});
+            lineupTextNotes = loadFromStorage(`salibandy_text_notes_${currentTeamId}`, {});
+            lineupGridPaper = loadFromStorage(`salibandy_grid_paper_${currentTeamId}`, {});
+            lineupPages = loadFromStorage(`salibandy_pages_${currentTeamId}`, {});
+            teamEvents = loadFromStorage(`salibandy_events_${currentTeamId}`, []);
+
+            activePageId = 'p1';
+            if (activeLineupKey !== 'summary' && activeLineupKey !== 'live' && !lineupConfigs.some(c => c.id === activeLineupKey)) {
+                activeLineupKey = lineupConfigs[0] ? lineupConfigs[0].id : '1';
+            }
+
+            saveStateLocalOnly();
+
+            // 7. Cancel pending debounced cloud write
+            if (cloudSyncDebounceTimer) {
+                clearTimeout(cloudSyncDebounceTimer);
+                cloudSyncDebounceTimer = null;
+            }
+
+            // 8. IMMEDIATELY overwrite Firestore user doc without { merge: true } so orphaned sub-maps are wiped!
+            if (currentUser && window.SalibandyFirebase && window.SalibandyFirebase.isReady()) {
+                const db = window.SalibandyFirebase.getDb();
+                const payload = buildFullCloudPayload();
+                lastLoadedCloudPayloadString = JSON.stringify(payload);
+                db.collection('users').doc(currentUser.uid).set(payload)
+                    .then(() => {
+                        updateCloudSyncBadge(true);
+                    })
+                    .catch(err => {
+                        console.warn('Immediate Firestore delete write error:', err);
+                    });
+            }
+
+            // 9. Update UI
+            applyThemeAndSettings();
             renderTeamDropdown();
-            switchTeam(nextTeamId);
-            showToast(`Joukkue '${team.name}' poistettu.`);
+            renderTabs();
+            renderTacticalPageBadges();
+            updateRosterCounters();
+            renderRoster();
+            if (activeLineupKey === 'summary') {
+                renderSummaryView();
+            } else if (activeLineupKey === 'live') {
+                renderLiveView();
+            } else {
+                renderActiveLineupSlots();
+                renderCourtBoards();
+            }
+
+            const activeTeam = teams.find(t => t.id === currentTeamId);
+            if (activeTeam && activeTeam.shareId) {
+                listenToSharedTeamFirestore(activeTeam.shareId);
+            }
+
+            document.getElementById('team-customize-modal')?.classList.remove('active');
+            showToast(`Joukkue '${team.name}' poistettu pysyvästi.`);
         }
     }
 
@@ -7794,6 +7974,7 @@
     function bindEvents() {
         document.getElementById('team-select')?.addEventListener('change', (e) => switchTeam(e.target.value));
         document.getElementById('btn-delete-team')?.addEventListener('click', deleteActiveTeam);
+        document.getElementById('btn-modal-delete-team')?.addEventListener('click', deleteActiveTeam);
         document.getElementById('cloud-sync-badge')?.addEventListener('click', forceCloudSync);
         document.getElementById('cloudSyncBadge')?.addEventListener('click', forceCloudSync);
 
