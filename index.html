@@ -16,8 +16,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 
-    <!-- CSS Stylesheet (Cache Busted v58.0) -->
-    <link rel="stylesheet" href="styles.css?v=58.0">
+    <!-- CSS Stylesheet (Cache Busted v59.0) -->
+    <link rel="stylesheet" href="styles.css?v=59.0">
 
     <!-- Smart Mobile/Tablet Auto-Routing to Simple Mode -->
     <script>
@@ -148,8 +148,8 @@
             <button class="btn btn-outline" id="btn-open-settings-modal" title="Yleiset asetukset">
                 ⚙️ Asetukset
             </button>
-            <button class="btn btn-photo" id="btn-import-photo">
-                📷 Lue kuvasta
+            <button class="btn btn-photo" id="btn-import-photo" title="Tuo pelaajia tekstistä tai valokuvasta tekoälyllä">
+                ✨ Tekoäly / Kuva
             </button>
             <button class="btn btn-primary" id="btn-add-player">
                 + Lisää pelaaja
@@ -189,7 +189,7 @@
                 <div class="roster-header-btns">
                     <button class="btn-xs btn-primary" id="btn-quick-add" title="Lisää uusi pelaaja rinkiin">+ Uusi</button>
                     <button class="btn-xs btn-outline" id="btn-open-import-modal" title="Tuo pelaajia toisesta joukkueesta">📥 Tuo</button>
-                    <button class="btn-xs btn-outline" id="btn-photo-add" title="Lue pelaajalista valokuvasta">📷 Kuvasta</button>
+                    <button class="btn-xs btn-outline" id="btn-photo-add" title="Tuo pelaajalista tekstistä tai valokuvasta tekoälyllä">✨ Tekoäly / Kuva</button>
                     <button class="btn-xs btn-outline" id="btn-reset-defaults" title="Palauta 19 oletuspelaajaa ja -kentälliset">🔄 Oletukset</button>
                 </div>
             </div>
@@ -662,39 +662,84 @@
         </div>
     </div>
 
-    <!-- PHOTO IMPORT OCR MODAL -->
+    <!-- AI & PHOTO IMPORT MODAL (v59.0) -->
     <div class="modal-overlay" id="photo-modal">
         <div class="modal-card modal-large">
             <div class="modal-header">
-                <h3>📷 Lue pelaajalista valokuvasta</h3>
+                <h3>✨ Tekoäly & Kuva - Pelaajien tuonti</h3>
                 <button class="close-btn" id="btn-close-photo-modal">&times;</button>
             </div>
-            
-            <p class="panel-hint" style="padding:0 0 0.8rem 0;">
-                Ota kuva pöytäkirjasta, fläppitaulusta tai WhatsApp-listasta. Optinen lukija tunnistaa nimet ja pelinumerot automaattisesti!
-            </p>
 
-            <div class="file-drop-area" id="file-drop-area">
-                <input type="file" id="photo-file-input" accept="image/*">
-                <div class="drop-prompt">
-                    <span class="drop-icon">📷</span>
-                    <strong>Valitse kuva tai ota valokuva</strong>
-                    <small>Tukee JPG, PNG ja WEBP -kuvia</small>
+            <!-- TAB NAVIGATION -->
+            <div class="ai-import-tabs" style="display: flex; gap: 8px; margin: 0.5rem 0 0.8rem 0; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem;">
+                <button type="button" class="btn btn-sm btn-primary ai-tab-btn active" id="ai-tab-text-btn" data-tab="text" style="display: flex; align-items: center; gap: 6px;">
+                    📝 Liitä tekstiä (AI)
+                </button>
+                <button type="button" class="btn btn-sm btn-outline ai-tab-btn" id="ai-tab-photo-btn" data-tab="photo" style="display: flex; align-items: center; gap: 6px;">
+                    📷 Valokuva (Gemini Vision)
+                </button>
+            </div>
+
+            <!-- TAB 1: TEXT PASTE (AI PARSER) -->
+            <div id="ai-tab-text-panel" class="ai-tab-panel">
+                <p class="panel-hint" style="padding:0 0 0.5rem 0;">
+                    Kopioi ja liitä tähän tekstiä WhatsAppista, Nimenhuudosta tai muistiinpanoista. Tekoäly poimii pelaajien nimet, numerot ja pelipaikat automaattisesti!
+                </p>
+                <textarea id="ai-text-input" class="form-input" rows="8" style="width: 100%; font-family: monospace; font-size: 0.85rem; line-height: 1.4; padding: 0.6rem;" placeholder="Esimerkiksi:&#10;In (12): #4 Männistö, #19 Aaltonen (VP), #88 Laakso (MV)&#10;23 Matias V (MV)&#10;Henri K #42 KH&#10;Veikka 20 OP&#10;11 Juki VH&#10;..."></textarea>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.6rem; flex-wrap: wrap; gap: 8px;">
+                    <small style="color: var(--text-secondary); font-size: 0.78rem;">💡 Vinkki: Tukee kaikkia yleisiä muotoja (#23 Nimi, Nimi 23, pelipaikat MV, VP, OP, VH, KH, OH, P, H).</small>
+                    <button type="button" class="btn btn-primary" id="btn-parse-ai-text">✨ Tunnista pelaajat</button>
                 </div>
             </div>
 
+            <!-- TAB 2: PHOTO (GEMINI VISION) -->
+            <div id="ai-tab-photo-panel" class="ai-tab-panel" style="display: none;">
+                <!-- GEMINI API KEY BAR -->
+                <div class="gemini-key-box" style="background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.25); border-radius: 8px; padding: 8px 12px; margin-bottom: 0.8rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; flex-wrap: wrap; gap: 4px;">
+                        <span style="font-size: 0.82rem; font-weight: 600; color: #93c5fd;">🤖 Google Gemini Vision AI</span>
+                        <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener" style="font-size: 0.75rem; color: #60a5fa; text-decoration: underline;">Hanki ilmainen API-avain ↗</a>
+                    </div>
+                    <div style="display: flex; gap: 6px;">
+                        <input type="password" id="gemini-api-key-input" class="form-input" style="flex: 1; font-size: 0.78rem; padding: 4px 8px;" placeholder="Syötä Gemini API-avain huipputarkkaan kuvanlukemiseen...">
+                        <button type="button" class="btn-xs btn-outline" id="btn-save-gemini-key">Tallenna avain</button>
+                    </div>
+                    <small id="gemini-key-status" style="font-size: 0.72rem; color: var(--text-secondary); display: block; margin-top: 3px;">
+                        Avain tallentuu vain omaan selaimeesi. Jos avainta ei ole, käytetään sisäistä lukijaa.
+                    </small>
+                </div>
+
+                <p class="panel-hint" style="padding:0 0 0.5rem 0;">
+                    Ota kuva pöytäkirjasta, fläppitaulusta tai paperilistasta, tai liitä kuvakaappaus leikepöydältä (<strong>Ctrl + V</strong>)!
+                </p>
+
+                <div class="file-drop-area" id="file-drop-area">
+                    <input type="file" id="photo-file-input" accept="image/*">
+                    <div class="drop-prompt">
+                        <span class="drop-icon">📷</span>
+                        <strong>Valitse kuva, ota valokuva tai liitä leikepöydältä (Ctrl + V)</strong>
+                        <small>Tukee JPG, PNG, WEBP -kuvia ja ruutukaappauksia</small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- OCR/AI STATUS -->
             <div class="ocr-status-box" id="ocr-status" style="display: none;">
                 <div class="spinner"></div>
-                <span id="ocr-status-text">Luetaan tekstiä...</span>
+                <span id="ocr-status-text">Analysoidaan tekoälyllä...</span>
             </div>
 
+            <!-- PREVIEW & EDIT STEP -->
             <div id="photo-preview-step" style="display: none;">
-                <h4 style="margin-top: 1rem; font-size: 0.88rem;">Tunnistetut pelaajat (voit korjata ennen tallennusta):</h4>
-                <div class="ocr-results-list" id="ocr-results-list">
-                    <!-- Dynamic OCR Editable Rows -->
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.8rem; margin-bottom: 0.4rem;">
+                    <h4 style="margin: 0; font-size: 0.88rem; font-weight: 600;">Tunnistetut pelaajat (<span id="ocr-count-badge">0</span> kpl):</h4>
+                    <button type="button" class="btn-xs btn-outline" id="btn-add-ocr-row">+ Lisää rivi</button>
                 </div>
-                <div class="modal-actions">
-                    <button type="button" class="btn btn-outline" id="btn-reselect-photo">Valitse uusi kuva</button>
+                <div class="ocr-results-list" id="ocr-results-list">
+                    <!-- Dynamic Editable Rows -->
+                </div>
+                <div class="modal-actions" style="margin-top: 1rem;">
+                    <button type="button" class="btn btn-outline" id="btn-reselect-photo">⬅️ Muokkaa / Syötä uudelleen</button>
                     <button type="button" class="btn btn-primary" id="btn-confirm-ocr-import">Tallenna rinkiin 🎉</button>
                 </div>
             </div>
@@ -1280,9 +1325,9 @@ Out:
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
-    <!-- Core Application Logic (Cache Busted v58.0) -->
-    <script src="firebase-config.js?v=58.0"></script>
-    <script src="app.js?v=58.0"></script>
+    <!-- Core Application Logic (Cache Busted v59.0) -->
+    <script src="firebase-config.js?v=59.0"></script>
+    <script src="app.js?v=59.0"></script>
 
 </body>
 </html>

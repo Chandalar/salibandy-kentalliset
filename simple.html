@@ -83,7 +83,10 @@
         <div class="roster-card">
             <div class="roster-card-header" style="display: flex; justify-content: space-between; align-items: center;">
                 <div class="roster-title">👥 Pelaajat & Live-status</div>
-                <button class="btn-header highlight" id="btn-simple-add-player" style="font-size: 0.78rem; padding: 5px 10px;" title="Lisää uusi pelaaja joukkueeseen">➕ Lisää pelaaja</button>
+                <div style="display: flex; gap: 6px;">
+                    <button class="btn-header" id="btn-simple-ai-import" style="font-size: 0.78rem; padding: 5px 10px; background: rgba(59, 130, 246, 0.2); border: 1px solid rgba(59, 130, 246, 0.4);" title="Tuo pelaajia tekstistä tai valokuvasta tekoälyllä">✨ Tekoäly / Kuva</button>
+                    <button class="btn-header highlight" id="btn-simple-add-player" style="font-size: 0.78rem; padding: 5px 10px;" title="Lisää uusi pelaaja joukkueeseen">➕ Lisää pelaaja</button>
+                </div>
             </div>
             <div class="player-list" id="simple-roster-list">
                 <!-- Dynamic Player Rows -->
@@ -158,6 +161,70 @@
         </div>
     </div>
 
+    <!-- AI & PHOTO IMPORT MODAL (v59.0) -->
+    <div class="simple-modal" id="simple-ai-modal">
+        <div class="modal-sheet" style="max-height: 90vh; overflow-y: auto;">
+            <div class="modal-header">
+                <div class="modal-title">✨ Tekoäly & Kuva - Pelaajien tuonti</div>
+                <button class="btn-modal-close" id="btn-close-simple-ai-modal">&times;</button>
+            </div>
+            <div class="modal-body" style="padding-top: 6px;">
+                <!-- TAB SELECTOR -->
+                <div style="display: flex; gap: 8px; margin-bottom: 12px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">
+                    <button type="button" class="btn-header highlight" id="simple-ai-tab-text-btn" style="flex: 1; text-align: center; font-size: 0.82rem;">📝 Teksti (AI)</button>
+                    <button type="button" class="btn-header" id="simple-ai-tab-photo-btn" style="flex: 1; text-align: center; font-size: 0.82rem;">📷 Valokuva (Gemini)</button>
+                </div>
+
+                <!-- TEXT PANEL -->
+                <div id="simple-ai-text-panel">
+                    <p style="color: var(--text-secondary); font-size: 0.8rem; margin-bottom: 8px;">
+                        Liitä tähän WhatsApp-viesti, Nimenhuuto-lista tai muistiinpanot. Tekoäly poimii pelaajat, numerot ja pelipaikat!
+                    </p>
+                    <textarea id="simple-ai-text-input" rows="7" style="width: 100%; background: #0b1120; border: 1px solid var(--border-color); border-radius: 8px; padding: 8px; color: #fff; font-family: monospace; font-size: 0.85rem;" placeholder="Esimerkiksi:&#10;In (12): #4 Männistö, #19 Aaltonen (VP), #88 Laakso (MV)&#10;23 Matias V (MV)&#10;Henri K 42 KH&#10;..."></textarea>
+                    <button type="button" class="btn-header highlight" id="btn-simple-parse-text" style="width: 100%; margin-top: 8px; padding: 10px; font-weight: 700;">✨ Tunnista pelaajat tekoälyllä</button>
+                </div>
+
+                <!-- PHOTO PANEL -->
+                <div id="simple-ai-photo-panel" style="display: none;">
+                    <div style="background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.25); border-radius: 8px; padding: 8px 10px; margin-bottom: 10px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                            <span style="font-size: 0.78rem; font-weight: 600; color: #93c5fd;">🤖 Google Gemini Vision AI</span>
+                            <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener" style="font-size: 0.72rem; color: #60a5fa; text-decoration: underline;">Hanki avain ↗</a>
+                        </div>
+                        <div style="display: flex; gap: 6px;">
+                            <input type="password" id="simple-gemini-key-input" style="flex: 1; background: #0b1120; border: 1px solid var(--border-color); border-radius: 6px; padding: 4px 8px; color: #fff; font-size: 0.75rem;" placeholder="Syötä Gemini API-avain...">
+                            <button type="button" class="btn-header" id="btn-simple-save-gemini-key" style="font-size: 0.75rem; padding: 4px 8px;">Tallenna</button>
+                        </div>
+                    </div>
+                    <label for="simple-photo-file-input" style="display: block; border: 2px dashed rgba(255,255,255,0.2); border-radius: 8px; padding: 24px 12px; text-align: center; cursor: pointer; background: rgba(255,255,255,0.02);">
+                        <span style="font-size: 2rem; display: block; margin-bottom: 6px;">📷</span>
+                        <strong style="font-size: 0.9rem; color: #fff; display: block;">Valitse kuva tai ota valokuva</strong>
+                        <small style="color: var(--text-secondary); font-size: 0.75rem;">JPG, PNG, WEBP tai kuvakaappaus (Ctrl+V)</small>
+                        <input type="file" id="simple-photo-file-input" accept="image/*" style="display: none;">
+                    </label>
+                </div>
+
+                <!-- STATUS SPINNER -->
+                <div id="simple-ai-status" style="display: none; align-items: center; justify-content: center; gap: 8px; padding: 16px; color: #60a5fa; font-size: 0.85rem;">
+                    <span>⏳</span> <span id="simple-ai-status-text">Analysoidaan...</span>
+                </div>
+
+                <!-- PREVIEW ROWS -->
+                <div id="simple-ai-preview" style="display: none; margin-top: 12px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                        <strong style="font-size: 0.85rem; color: #fff;">Tunnistetut pelaajat (<span id="simple-ocr-count">0</span> kpl):</strong>
+                        <button type="button" class="btn-header" id="btn-simple-add-ocr-row" style="font-size: 0.72rem; padding: 3px 8px;">+ Lisää rivi</button>
+                    </div>
+                    <div id="simple-ocr-results-list" style="display: flex; flex-direction: column; gap: 6px; max-height: 45vh; overflow-y: auto;"></div>
+                    <div style="display: flex; gap: 8px; margin-top: 12px;">
+                        <button type="button" class="btn-header" id="btn-simple-reselect-ai" style="flex: 1; padding: 8px;">⬅️ Takaisin</button>
+                        <button type="button" class="btn-header highlight" id="btn-simple-confirm-ai" style="flex: 2; padding: 8px; font-weight: 700;">Tallenna rinkiin 🎉</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- TOAST NOTIFICATION -->
     <div class="simple-toast" id="simple-toast"></div>
 
@@ -165,9 +232,9 @@
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
-    <!-- Firebase Config & Simple Engine (v58.0) -->
-    <script src="firebase-config.js?v=58.0"></script>
-    <script src="simple.js?v=58.0"></script>
+    <!-- Firebase Config & Simple Engine (v59.0) -->
+    <script src="firebase-config.js?v=59.0"></script>
+    <script src="simple.js?v=59.0"></script>
 
 </body>
 </html>

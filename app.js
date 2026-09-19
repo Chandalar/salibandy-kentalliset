@@ -11,6 +11,20 @@
     // ==========================================
     const DEFAULT_TEAMS = [
         { 
+            id: 'team_sekta', 
+            name: 'SekTa',
+            logo: '🏑',
+            primaryColor: '#2563eb',
+            mvColor: '#10b981',
+            tokenStyle: 'circle',
+            arenaName: 'Kotiareena',
+            rinkColor: 'black',
+            showCourtLogo: true,
+            eventsUrl: 'https://sekta.nimenhuuto.com/events',
+            nimenhuutoUrl: 'https://sekta.nimenhuuto.com/events',
+            matchInfo: { opponent: '', time: '', meta: '', showBanner: false }
+        },
+        { 
             id: 'team_edustus', 
             name: 'Edustusjoukkue',
             logo: '🦁',
@@ -130,8 +144,17 @@
 
     // Global State
     let deletedTeamIds = loadFromStorage('salibandy_deleted_team_ids', []);
+    if (Array.isArray(deletedTeamIds)) {
+        deletedTeamIds = deletedTeamIds.filter(id => {
+            if (!id) return false;
+            const low = String(id).toLowerCase();
+            return low !== 'team_sekta' && low !== 'default_team' && !low.includes('sekta');
+        });
+        localStorage.setItem('salibandy_deleted_team_ids', JSON.stringify(deletedTeamIds));
+    }
+
     let teams = loadFromStorage('salibandy_teams_v1', DEFAULT_TEAMS);
-    let currentTeamId = loadFromStorage('salibandy_active_team_id', 'team_edustus');
+    let currentTeamId = loadFromStorage('salibandy_active_team_id', 'team_sekta');
 
     if (Array.isArray(teams)) {
         // Filter out deleted teams and deduplicate by ID
@@ -159,6 +182,14 @@
             }
         });
         teams = validTeams.length > 0 ? validTeams : DEFAULT_TEAMS;
+
+        // Ensure SekTa is present in teams
+        const hasSekTa = teams.some(t => t && (t.id === 'team_sekta' || t.id === 'default_team' || (t.name && t.name.toLowerCase().includes('sekta'))));
+        if (!hasSekTa) {
+            teams.unshift(JSON.parse(JSON.stringify(DEFAULT_TEAMS[0])));
+            localStorage.setItem('salibandy_teams_v1', JSON.stringify(teams));
+        }
+
         if (!teams.some(t => t.id === currentTeamId)) {
             currentTeamId = teams[0].id;
         }
@@ -1363,7 +1394,11 @@
             // 1. Sync tombstones (deletedTeamIds)
             if (cloudData.deletedTeamIds && Array.isArray(cloudData.deletedTeamIds)) {
                 const incomingDeleted = new Set([...deletedTeamIds, ...cloudData.deletedTeamIds]);
-                deletedTeamIds = Array.from(incomingDeleted);
+                deletedTeamIds = Array.from(incomingDeleted).filter(id => {
+                    if (!id) return false;
+                    const low = String(id).toLowerCase();
+                    return low !== 'team_sekta' && low !== 'default_team' && !low.includes('sekta');
+                });
                 localStorage.setItem('salibandy_deleted_team_ids', JSON.stringify(deletedTeamIds));
             }
 
@@ -1399,11 +1434,13 @@
                 });
 
                 teams = Array.from(mergedMap.values());
+                const hasSekTa = teams.some(t => t && (t.id === 'team_sekta' || t.id === 'default_team' || (t.name && t.name.toLowerCase().includes('sekta'))));
+                if (!hasSekTa) {
+                    teams.unshift(JSON.parse(JSON.stringify(DEFAULT_TEAMS[0])));
+                    needCloudUpdateBack = true;
+                }
                 if (teams.length === 0) {
-                    teams = DEFAULT_TEAMS.filter(t => !deletedTeamIds.includes(t.id));
-                    if (teams.length === 0) {
-                        teams = [{ id: 'team_edustus', name: 'Edustusjoukkue', logo: '🦁', primaryColor: '#2563eb', mvColor: '#10b981', tokenStyle: 'circle', rinkColor: 'black', showCourtLogo: true }];
-                    }
+                    teams = JSON.parse(JSON.stringify(DEFAULT_TEAMS));
                 }
 
                 if (cloudData.currentTeamId && teams.some(t => t.id === cloudData.currentTeamId)) {
@@ -1590,7 +1627,8 @@
     function cleanCorruptedUserTeams() {
         if (!Array.isArray(teams)) return;
         teams.forEach(t => {
-            if (t.id !== 'team_edustus') {
+            const isDefaultOrSekta = !t || t.id === 'team_edustus' || t.id === 'team_sekta' || t.id === 'default_team' || (t.name && t.name.toLowerCase().includes('sekta'));
+            if (!isDefaultOrSekta) {
                 const storedRoster = loadFromStorage(`salibandy_roster_${t.id}`, null);
                 if (storedRoster && Array.isArray(storedRoster) && storedRoster.some(p => p.id === 'p_mv23')) {
                     localStorage.setItem(`salibandy_roster_${t.id}`, JSON.stringify([]));
@@ -1612,7 +1650,18 @@
     }
 
     function loadRosterForTeam(teamId) {
-        const stored = loadFromStorage(`salibandy_roster_${teamId}`, null);
+        let stored = loadFromStorage(`salibandy_roster_${teamId}`, null);
+        const isSekta = teamId === 'team_sekta' || teamId === 'default_team' || (teams && teams.some(t => t && t.id === teamId && (t.name || '').toLowerCase().includes('sekta')));
+        if ((!stored || !Array.isArray(stored) || stored.length === 0) && isSekta) {
+            const altKey = (teamId === 'team_sekta') ? 'salibandy_roster_default_team' : 'salibandy_roster_team_sekta';
+            const alt = loadFromStorage(altKey, null);
+            if (alt && Array.isArray(alt) && alt.length > 0) {
+                stored = alt;
+            } else {
+                stored = JSON.parse(JSON.stringify(DEFAULT_ROSTER));
+            }
+            localStorage.setItem(`salibandy_roster_${teamId}`, JSON.stringify(stored));
+        }
         return (stored && Array.isArray(stored)) ? stored : [];
     }
 
@@ -1621,7 +1670,19 @@
     }
 
     function loadLineupsForTeam(teamId, configs) {
-        const stored = loadFromStorage(`salibandy_lineups_${teamId}`, null);
+        let stored = loadFromStorage(`salibandy_lineups_${teamId}`, null);
+        const isSekta = teamId === 'team_sekta' || teamId === 'default_team' || (teams && teams.some(t => t && t.id === teamId && (t.name || '').toLowerCase().includes('sekta')));
+        if ((!stored || typeof stored !== 'object' || Object.keys(stored).length === 0) && isSekta) {
+            const altKey = (teamId === 'team_sekta') ? 'salibandy_lineups_default_team' : 'salibandy_lineups_team_sekta';
+            const alt = loadFromStorage(altKey, null);
+            if (alt && typeof alt === 'object' && Object.keys(alt).length > 0) {
+                stored = alt;
+            } else {
+                stored = JSON.parse(JSON.stringify(DEFAULT_LINEUPS));
+            }
+            localStorage.setItem(`salibandy_lineups_${teamId}`, JSON.stringify(stored));
+        }
+
         if (stored && typeof stored === 'object' && Object.keys(stored).length > 0) {
             if (configs && Array.isArray(configs)) {
                 configs.forEach(c => {
@@ -1856,6 +1917,11 @@
         const team = teams.find(t => t.id === currentTeamId);
         if (!team) return;
 
+        if (currentTeamId === 'team_sekta' || currentTeamId === 'default_team' || (team.name && team.name.toLowerCase().includes('sekta'))) {
+            showToast('SekTa-pääjoukkuetta ei voi poistaa.', 'warning');
+            return;
+        }
+
         if (confirm(`Haluatko varmasti poistaa joukkueen '${team.name}' kaikkine pelaajineen ja kentällisineen?`)) {
             const deleteId = currentTeamId;
 
@@ -1882,7 +1948,7 @@
             // 3. Remove from teams array
             teams = teams.filter(t => t.id !== deleteId && !deletedTeamIds.includes(t.id));
             if (teams.length === 0) {
-                teams = [{ id: 'team_edustus', name: 'Edustusjoukkue', logo: '🦁', primaryColor: '#2563eb', mvColor: '#10b981', tokenStyle: 'circle', rinkColor: 'black', showCourtLogo: true }];
+                teams = JSON.parse(JSON.stringify(DEFAULT_TEAMS));
             }
 
             // 4. Remove all localStorage entries for this team
@@ -7839,31 +7905,252 @@
         }
     }
 
+    let activeAiImportTab = 'text';
+
     function openPhotoModal() {
         const fileDropArea = document.getElementById('file-drop-area');
         const ocrStatus = document.getElementById('ocr-status');
         const photoPreviewStep = document.getElementById('photo-preview-step');
         const fileInput = document.getElementById('photo-file-input');
+        const textInput = document.getElementById('ai-text-input');
+        const keyInput = document.getElementById('gemini-api-key-input');
+        const keyStatus = document.getElementById('gemini-key-status');
 
         if (fileDropArea) fileDropArea.style.display = 'block';
         if (ocrStatus) ocrStatus.style.display = 'none';
         if (photoPreviewStep) photoPreviewStep.style.display = 'none';
         if (fileInput) fileInput.value = '';
+        if (textInput) textInput.value = '';
 
+        const savedKey = (localStorage.getItem('salibandy_gemini_api_key') || '').trim();
+        if (keyInput) keyInput.value = savedKey;
+        if (keyStatus) {
+            keyStatus.innerHTML = savedKey 
+                ? '✅ <span style="color:#10b981;">Gemini API-avain aktivoitu! Kuvat luetaan Google AI:lla.</span>'
+                : 'Avain tallentuu vain omaan selaimeesi. Jos avainta ei ole, käytetään sisäistä lukijaa.';
+        }
+
+        switchAiTab(activeAiImportTab || 'text');
         document.getElementById('photo-modal')?.classList.add('active');
     }
 
-    function processPhotoFile(file) {
+    function switchAiTab(tabName) {
+        activeAiImportTab = tabName;
+        const textBtn = document.getElementById('ai-tab-text-btn');
+        const photoBtn = document.getElementById('ai-tab-photo-btn');
+        const textPanel = document.getElementById('ai-tab-text-panel');
+        const photoPanel = document.getElementById('ai-tab-photo-panel');
+        const photoPreviewStep = document.getElementById('photo-preview-step');
+        const ocrStatus = document.getElementById('ocr-status');
+
+        if (photoPreviewStep) photoPreviewStep.style.display = 'none';
+        if (ocrStatus) ocrStatus.style.display = 'none';
+
+        if (tabName === 'text') {
+            textBtn?.classList.add('btn-primary', 'active');
+            textBtn?.classList.remove('btn-outline');
+            photoBtn?.classList.remove('btn-primary', 'active');
+            photoBtn?.classList.add('btn-outline');
+            if (textPanel) textPanel.style.display = 'block';
+            if (photoPanel) photoPanel.style.display = 'none';
+        } else {
+            photoBtn?.classList.add('btn-primary', 'active');
+            photoBtn?.classList.remove('btn-outline');
+            textBtn?.classList.remove('btn-primary', 'active');
+            textBtn?.classList.add('btn-outline');
+            if (textPanel) textPanel.style.display = 'none';
+            if (photoPanel) photoPanel.style.display = 'block';
+        }
+    }
+
+    function smartParseTextToPlayers(text) {
+        if (!text || typeof text !== 'string') return [];
+        
+        // Clean headers like 'In (12):', 'Out (3):', 'Mukana:', etc.
+        let cleaned = text
+            .replace(/In\s*\(\d+\)\s*:/gi, '\n')
+            .replace(/Out\s*\(\d+\)\s*:/gi, '\n')
+            .replace(/Mukana\s*\(\d+\)\s*:/gi, '\n')
+            .replace(/Poissa\s*\(\d+\)\s*:/gi, '\n')
+            .replace(/Ehkä\s*\(\d+\)\s*:/gi, '\n')
+            .replace(/Avoin\s*\(\d+\)\s*:/gi, '\n');
+
+        // Split by lines, commas, semicolons or bullets
+        const rawChunks = cleaned.split(/[\r\n,;•]+/);
+        const results = [];
+        const seenNames = new Set();
+        let idCounter = 1;
+
+        rawChunks.forEach(chunk => {
+            let trimmed = chunk.trim();
+            if (!trimmed || trimmed.length < 2) return;
+
+            // Skip metadata headers
+            if (/^(in|out|ehkä|poissa|peli|ottelu|treenit|kokoonpano|pelaajat|valkku|valmentaja)\b/i.test(trimmed) && !trimmed.includes('#') && !/\d/.test(trimmed)) {
+                return;
+            }
+
+            // Detect position
+            let pos = 'H';
+            const low = trimmed.toLowerCase();
+            if (/\b(mv|maalivahti|veskari|gk|goalie)\b/i.test(low)) pos = 'MV';
+            else if (/\b(vp|vasen\s*pakki|vasen\s*puolustaja|ld)\b/i.test(low)) pos = 'VP';
+            else if (/\b(op|oikea\s*pakki|oikea\s*puolustaja|rd)\b/i.test(low)) pos = 'OP';
+            else if (/\b(p|pakki|puolustaja|def)\b/i.test(low)) pos = 'P';
+            else if (/\b(vh|vasen\s*h|vasen\s*laita|lw)\b/i.test(low)) pos = 'VH';
+            else if (/\b(kh|sentteri|keskushyökkääjä|c|center)\b/i.test(low)) pos = 'KH';
+            else if (/\b(oh|oikea\s*h|oikea\s*laita|rw)\b/i.test(low)) pos = 'OH';
+            else if (/\b(h|hyökkääjä|fwd)\b/i.test(low)) pos = 'H';
+
+            // Strip position tags from name
+            let stripped = trimmed
+                .replace(/\((mv|maalivahti|veskari|vp|op|p|vh|kh|oh|h|pakki|hyökkääjä|c)\)/gi, '')
+                .replace(/\[(mv|maalivahti|veskari|vp|op|p|vh|kh|oh|h|pakki|hyökkääjä|c)\]/gi, '')
+                .replace(/\b(mv|maalivahti|veskari|vp|op|vh|kh|oh)\b/gi, '')
+                .trim();
+
+            let number = null;
+            let name = stripped;
+
+            // Pattern 1: #23 Name or 23 Name or 23. Name
+            const numStartMatch = stripped.match(/^#?(\d{1,2})[\.\s\-:]+(.+)$/);
+            // Pattern 2: Name (#23)
+            const numParenMatch = stripped.match(/^(.+?)\s*\(#?(\d{1,2})\)$/);
+            // Pattern 3: Name #23 or Name 23
+            const numEndMatch = stripped.match(/^(.+?)[,\s#\-]+(\d{1,2})$/);
+
+            if (numStartMatch) {
+                number = parseInt(numStartMatch[1], 10);
+                name = numStartMatch[2];
+            } else if (numParenMatch) {
+                name = numParenMatch[1];
+                number = parseInt(numParenMatch[2], 10);
+            } else if (numEndMatch && !/^\d+$/.test(numEndMatch[1])) {
+                name = numEndMatch[1];
+                number = parseInt(numEndMatch[2], 10);
+            }
+
+            // Clean name
+            name = name.replace(/^[#\d\s\.\-:]+/, '').replace(/[#\(\)\[\]]/g, '').trim();
+            if (name.length < 2) return;
+            if (/^(in|out|ehkä|poissa)\b/i.test(name)) return;
+
+            const nameKey = name.toLowerCase();
+            if (!seenNames.has(nameKey)) {
+                seenNames.add(nameKey);
+                results.push({
+                    id: 'ai_' + Date.now() + '_' + (idCounter++),
+                    name: name,
+                    number: (number !== null && number >= 1 && number <= 99) ? number : 1,
+                    position: pos
+                });
+            }
+        });
+        return results;
+    }
+
+    async function callGeminiVision(file, apiKey) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = async () => {
+                try {
+                    const base64Data = reader.result;
+                    const mimeType = file.type || 'image/jpeg';
+                    const cleanBase64 = String(base64Data).replace(/^data:[^;]+;base64,/, '');
+
+                    const prompt = `You are an expert sports/floorball assistant. Analyze this image (roster, whiteboard, match sheet, paper, lineup, screenshot).
+Extract all player names, jersey numbers, and positions.
+Map positions to: "MV" (goalkeeper), "VP" (left defender), "OP" (right defender), "P" (defender), "VH" (left wing), "KH" (center), "OH" (right wing), "H" (forward). If position is unknown, default to "H".
+Output MUST be a valid, raw JSON array of objects with NO markdown formatting, NO code block ticks, like:
+[{"number": 23, "name": "Matias V", "position": "MV"}]
+If number is not visible, provide a number or null. Only return the JSON array.`;
+
+                    const body = {
+                        contents: [{
+                            parts: [
+                                { text: prompt },
+                                {
+                                    inline_data: {
+                                        mime_type: mimeType,
+                                        data: cleanBase64
+                                    }
+                                }
+                            ]
+                        }],
+                        generationConfig: {
+                            temperature: 0.1,
+                            maxOutputTokens: 2048
+                        }
+                    };
+
+                    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(body)
+                    });
+
+                    if (!response.ok) {
+                        const errBody = await response.text();
+                        throw new Error(`Gemini API error (${response.status}): ${errBody}`);
+                    }
+
+                    const json = await response.json();
+                    const rawText = json?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+                    const cleanJson = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
+                    const parsed = JSON.parse(cleanJson);
+                    resolve(parsed);
+                } catch (e) {
+                    reject(e);
+                }
+            };
+            reader.onerror = (e) => reject(e);
+            reader.readAsDataURL(file);
+        });
+    }
+
+    async function processPhotoFile(file) {
         if (!file) return;
         const fileDropArea = document.getElementById('file-drop-area');
         const ocrStatus = document.getElementById('ocr-status');
         const ocrStatusText = document.getElementById('ocr-status-text');
         const photoPreviewStep = document.getElementById('photo-preview-step');
+        const textPanel = document.getElementById('ai-tab-text-panel');
+        const photoPanel = document.getElementById('ai-tab-photo-panel');
 
-        if (fileDropArea) fileDropArea.style.display = 'none';
+        if (textPanel) textPanel.style.display = 'none';
+        if (photoPanel) photoPanel.style.display = 'none';
         if (photoPreviewStep) photoPreviewStep.style.display = 'none';
         if (ocrStatus) ocrStatus.style.display = 'flex';
-        
+
+        const apiKey = (localStorage.getItem('salibandy_gemini_api_key') || '').trim();
+
+        if (apiKey) {
+            if (ocrStatusText) ocrStatusText.textContent = '🤖 Gemini Vision AI analysoi kuvaa...';
+            try {
+                const geminiPlayers = await callGeminiVision(file, apiKey);
+                if (Array.isArray(geminiPlayers) && geminiPlayers.length > 0) {
+                    tempOcrParsedPlayers = geminiPlayers.map((p, idx) => ({
+                        id: 'gemini_' + Date.now() + '_' + idx,
+                        name: p.name || 'Pelaaja',
+                        number: (p.number !== null && !isNaN(p.number)) ? parseInt(p.number, 10) : (idx + 1),
+                        position: (p.position || 'H').toUpperCase()
+                    }));
+                    if (ocrStatus) ocrStatus.style.display = 'none';
+                    renderOcrResults();
+                    if (photoPreviewStep) photoPreviewStep.style.display = 'block';
+                    showToast(`Gemini AI tunnisti ${tempOcrParsedPlayers.length} pelaajaa valokuvasta! ✨`);
+                    return;
+                }
+            } catch (err) {
+                console.warn('Gemini Vision API error, falling back to local OCR:', err);
+                showToast('Gemini API -virhe, käytetään varalukijaa.', 'warning');
+            }
+        }
+
+        // Fallback: Tesseract OCR + smartParseTextToPlayers
+        if (ocrStatusText) ocrStatusText.textContent = 'Valmistellaan tekstintunnistusta...';
+
         function loadTesseractOnDemand() {
             return new Promise((resolve, reject) => {
                 if (typeof window !== 'undefined' && window.Tesseract) {
@@ -7877,10 +8164,8 @@
             });
         }
 
-        if (ocrStatusText) ocrStatusText.textContent = 'Valmistellaan tekstintunnistusta...';
-
         loadTesseractOnDemand().then(tesseract => {
-            if (ocrStatusText) ocrStatusText.textContent = 'Luetaan tekstiä valokuvasta...';
+            if (ocrStatusText) ocrStatusText.textContent = 'Luetaan tekstiä kuvasta...';
             return tesseract.recognize(file, 'fin+eng', {
                 logger: m => {
                     if (m.status === 'recognizing text' && ocrStatusText) {
@@ -7890,81 +8175,80 @@
                 }
             }).then(result => {
                 const text = result?.data?.text || '';
-                parseOcrTextToPlayers(text);
+                const parsed = smartParseTextToPlayers(text);
+                tempOcrParsedPlayers = parsed.length > 0 ? parsed : [
+                    { id: 'ocr_1', name: 'Matti Meikäläinen', number: 10, position: 'H' },
+                    { id: 'ocr_2', name: 'Jussi Maalivahti', number: 31, position: 'MV' }
+                ];
+                if (ocrStatus) ocrStatus.style.display = 'none';
+                renderOcrResults();
+                if (photoPreviewStep) photoPreviewStep.style.display = 'block';
+                if (!apiKey) {
+                    showToast('Vinkki: Lisää Gemini API-avain huipputarkkaan valokuvantunnistukseen!');
+                }
             }).catch(err => {
-                console.warn('Tesseract OCR error or offline:', err);
-                parseOcrTextToPlayers('');
-                showToast('Valmis. Voit tarkistaa ja lisätä pelaajat!');
+                console.warn('Tesseract OCR error:', err);
+                tempOcrParsedPlayers = [
+                    { id: 'ocr_1', name: 'Matti Meikäläinen', number: 10, position: 'H' }
+                ];
+                if (ocrStatus) ocrStatus.style.display = 'none';
+                renderOcrResults();
+                if (photoPreviewStep) photoPreviewStep.style.display = 'block';
             });
         }).catch(err => {
-            console.warn('Could not load OCR script:', err);
-            parseOcrTextToPlayers('');
-            showToast('Valokuvalukija ei käytettävissä offline-tilassa. Voit syöttää pelaajat käsin.');
-        });
-    }
-
-    function parseOcrTextToPlayers(text) {
-        const ocrStatus = document.getElementById('ocr-status');
-        const photoPreviewStep = document.getElementById('photo-preview-step');
-        if (ocrStatus) ocrStatus.style.display = 'none';
-        tempOcrParsedPlayers = [];
-
-        const lines = text.split(/\r?\n/);
-        let idCounter = 1;
-
-        lines.forEach(line => {
-            const trimmed = line.trim();
-            if (!trimmed) return;
-
-            const numMatch = trimmed.match(/#?(\d{1,2})\s*([^#\d]+)/);
-            if (numMatch) {
-                const number = parseInt(numMatch[1], 10);
-                let name = numMatch[2].replace(/[\(\)\[\]]/g, '').trim();
-                let position = 'H';
-
-                if (trimmed.toLowerCase().includes('mv') || trimmed.toLowerCase().includes('maalivahti')) {
-                    position = 'MV';
-                    name = name.replace(/mv|maalivahti/gi, '').trim();
-                }
-
-                if (name.length >= 2 && number > 0) {
-                    tempOcrParsedPlayers.push({
-                        id: 'ocr_' + Date.now() + '_' + (idCounter++),
-                        name: name,
-                        number: number,
-                        position: position
-                    });
-                }
-            }
-        });
-
-        if (tempOcrParsedPlayers.length === 0) {
+            console.warn('Could not load OCR:', err);
             tempOcrParsedPlayers = [
-                { id: 'ocr_1', name: 'Matti Meikäläinen', number: 10, position: 'H' },
-                { id: 'ocr_2', name: 'Jussi Maalivahti', number: 31, position: 'MV' }
+                { id: 'ocr_1', name: 'Matti Meikäläinen', number: 10, position: 'H' }
             ];
-        }
-
-        renderOcrResults();
-        if (photoPreviewStep) photoPreviewStep.style.display = 'block';
+            if (ocrStatus) ocrStatus.style.display = 'none';
+            renderOcrResults();
+            if (photoPreviewStep) photoPreviewStep.style.display = 'block';
+        });
     }
 
     function renderOcrResults() {
         const ocrResultsList = document.getElementById('ocr-results-list');
+        const badge = document.getElementById('ocr-count-badge');
+        if (badge) badge.textContent = tempOcrParsedPlayers.length;
         if (!ocrResultsList) return;
         ocrResultsList.innerHTML = '';
+
+        if (tempOcrParsedPlayers.length === 0) {
+            ocrResultsList.innerHTML = '<div style="padding: 1rem; text-align: center; color: var(--text-secondary);">Ei tunnistettuja pelaajia. Voit lisätä pelaajan alta "+ Lisää rivi".</div>';
+            return;
+        }
+
         tempOcrParsedPlayers.forEach((item, index) => {
             const row = document.createElement('div');
             row.className = 'ocr-item-row';
+            const pos = (item.position || 'H').toUpperCase();
             row.innerHTML = `
-                <input type="number" value="${item.number}" class="form-input ocr-num-input" data-index="${index}">
-                <input type="text" value="${escapeHtml(item.name)}" class="form-input ocr-name-input" data-index="${index}">
+                <input type="number" value="${item.number !== undefined && item.number !== null ? item.number : ''}" class="form-input ocr-num-input" data-index="${index}" placeholder="#" style="text-align: center;">
+                <input type="text" value="${escapeHtml(item.name || '')}" class="form-input ocr-name-input" data-index="${index}" placeholder="Pelaajan nimi">
                 <select class="form-input ocr-pos-input" data-index="${index}">
-                    <option value="MV" ${item.position === 'MV' ? 'selected' : ''}>🟢 MV</option>
-                    <option value="H" ${item.position !== 'MV' ? 'selected' : ''}>🔵 Kenttä</option>
+                    <option value="MV" ${pos === 'MV' ? 'selected' : ''}>🟢 MV</option>
+                    <option value="VP" ${pos === 'VP' ? 'selected' : ''}>🛡️ VP</option>
+                    <option value="OP" ${pos === 'OP' ? 'selected' : ''}>🛡️ OP</option>
+                    <option value="P" ${pos === 'P' ? 'selected' : ''}>🛡️ P</option>
+                    <option value="VH" ${pos === 'VH' ? 'selected' : ''}>⚡ VH</option>
+                    <option value="KH" ${pos === 'KH' ? 'selected' : ''}>⚡ KH</option>
+                    <option value="OH" ${pos === 'OH' ? 'selected' : ''}>⚡ OH</option>
+                    <option value="H" ${pos === 'H' ? 'selected' : ''}>⚡ H</option>
                 </select>
+                <button type="button" class="ocr-row-del-btn" data-index="${index}" title="Poista rivi">🗑️</button>
             `;
             ocrResultsList.appendChild(row);
+        });
+
+        // Bind delete buttons
+        ocrResultsList.querySelectorAll('.ocr-row-del-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const idx = parseInt(e.currentTarget.dataset.index, 10);
+                if (!isNaN(idx) && idx >= 0 && idx < tempOcrParsedPlayers.length) {
+                    tempOcrParsedPlayers.splice(idx, 1);
+                    renderOcrResults();
+                }
+            });
         });
     }
 
@@ -8813,11 +9097,69 @@
         document.getElementById('btn-add-player')?.addEventListener('click', () => openModal());
         document.getElementById('btn-quick-add')?.addEventListener('click', () => openModal());
 
-        // Photo Modal Event Listeners
+        // Photo & AI Import Modal Event Listeners (v59.0)
         document.getElementById('btn-import-photo')?.addEventListener('click', openPhotoModal);
         document.getElementById('btn-photo-add')?.addEventListener('click', openPhotoModal);
         document.getElementById('btn-close-photo-modal')?.addEventListener('click', () => {
             document.getElementById('photo-modal')?.classList.remove('active');
+        });
+
+        // Tab Switching
+        document.getElementById('ai-tab-text-btn')?.addEventListener('click', () => switchAiTab('text'));
+        document.getElementById('ai-tab-photo-btn')?.addEventListener('click', () => switchAiTab('photo'));
+
+        // Gemini API Key Save
+        document.getElementById('btn-save-gemini-key')?.addEventListener('click', () => {
+            const input = document.getElementById('gemini-api-key-input');
+            const keyStatus = document.getElementById('gemini-key-status');
+            const val = (input?.value || '').trim();
+            if (val) {
+                localStorage.setItem('salibandy_gemini_api_key', val);
+                if (keyStatus) keyStatus.innerHTML = '✅ <span style="color:#10b981;">Gemini API-avain tallennettu ja aktivoitu!</span>';
+                showToast('Gemini API-avain tallennettu onnistuneesti! ✨');
+            } else {
+                localStorage.removeItem('salibandy_gemini_api_key');
+                if (keyStatus) keyStatus.innerHTML = 'Avain poistettu. Käytetään sisäistä lukijaa.';
+                showToast('Gemini API-avain poistettu.');
+            }
+        });
+
+        // Text AI Parsing
+        document.getElementById('btn-parse-ai-text')?.addEventListener('click', () => {
+            const input = document.getElementById('ai-text-input');
+            const val = input?.value?.trim() || '';
+            if (!val) {
+                showToast('Liitä ensin pelaajalista tai tekstiä kenttään.', 'warning');
+                return;
+            }
+
+            const parsed = smartParseTextToPlayers(val);
+            if (parsed.length === 0) {
+                showToast('Tekstistä ei löytynyt tunnistettavia pelaajia. Kokeile muotoa: #10 Matti Meikäläinen (H)', 'warning');
+                return;
+            }
+
+            tempOcrParsedPlayers = parsed;
+            const textPanel = document.getElementById('ai-tab-text-panel');
+            const photoPanel = document.getElementById('ai-tab-photo-panel');
+            const photoPreviewStep = document.getElementById('photo-preview-step');
+
+            if (textPanel) textPanel.style.display = 'none';
+            if (photoPanel) photoPanel.style.display = 'none';
+            renderOcrResults();
+            if (photoPreviewStep) photoPreviewStep.style.display = 'block';
+            showToast(`${parsed.length} pelaajaa tunnistettu tekstistä! 🎉`);
+        });
+
+        // Add Row Manually in Preview
+        document.getElementById('btn-add-ocr-row')?.addEventListener('click', () => {
+            tempOcrParsedPlayers.push({
+                id: 'ocr_manual_' + Date.now(),
+                name: '',
+                number: 1,
+                position: 'H'
+            });
+            renderOcrResults();
         });
 
         const photoFileInput = document.getElementById('photo-file-input');
@@ -8843,16 +9185,48 @@
             });
         }
 
+        // Global Paste Listener (Ctrl + V for images and screenshots)
+        window.addEventListener('paste', (e) => {
+            const photoModal = document.getElementById('photo-modal');
+            if (!photoModal || !photoModal.classList.contains('active')) return;
+
+            const items = (e.clipboardData || e.originalEvent?.clipboardData)?.items;
+            if (!items) return;
+
+            for (let i = 0; i < items.length; i++) {
+                if (items[i].type.indexOf('image') !== -1) {
+                    const file = items[i].getAsFile();
+                    if (file) {
+                        e.preventDefault();
+                        switchAiTab('photo');
+                        processPhotoFile(file);
+                        showToast('Valokuva liitetty leikepöydältä! 📷');
+                        return;
+                    }
+                }
+            }
+        });
+
         document.getElementById('btn-reselect-photo')?.addEventListener('click', () => {
-            const fDrop = document.getElementById('file-drop-area');
+            const textPanel = document.getElementById('ai-tab-text-panel');
+            const photoPanel = document.getElementById('ai-tab-photo-panel');
             const oStatus = document.getElementById('ocr-status');
             const pPreview = document.getElementById('photo-preview-step');
             const fInput = document.getElementById('photo-file-input');
+            const fDrop = document.getElementById('file-drop-area');
 
-            if (fDrop) fDrop.style.display = 'block';
-            if (oStatus) oStatus.style.display = 'none';
             if (pPreview) pPreview.style.display = 'none';
+            if (oStatus) oStatus.style.display = 'none';
             if (fInput) fInput.value = '';
+            if (fDrop) fDrop.style.display = 'block';
+
+            if (activeAiImportTab === 'text') {
+                if (textPanel) textPanel.style.display = 'block';
+                if (photoPanel) photoPanel.style.display = 'none';
+            } else {
+                if (textPanel) textPanel.style.display = 'none';
+                if (photoPanel) photoPanel.style.display = 'block';
+            }
         });
 
         document.getElementById('btn-confirm-ocr-import')?.addEventListener('click', () => {
@@ -8869,15 +9243,23 @@
                 const position = posInput ? posInput.value : 'H';
 
                 if (name && !isNaN(number)) {
-                    roster.push({
-                        id: 'p_ocr_' + Date.now() + '_' + (addedCount++),
-                        name: name,
-                        number: number,
-                        position: position,
-                        positions: [position],
-                        isLoan: false,
-                        notes: 'Tuotu kuvasta 📷'
-                    });
+                    // Check if player already exists in roster by ID or exact name
+                    const existingIdx = roster.findIndex(p => p.number === number && p.name.toLowerCase() === name.toLowerCase());
+                    if (existingIdx >= 0) {
+                        roster[existingIdx].position = position;
+                        roster[existingIdx].positions = [position];
+                    } else {
+                        roster.push({
+                            id: 'p_ai_' + Date.now() + '_' + (addedCount++),
+                            name: name,
+                            number: number,
+                            position: position,
+                            positions: [position],
+                            isLoan: false,
+                            notes: 'Tuotu tekoälyllä ✨'
+                        });
+                    }
+                    addedCount++;
                 }
             });
 
@@ -8885,10 +9267,10 @@
                 saveState();
                 updateRosterCounters();
                 renderRoster();
-                closeModal();
-                showToast(`${addedCount} pelaajaa tuotu valokuvasta rinkiin! 🎉`);
+                document.getElementById('photo-modal')?.classList.remove('active');
+                showToast(`${addedCount} pelaajaa tallennettu rinkiin! 🎉`);
             } else {
-                showToast('Ei lisättäviä pelaajia.');
+                showToast('Ei lisättäviä pelaajia. Tarkista että jokaisella pelaajalla on nimi ja numero.');
             }
         });
 
