@@ -103,6 +103,31 @@
         { id: '6v5_2', name: '2. 6vs5 (Ilman MV)', shortName: '2. 6v5', group: '6v5', icon: '🔥' }
     ];
 
+    const DEFAULT_TEAMS = [
+        { id: 'default_team', name: 'SekTa', logo: '🏑', primaryColor: '#2563eb', mvColor: '#10b981' },
+        { id: 'team_akatemia', name: 'FBC Akatemia', logo: '🦅', primaryColor: '#dc2626', mvColor: '#10b981' },
+        { id: 'team_edustus', name: 'Edustusjoukkue', logo: '🦁', primaryColor: '#2563eb', mvColor: '#10b981' },
+        { id: 'team_junnut', name: 'A-Juniorit', logo: '⚡', primaryColor: '#dc2626', mvColor: '#eab308' }
+    ];
+
+    const DEFAULT_AKATEMIA_ROSTER = [
+        // 🟢 Maalivahdit
+        { id: 'p_ocr_1786787489945_1', name: 'Sivil Daniel', number: 33, position: 'MV', notes: 'In 👍' },
+
+        // 🔵 Kenttäpelaajat
+        { id: 'p_ocr_1786787489945_7', name: 'Pelllä Jooa', number: 7, position: 'VP', notes: 'In 👍' },
+        { id: 'p_ocr_1786787489945_8', name: 'Männistö Juho', number: 4, position: 'OP', notes: 'In 👍' },
+        { id: 'p_ocr_1786787489945_0', name: 'Laine Nico', number: 44, position: 'VH', notes: 'In 👍' },
+        { id: 'p_ocr_1786787489945_2', name: 'Tiihonen Henri', number: 2, position: 'KH', notes: 'In 👍' },
+        { id: 'p_ocr_1786787489945_6', name: 'Sinkkonen Aleksi', number: 12, position: 'OH', notes: 'In 👍' },
+        { id: 'p_ocr_1786787489945_3', name: 'Lehtonen Elias', number: 2, position: 'VP', notes: 'In 👍' },
+        { id: 'p_ocr_1786787489945_4', name: 'Lehtovirta Valtteri', number: 2, position: 'OP', notes: 'In 👍' },
+        { id: 'p_ocr_1786787489945_5', name: 'Vuorenpää Vil', number: 19, position: 'VH', notes: 'In 👍' },
+        { id: 'p_ocr_1786787489945_9', name: 'Rantasalo Elsa', number: 4, position: 'KH', notes: 'In 👍' },
+        { id: 'p_ocr_1786787489945_10', name: 'Kallio Luukas', number: 2, position: 'OH', notes: 'In 👍' },
+        { id: 'p_1789731527753', name: 'Vesku', number: 99, position: 'H', notes: 'In 👍' }
+    ];
+
     function showToast(msg) {
         if (!toastEl) return;
         toastEl.textContent = msg;
@@ -157,15 +182,15 @@
                 deletedTeamIds = deletedTeamIds.filter(id => {
                     if (!id) return false;
                     const low = String(id).toLowerCase();
-                    return low !== 'team_sekta' && low !== 'default_team' && !low.includes('sekta');
+                    const isSekta = low === 'team_sekta' || low === 'default_team' || low.includes('sekta');
+                    const isAkatemia = low === 'team_akatemia' || low === 'team_fbc_akatemia' || low === 'team_1786787084772' || low.includes('akatemia');
+                    return !isSekta && !isAkatemia;
                 });
                 localStorage.setItem('salibandy_deleted_team_ids', JSON.stringify(deletedTeamIds));
             }
 
             const rawTeams = localStorage.getItem('salibandy_teams_v1');
-            teams = rawTeams ? JSON.parse(rawTeams) : [
-                { id: 'default_team', name: 'SekTa', logo: '🏑', primaryColor: '#2563eb' }
-            ];
+            teams = rawTeams ? JSON.parse(rawTeams) : JSON.parse(JSON.stringify(DEFAULT_TEAMS));
 
             // Filter out deleted teams, clean corrupt names/IDs, and deduplicate by ID
             const seenTeamIds = new Set();
@@ -183,13 +208,21 @@
                     validTeams.push(t);
                 }
             });
-            teams = validTeams.length > 0 ? validTeams : [
-                { id: 'default_team', name: 'SekTa', logo: '🏑', primaryColor: '#2563eb' }
-            ];
+            teams = validTeams.length > 0 ? validTeams : JSON.parse(JSON.stringify(DEFAULT_TEAMS));
 
             const hasSekTa = teams.some(t => t && (t.id === 'default_team' || t.id === 'team_sekta' || (t.name && t.name.toLowerCase().includes('sekta'))));
             if (!hasSekTa) {
-                teams.unshift({ id: 'default_team', name: 'SekTa', logo: '🏑', primaryColor: '#2563eb' });
+                teams.unshift(JSON.parse(JSON.stringify(DEFAULT_TEAMS[0])));
+            }
+
+            const hasAkatemia = teams.some(t => t && (t.id === 'team_akatemia' || t.id === 'team_fbc_akatemia' || t.id === 'team_1786787084772' || (t.name && t.name.toLowerCase().includes('akatemia'))));
+            if (!hasAkatemia) {
+                const sektaIdx = teams.findIndex(t => t && (t.id === 'default_team' || t.id === 'team_sekta' || (t.name && t.name.toLowerCase().includes('sekta'))));
+                if (sektaIdx !== -1) {
+                    teams.splice(sektaIdx + 1, 0, JSON.parse(JSON.stringify(DEFAULT_TEAMS[1])));
+                } else {
+                    teams.push(JSON.parse(JSON.stringify(DEFAULT_TEAMS[1])));
+                }
             }
 
             localStorage.setItem('salibandy_teams_v1', JSON.stringify(teams));
@@ -230,6 +263,7 @@
 
             const curTeam = teams.find(t => t.id === currentTeamId);
             const isSektaTeam = currentTeamId === 'default_team' || currentTeamId === 'team_sekta' || (curTeam && (curTeam.name || '').toLowerCase().includes('sekta'));
+            const isAkatemiaTeam = currentTeamId === 'team_akatemia' || currentTeamId === 'team_fbc_akatemia' || currentTeamId === 'team_1786787084772' || (curTeam && (curTeam.name || '').toLowerCase().includes('akatemia'));
 
             // Default Sekta events URL if team name matches
             if (curTeam && !curTeam.eventsUrl && !curTeam.nimenhuutoUrl) {
@@ -242,7 +276,7 @@
             const rawRoster = localStorage.getItem('salibandy_roster_' + currentTeamId);
             roster = rawRoster ? JSON.parse(rawRoster) : [];
 
-            // ONLY provide default SekTa roster if current team is SekTa and roster is empty!
+            // ONLY provide default SekTa/Akatemia roster if current team matches and roster is empty!
             if (!roster || roster.length === 0) {
                 if (isSektaTeam) {
                     const altRoster1 = localStorage.getItem('salibandy_roster_default_team');
@@ -278,6 +312,26 @@
                             { id: 'p_66', name: 'Miika', number: 66, position: 'H' }
                         ];
                     }
+                    localStorage.setItem('salibandy_roster_' + currentTeamId, JSON.stringify(roster));
+                } else if (isAkatemiaTeam) {
+                    const altKeys = ['salibandy_roster_team_akatemia', 'salibandy_roster_team_fbc_akatemia', 'salibandy_roster_team_1786787084772'];
+                    for (const k of altKeys) {
+                        if (k === 'salibandy_roster_' + currentTeamId) continue;
+                        const alt = localStorage.getItem(k);
+                        if (alt) {
+                            try {
+                                const parsed = JSON.parse(alt);
+                                if (Array.isArray(parsed) && parsed.length > 0) {
+                                    roster = parsed;
+                                    break;
+                                }
+                            } catch(e){}
+                        }
+                    }
+                    if (!roster || roster.length === 0) {
+                        roster = JSON.parse(JSON.stringify(DEFAULT_AKATEMIA_ROSTER));
+                    }
+                    localStorage.setItem('salibandy_roster_' + currentTeamId, JSON.stringify(roster));
                 } else {
                     roster = [];
                 }
@@ -321,12 +375,56 @@
             if (lineupReserves['av'] && !lineupReserves['av1']) lineupReserves['av1'] = [...lineupReserves['av']];
             if (lineupReserves['6v5'] && !lineupReserves['6v5_1']) lineupReserves['6v5_1'] = [...lineupReserves['6v5']];
 
-            // If completely empty lineups, seed with initial realistic starters & bench ONLY for SekTa
+            // If completely empty lineups, seed with initial realistic starters & bench
             const isAnyAssigned = Object.values(lineups).some(l => Object.values(l).some(Boolean));
             if (!isAnyAssigned && roster.length >= 12 && isSektaTeam) {
                 lineups['1'] = { MV: 'p_mv23', VP: 'p_19', OP: 'p_20', VH: 'p_11', KH: 'p_42', OH: 'p_64' };
                 lineups['2'] = { MV: 'p_mv45', VP: 'p_71', OP: 'p_4', VH: 'p_21', KH: 'p_55', OH: 'p_2' };
                 if (!lineupReserves['1']) lineupReserves['1'] = ['p_88'];
+                localStorage.setItem('salibandy_lineups_' + currentTeamId, JSON.stringify(lineups));
+            } else if (!isAnyAssigned && isAkatemiaTeam) {
+                const altKeys = ['salibandy_lineups_team_akatemia', 'salibandy_lineups_team_fbc_akatemia', 'salibandy_lineups_team_1786787084772'];
+                for (const k of altKeys) {
+                    if (k === 'salibandy_lineups_' + currentTeamId) continue;
+                    const alt = localStorage.getItem(k);
+                    if (alt) {
+                        try {
+                            const parsed = JSON.parse(alt);
+                            if (parsed && parsed['1'] && Object.values(parsed['1']).some(Boolean)) {
+                                lineups = parsed;
+                                break;
+                            }
+                        } catch(e){}
+                    }
+                }
+                if (!Object.values(lineups['1'] || {}).some(Boolean)) {
+                    lineups['1'] = {
+                        MV: 'p_ocr_1786787489945_1',
+                        VP: 'p_ocr_1786787489945_7',
+                        OP: 'p_ocr_1786787489945_8',
+                        VH: 'p_ocr_1786787489945_0',
+                        KH: 'p_ocr_1786787489945_2',
+                        OH: 'p_ocr_1786787489945_6'
+                    };
+                    lineups['2'] = {
+                        MV: '',
+                        VP: 'p_ocr_1786787489945_3',
+                        OP: 'p_ocr_1786787489945_4',
+                        VH: 'p_ocr_1786787489945_5',
+                        KH: 'p_ocr_1786787489945_9',
+                        OH: 'p_ocr_1786787489945_10'
+                    };
+                    lineups['yv1'] = {
+                        MV: '',
+                        VP: 'p_ocr_1786787489945_7',
+                        OP: 'p_ocr_1786787489945_8',
+                        VH: 'p_ocr_1786787489945_0',
+                        KH: 'p_ocr_1786787489945_2',
+                        OH: 'p_ocr_1786787489945_6'
+                    };
+                    if (!lineupReserves['1']) lineupReserves['1'] = ['p_1789731527753'];
+                }
+                localStorage.setItem('salibandy_lineups_' + currentTeamId, JSON.stringify(lineups));
             }
 
             // In Simple mode: ONLY canonical lineups exist (1-4, 2x YV, 2x AV, 2x 6vs5).
@@ -684,7 +782,9 @@
                 deletedTeamIds = Array.from(new Set([...deletedTeamIds, ...cloudData.deletedTeamIds])).filter(id => {
                     if (!id) return false;
                     const low = String(id).toLowerCase();
-                    return low !== 'team_sekta' && low !== 'default_team' && !low.includes('sekta');
+                    const isSekta = low === 'team_sekta' || low === 'default_team' || low.includes('sekta');
+                    const isAkatemia = low === 'team_akatemia' || low === 'team_fbc_akatemia' || low === 'team_1786787084772' || low.includes('akatemia');
+                    return !isSekta && !isAkatemia;
                 });
                 localStorage.setItem('salibandy_deleted_team_ids', JSON.stringify(deletedTeamIds));
             }
@@ -710,10 +810,19 @@
                 teams = Array.from(mergedMap.values());
                 const hasSekTa = teams.some(t => t && (t.id === 'default_team' || t.id === 'team_sekta' || (t.name && t.name.toLowerCase().includes('sekta'))));
                 if (!hasSekTa) {
-                    teams.unshift({ id: 'default_team', name: 'SekTa', logo: '🏑', primaryColor: '#2563eb' });
+                    teams.unshift(JSON.parse(JSON.stringify(DEFAULT_TEAMS[0])));
+                }
+                const hasAkatemia = teams.some(t => t && (t.id === 'team_akatemia' || t.id === 'team_fbc_akatemia' || t.id === 'team_1786787084772' || (t.name && t.name.toLowerCase().includes('akatemia'))));
+                if (!hasAkatemia) {
+                    const sektaIdx = teams.findIndex(t => t && (t.id === 'default_team' || t.id === 'team_sekta' || (t.name && t.name.toLowerCase().includes('sekta'))));
+                    if (sektaIdx !== -1) {
+                        teams.splice(sektaIdx + 1, 0, JSON.parse(JSON.stringify(DEFAULT_TEAMS[1])));
+                    } else {
+                        teams.push(JSON.parse(JSON.stringify(DEFAULT_TEAMS[1])));
+                    }
                 }
                 if (teams.length === 0) {
-                    teams = [{ id: 'default_team', name: 'SekTa', logo: '🏑', primaryColor: '#2563eb' }];
+                    teams = JSON.parse(JSON.stringify(DEFAULT_TEAMS));
                 }
                 if (cloudData.currentTeamId && teams.some(t => t.id === cloudData.currentTeamId)) {
                     currentTeamId = cloudData.currentTeamId;
@@ -1073,6 +1182,11 @@
             return;
         }
 
+        if (currentTeamId === 'team_akatemia' || currentTeamId === 'team_fbc_akatemia' || currentTeamId === 'team_1786787084772' || (team.name && team.name.toLowerCase().includes('akatemia'))) {
+            showToast('⚠️ Joukkuetta "FBC Akatemia" ei voi poistaa!', 'warning');
+            return;
+        }
+
         if (confirm(`Haluatko varmasti poistaa joukkueen '${team.name}' kaikkine pelaajineen ja kentällisineen?`)) {
             const deleteId = currentTeamId;
 
@@ -1099,7 +1213,7 @@
             // 3. Filter teams
             teams = teams.filter(t => t.id !== deleteId && !deletedTeamIds.includes(t.id));
             if (teams.length === 0) {
-                teams = [{ id: 'default_team', name: 'SekTa', logo: '🏑', primaryColor: '#2563eb' }];
+                teams = JSON.parse(JSON.stringify(DEFAULT_TEAMS));
             }
 
             // 4. Remove localStorage items

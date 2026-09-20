@@ -25,6 +25,18 @@
             matchInfo: { opponent: '', time: '', meta: '', showBanner: false }
         },
         { 
+            id: 'team_akatemia', 
+            name: 'FBC Akatemia',
+            logo: '🦅',
+            primaryColor: '#dc2626',
+            mvColor: '#10b981',
+            tokenStyle: 'circle',
+            arenaName: 'FBC Areena',
+            rinkColor: 'black',
+            showCourtLogo: true,
+            matchInfo: { opponent: '', time: '', meta: '', showBanner: false }
+        },
+        { 
             id: 'team_edustus', 
             name: 'Edustusjoukkue',
             logo: '🦁',
@@ -105,6 +117,35 @@
         'freeform': { MV: '', VP: '', OP: '', VH: '', KH: '', OH: '', VM: '' }
     };
 
+    const DEFAULT_AKATEMIA_ROSTER = [
+        // 🟢 Maalivahdit (Vihreät laput)
+        { id: 'p_ocr_1786787489945_1', name: 'Sivil Daniel', number: 33, position: 'MV', isLoan: false, notes: 'In 👍' },
+
+        // 🔵 Kenttäpelaajat (Siniset laput - In 👍)
+        { id: 'p_ocr_1786787489945_7', name: 'Pelllä Jooa', number: 7, position: 'VP', isLoan: false, notes: 'In 👍' },
+        { id: 'p_ocr_1786787489945_8', name: 'Männistö Juho', number: 4, position: 'OP', isLoan: false, notes: 'In 👍' },
+        { id: 'p_ocr_1786787489945_0', name: 'Laine Nico', number: 44, position: 'VH', isLoan: false, notes: 'In 👍' },
+        { id: 'p_ocr_1786787489945_2', name: 'Tiihonen Henri', number: 2, position: 'KH', isLoan: false, notes: 'In 👍' },
+        { id: 'p_ocr_1786787489945_6', name: 'Sinkkonen Aleksi', number: 12, position: 'OH', isLoan: false, notes: 'In 👍' },
+        { id: 'p_ocr_1786787489945_3', name: 'Lehtonen Elias', number: 2, position: 'VP', isLoan: false, notes: 'In 👍' },
+        { id: 'p_ocr_1786787489945_4', name: 'Lehtovirta Valtteri', number: 2, position: 'OP', isLoan: false, notes: 'In 👍' },
+        { id: 'p_ocr_1786787489945_5', name: 'Vuorenpää Vil', number: 19, position: 'VH', isLoan: false, notes: 'In 👍' },
+        { id: 'p_ocr_1786787489945_9', name: 'Rantasalo Elsa', number: 4, position: 'KH', isLoan: false, notes: 'In 👍' },
+        { id: 'p_ocr_1786787489945_10', name: 'Kallio Luukas', number: 2, position: 'OH', isLoan: false, notes: 'In 👍' },
+        { id: 'p_1789731527753', name: 'Vesku', number: 99, position: 'H', isLoan: false, notes: 'In 👍' }
+    ];
+
+    const DEFAULT_AKATEMIA_LINEUPS = {
+        '1': { MV: 'p_ocr_1786787489945_1', VP: 'p_ocr_1786787489945_7', OP: 'p_ocr_1786787489945_8', VH: 'p_ocr_1786787489945_0', KH: 'p_ocr_1786787489945_2', OH: 'p_ocr_1786787489945_6', VM: '' },
+        '2': { MV: '', VP: 'p_ocr_1786787489945_3', OP: 'p_ocr_1786787489945_4', VH: 'p_ocr_1786787489945_5', KH: 'p_ocr_1786787489945_9', OH: 'p_ocr_1786787489945_10', VM: '' },
+        '3': { MV: '', VP: '', OP: '', VH: '', KH: 'p_1789731527753', OH: '', VM: '' },
+        'yv': { MV: '', VP: 'p_ocr_1786787489945_7', OP: 'p_ocr_1786787489945_8', VH: 'p_ocr_1786787489945_0', KH: 'p_ocr_1786787489945_2', OH: 'p_ocr_1786787489945_6', VM: '' },
+        'av': { MV: 'p_ocr_1786787489945_1', VP: 'p_ocr_1786787489945_7', OP: 'p_ocr_1786787489945_8', VH: 'p_ocr_1786787489945_0', KH: 'p_ocr_1786787489945_2', OH: '', VM: '' },
+        '6v5': { MV: '', VP: 'p_ocr_1786787489945_7', OP: 'p_ocr_1786787489945_8', VH: 'p_ocr_1786787489945_0', KH: 'p_ocr_1786787489945_2', OH: 'p_ocr_1786787489945_6', VM: 'p_ocr_1786787489945_5' },
+        'custom': { MV: '', VP: '', OP: '', VH: '', KH: '', OH: '', VM: '' },
+        'freeform': { MV: '', VP: '', OP: '', VH: '', KH: '', OH: '', VM: '' }
+    };
+
     const DEFAULT_POS_COORDS = {
         horizontal: {
             MV: { x: 12, y: 50 },
@@ -148,7 +189,9 @@
         deletedTeamIds = deletedTeamIds.filter(id => {
             if (!id) return false;
             const low = String(id).toLowerCase();
-            return low !== 'team_sekta' && low !== 'default_team' && !low.includes('sekta');
+            const isSekta = low === 'team_sekta' || low === 'default_team' || low.includes('sekta');
+            const isAkatemia = low === 'team_akatemia' || low === 'team_fbc_akatemia' || low === 'team_1786787084772' || low.includes('akatemia');
+            return !isSekta && !isAkatemia;
         });
         localStorage.setItem('salibandy_deleted_team_ids', JSON.stringify(deletedTeamIds));
     }
@@ -170,10 +213,11 @@
                 if (t.id && (t.id.startsWith('data:') || t.id.length > 50)) {
                     t.id = 'team_sekta';
                 }
+                const isAkatemia = t.id === 'team_akatemia' || t.id === 'team_fbc_akatemia' || t.id === 'team_1786787084772' || (t.name && t.name.toLowerCase().includes('akatemia'));
                 if (!t.logo) {
-                    t.logo = (t.id === 'team_edustus') ? '🦁' : ((t.id === 'team_junnut') ? '⚡' : '🏑');
+                    t.logo = (t.id === 'team_edustus') ? '🦁' : ((t.id === 'team_junnut') ? '⚡' : (isAkatemia ? '🦅' : '🏑'));
                 }
-                if (!t.primaryColor) t.primaryColor = (t.id === 'team_junnut') ? '#dc2626' : '#2563eb';
+                if (!t.primaryColor) t.primaryColor = (t.id === 'team_junnut' || isAkatemia) ? '#dc2626' : '#2563eb';
                 if (!t.mvColor) t.mvColor = (t.id === 'team_junnut') ? '#eab308' : '#10b981';
                 if (!t.tokenStyle) t.tokenStyle = 'circle';
                 if (!t.rinkColor) t.rinkColor = 'black';
@@ -187,8 +231,19 @@
         const hasSekTa = teams.some(t => t && (t.id === 'team_sekta' || t.id === 'default_team' || (t.name && t.name.toLowerCase().includes('sekta'))));
         if (!hasSekTa) {
             teams.unshift(JSON.parse(JSON.stringify(DEFAULT_TEAMS[0])));
-            localStorage.setItem('salibandy_teams_v1', JSON.stringify(teams));
         }
+
+        // Ensure FBC Akatemia is present in teams
+        const hasAkatemia = teams.some(t => t && (t.id === 'team_akatemia' || t.id === 'team_fbc_akatemia' || t.id === 'team_1786787084772' || (t.name && t.name.toLowerCase().includes('akatemia'))));
+        if (!hasAkatemia) {
+            const sektaIdx = teams.findIndex(t => t && (t.id === 'team_sekta' || t.id === 'default_team' || (t.name && t.name.toLowerCase().includes('sekta'))));
+            if (sektaIdx !== -1) {
+                teams.splice(sektaIdx + 1, 0, JSON.parse(JSON.stringify(DEFAULT_TEAMS[1])));
+            } else {
+                teams.push(JSON.parse(JSON.stringify(DEFAULT_TEAMS[1])));
+            }
+        }
+        localStorage.setItem('salibandy_teams_v1', JSON.stringify(teams));
 
         if (!teams.some(t => t.id === currentTeamId)) {
             currentTeamId = teams[0].id;
@@ -1397,7 +1452,9 @@
                 deletedTeamIds = Array.from(incomingDeleted).filter(id => {
                     if (!id) return false;
                     const low = String(id).toLowerCase();
-                    return low !== 'team_sekta' && low !== 'default_team' && !low.includes('sekta');
+                    const isSekta = low === 'team_sekta' || low === 'default_team' || low.includes('sekta');
+                    const isAkatemia = low === 'team_akatemia' || low === 'team_fbc_akatemia' || low === 'team_1786787084772' || low.includes('akatemia');
+                    return !isSekta && !isAkatemia;
                 });
                 localStorage.setItem('salibandy_deleted_team_ids', JSON.stringify(deletedTeamIds));
             }
@@ -1437,6 +1494,16 @@
                 const hasSekTa = teams.some(t => t && (t.id === 'team_sekta' || t.id === 'default_team' || (t.name && t.name.toLowerCase().includes('sekta'))));
                 if (!hasSekTa) {
                     teams.unshift(JSON.parse(JSON.stringify(DEFAULT_TEAMS[0])));
+                    needCloudUpdateBack = true;
+                }
+                const hasAkatemia = teams.some(t => t && (t.id === 'team_akatemia' || t.id === 'team_fbc_akatemia' || t.id === 'team_1786787084772' || (t.name && t.name.toLowerCase().includes('akatemia'))));
+                if (!hasAkatemia) {
+                    const sektaIdx = teams.findIndex(t => t && (t.id === 'team_sekta' || t.id === 'default_team' || (t.name && t.name.toLowerCase().includes('sekta'))));
+                    if (sektaIdx !== -1) {
+                        teams.splice(sektaIdx + 1, 0, JSON.parse(JSON.stringify(DEFAULT_TEAMS[1])));
+                    } else {
+                        teams.push(JSON.parse(JSON.stringify(DEFAULT_TEAMS[1])));
+                    }
                     needCloudUpdateBack = true;
                 }
                 if (teams.length === 0) {
@@ -1628,7 +1695,8 @@
         if (!Array.isArray(teams)) return;
         teams.forEach(t => {
             const isDefaultOrSekta = !t || t.id === 'team_edustus' || t.id === 'team_sekta' || t.id === 'default_team' || (t.name && t.name.toLowerCase().includes('sekta'));
-            if (!isDefaultOrSekta) {
+            const isAkatemia = t && (t.id === 'team_akatemia' || t.id === 'team_fbc_akatemia' || t.id === 'team_1786787084772' || (t.name && t.name.toLowerCase().includes('akatemia')));
+            if (!isDefaultOrSekta && !isAkatemia) {
                 const storedRoster = loadFromStorage(`salibandy_roster_${t.id}`, null);
                 if (storedRoster && Array.isArray(storedRoster) && storedRoster.some(p => p.id === 'p_mv23')) {
                     localStorage.setItem(`salibandy_roster_${t.id}`, JSON.stringify([]));
@@ -1662,6 +1730,24 @@
             }
             localStorage.setItem(`salibandy_roster_${teamId}`, JSON.stringify(stored));
         }
+
+        const isAkatemia = teamId === 'team_akatemia' || teamId === 'team_fbc_akatemia' || teamId === 'team_1786787084772' || (teams && teams.some(t => t && t.id === teamId && (t.name || '').toLowerCase().includes('akatemia')));
+        if ((!stored || !Array.isArray(stored) || stored.length === 0) && isAkatemia) {
+            const altKeys = ['salibandy_roster_team_akatemia', 'salibandy_roster_team_fbc_akatemia', 'salibandy_roster_team_1786787084772'];
+            for (const k of altKeys) {
+                if (k === `salibandy_roster_${teamId}`) continue;
+                const alt = loadFromStorage(k, null);
+                if (alt && Array.isArray(alt) && alt.length > 0) {
+                    stored = alt;
+                    break;
+                }
+            }
+            if (!stored || !Array.isArray(stored) || stored.length === 0) {
+                stored = JSON.parse(JSON.stringify(DEFAULT_AKATEMIA_ROSTER));
+            }
+            localStorage.setItem(`salibandy_roster_${teamId}`, JSON.stringify(stored));
+        }
+
         return (stored && Array.isArray(stored)) ? stored : [];
     }
 
@@ -1679,6 +1765,23 @@
                 stored = alt;
             } else {
                 stored = JSON.parse(JSON.stringify(DEFAULT_LINEUPS));
+            }
+            localStorage.setItem(`salibandy_lineups_${teamId}`, JSON.stringify(stored));
+        }
+
+        const isAkatemia = teamId === 'team_akatemia' || teamId === 'team_fbc_akatemia' || teamId === 'team_1786787084772' || (teams && teams.some(t => t && t.id === teamId && (t.name || '').toLowerCase().includes('akatemia')));
+        if ((!stored || typeof stored !== 'object' || Object.keys(stored).length === 0 || !Object.values(stored['1'] || {}).some(Boolean)) && isAkatemia) {
+            const altKeys = ['salibandy_lineups_team_akatemia', 'salibandy_lineups_team_fbc_akatemia', 'salibandy_lineups_team_1786787084772'];
+            for (const k of altKeys) {
+                if (k === `salibandy_lineups_${teamId}`) continue;
+                const alt = loadFromStorage(k, null);
+                if (alt && typeof alt === 'object' && Object.values(alt['1'] || {}).some(Boolean)) {
+                    stored = alt;
+                    break;
+                }
+            }
+            if (!stored || typeof stored !== 'object' || !Object.values(stored['1'] || {}).some(Boolean)) {
+                stored = JSON.parse(JSON.stringify(DEFAULT_AKATEMIA_LINEUPS));
             }
             localStorage.setItem(`salibandy_lineups_${teamId}`, JSON.stringify(stored));
         }
@@ -1919,6 +2022,11 @@
 
         if (currentTeamId === 'team_sekta' || currentTeamId === 'default_team' || (team.name && team.name.toLowerCase().includes('sekta'))) {
             showToast('SekTa-pääjoukkuetta ei voi poistaa.', 'warning');
+            return;
+        }
+
+        if (currentTeamId === 'team_akatemia' || currentTeamId === 'team_fbc_akatemia' || currentTeamId === 'team_1786787084772' || (team.name && team.name.toLowerCase().includes('akatemia'))) {
+            showToast('FBC Akatemia -joukkuetta ei voi poistaa.', 'warning');
             return;
         }
 
