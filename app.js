@@ -303,6 +303,13 @@
     let activeAssigningPlayerId = null;
     let teamEvents = [];
     let activeEventId = null;
+    teamEvents = loadTeamEvents(currentTeamId);
+    const initialRawActive = loadFromStorage(`salibandy_active_event_id_${currentTeamId}`, null);
+    if (initialRawActive && teamEvents.some(e => e.id === initialRawActive)) {
+        activeEventId = initialRawActive;
+    } else if (!activeEventId || !teamEvents.some(e => e.id === activeEventId)) {
+        activeEventId = teamEvents[0] ? teamEvents[0].id : null;
+    }
     let liveRosterFilter = 'all';
     let liveRosterSearchQuery = '';
     let selectedPlayerForAttendance = null;
@@ -795,6 +802,18 @@
         initNetworkStatus();
         initPWAInstall();
         initMobileMorePanel();
+
+        // Background auto-fetch of events if team has eventsUrl and events are empty or stale (> 2 min)
+        const initTeam = teams.find(t => t.id === currentTeamId);
+        const initUrl = initTeam ? (initTeam.eventsUrl || initTeam.nimenhuutoUrl || initTeam.myclubUrl || '') : '';
+        if (initUrl) {
+            const lastFetch = parseInt(loadFromStorage(`salibandy_events_last_fetch_${currentTeamId}`, '0'), 10) || 0;
+            if (!teamEvents || teamEvents.length === 0 || Date.now() - lastFetch > 2 * 60 * 1000) {
+                setTimeout(() => {
+                    fetchAndSyncEvents(initUrl, true);
+                }, 800);
+            }
+        }
     }
 
     // ==========================================
@@ -1640,6 +1659,15 @@
                     localStorage.setItem(`salibandy_pages_${tId}`, JSON.stringify(cloudData.pages[tId]));
                 });
             }
+            if (cloudData.events) {
+                Object.keys(cloudData.events).forEach(tId => {
+                    if (deletedTeamIds.includes(tId)) {
+                        localStorage.removeItem(`salibandy_events_${tId}`);
+                        return;
+                    }
+                    localStorage.setItem(`salibandy_events_${tId}`, JSON.stringify(cloudData.events[tId]));
+                });
+            }
 
             roster = loadRosterForTeam(currentTeamId);
             lineupConfigs = loadLineupConfigs(currentTeamId);
@@ -1654,6 +1682,7 @@
             lineupExtraPlayers = loadFromStorage(`salibandy_extra_players_${currentTeamId}`, {});
             lineupTextNotes = loadFromStorage(`salibandy_text_notes_${currentTeamId}`, {});
             lineupPages = loadFromStorage(`salibandy_pages_${currentTeamId}`, {});
+            teamEvents = loadTeamEvents(currentTeamId);
 
             saveStateLocalOnly();
 
@@ -1841,6 +1870,26 @@
             localStorage.setItem(`salibandy_grid_paper_${currentTeamId}`, JSON.stringify(lineupGridPaper));
             localStorage.setItem(`salibandy_pages_${currentTeamId}`, JSON.stringify(lineupPages));
             localStorage.setItem(`salibandy_events_${currentTeamId}`, JSON.stringify(teamEvents));
+            if (activeEventId) {
+                localStorage.setItem(`salibandy_active_event_id_${currentTeamId}`, JSON.stringify(activeEventId));
+            }
+            if (currentTeamId === 'team_sekta' || currentTeamId === 'default_team') {
+                const altKey = currentTeamId === 'team_sekta' ? 'default_team' : 'team_sekta';
+                localStorage.setItem(`salibandy_events_${altKey}`, JSON.stringify(teamEvents));
+                if (activeEventId) {
+                    localStorage.setItem(`salibandy_active_event_id_${altKey}`, JSON.stringify(activeEventId));
+                }
+            } else if (currentTeamId === 'team_akatemia' || currentTeamId === 'team_fbc_akatemia' || currentTeamId === 'team_1786787084772') {
+                const altKeys = ['team_akatemia', 'team_fbc_akatemia', 'team_1786787084772'];
+                altKeys.forEach(ak => {
+                    if (ak !== currentTeamId) {
+                        localStorage.setItem(`salibandy_events_${ak}`, JSON.stringify(teamEvents));
+                        if (activeEventId) {
+                            localStorage.setItem(`salibandy_active_event_id_${ak}`, JSON.stringify(activeEventId));
+                        }
+                    }
+                });
+            }
         } catch (e) {
             console.error('LocalStorage save error', e);
         }
@@ -1976,6 +2025,9 @@
         lineupTextNotes = loadFromStorage(`salibandy_text_notes_${currentTeamId}`, {});
         lineupGridPaper = loadFromStorage(`salibandy_grid_paper_${currentTeamId}`, {});
         lineupPages = loadFromStorage(`salibandy_pages_${currentTeamId}`, {});
+        teamEvents = loadTeamEvents(currentTeamId);
+        const rawAct = loadFromStorage(`salibandy_active_event_id_${currentTeamId}`, null);
+        activeEventId = (rawAct && teamEvents.some(e => e.id === rawAct)) ? rawAct : (teamEvents[0]?.id || null);
 
         activePageId = 'p1';
 
@@ -1984,6 +2036,18 @@
         }
 
         saveState();
+
+        // Background auto-fetch if switched team has URL and events are empty or stale (> 2 min)
+        const curTeamObj = teams.find(t => t.id === currentTeamId);
+        const curTeamUrl = curTeamObj ? (curTeamObj.eventsUrl || curTeamObj.nimenhuutoUrl || curTeamObj.myclubUrl || '') : '';
+        if (curTeamUrl) {
+            const lastFetch = parseInt(loadFromStorage(`salibandy_events_last_fetch_${currentTeamId}`, '0'), 10) || 0;
+            if (!teamEvents || teamEvents.length === 0 || Date.now() - lastFetch > 2 * 60 * 1000) {
+                setTimeout(() => {
+                    fetchAndSyncEvents(curTeamUrl, true);
+                }, 500);
+            }
+        }
 
         applyThemeAndSettings();
         renderTeamDropdown();
@@ -5689,12 +5753,16 @@
                 .map(oId => text.indexOf('/events/' + oId, startPos + 30))
                 .filter(p => p > startPos);
             const endPos = nextPositions.length > 0 ? Math.min(...nextPositions) : text.length;
-            const chunk = text.substring(Math.max(0, startPos - 100), endPos);
+            const chunk = text.substring(Math.max(0, startPos - 120), endPos);
 
             let title = 'Tapahtuma';
-            const titleMatch = chunk.match(/\[([A-ZÅÄÖa-zåäö0-9\s\.\-·]+)\]\(https:\/\/[^\/]+\/events\/\d+\)/);
-            if (titleMatch && !titleMatch[1].startsWith('SYYS') && !titleMatch[1].startsWith('LOKA') && !titleMatch[1].startsWith('MARRAS') && !titleMatch[1].startsWith('TAMMI') && !titleMatch[1].startsWith('HELMI') && !titleMatch[1].startsWith('MAALIS') && !titleMatch[1].startsWith('HUHTI') && !titleMatch[1].startsWith('TOUKO') && !titleMatch[1].startsWith('KESÄ') && !titleMatch[1].startsWith('HEINÄ') && !titleMatch[1].startsWith('ELO') && !titleMatch[1].startsWith('JOULU')) {
-                title = titleMatch[1].replace(/&middot;/g, '·').trim();
+            const titleMatches = [...chunk.matchAll(/\[([^\]]+)\]\(https:\/\/[^\/]+\/events\/\d+\)/g)];
+            for (const tm of titleMatches) {
+                const cand = tm[1].trim();
+                if (!cand.match(/^(TAMMI|HELMI|MAALIS|HUHTI|TOUKO|KESÄ|HEINÄ|ELO|SYYS|LOKA|MARRAS|JOULU)\s+\d+/i) && cand !== 'IN OUT' && !cand.match(/^In\s+\d+/i) && !cand.match(/^Out\s+\d+/i)) {
+                    title = cand.replace(/&middot;/g, '·').trim();
+                    break;
+                }
             }
 
             let dateStr = '';
@@ -5799,7 +5867,9 @@
         return events;
     }
 
-    async function fetchAndSyncEvents(targetUrl = null) {
+    let isFetchingLiveEvents = false;
+
+    async function fetchAndSyncEvents(targetUrl = null, isSilent = false) {
         const curTeam = teams.find(t => t.id === currentTeamId);
         const teamName = curTeam ? curTeam.name : 'Joukkue';
 
@@ -5808,7 +5878,7 @@
         }
 
         if (!targetUrl || !targetUrl.trim()) {
-            openAttendanceImportModal();
+            if (!isSilent) openAttendanceImportModal();
             return false;
         }
 
@@ -5825,7 +5895,9 @@
             targetUrl = targetUrl.replace(/\/+$/, '') + '/events';
         }
 
-        showToast(`Haetaan tapahtumia joukkueelle ${teamName}... ⏳`);
+        if (!isSilent) {
+            showToast(`Haetaan tapahtumia joukkueelle ${teamName}... ⏳`);
+        }
 
         const proxyUrls = [
             `https://r.jina.ai/${targetUrl}`,
@@ -5865,8 +5937,10 @@
         }
 
         if (!fetchSuccess || !rawText) {
-            showToast(`Haku osoitteesta epäonnistui. Varmista osoite tai liitä osallistujat tekstinä.`);
-            openAttendanceImportModal();
+            if (!isSilent) {
+                showToast(`Haku osoitteesta epäonnistui. Varmista osoite tai liitä osallistujat tekstinä.`);
+                openAttendanceImportModal();
+            }
             return false;
         }
 
@@ -5881,8 +5955,10 @@
         }
 
         if (parsedEvents.length === 0) {
-            showToast('Sivulta ei löytynyt tapahtumia. Voit liittää tapahtuman tai osallistujat myös tekstinä.');
-            openAttendanceImportModal();
+            if (!isSilent) {
+                showToast('Sivulta ei löytynyt tapahtumia. Voit liittää tapahtuman tai osallistujat myös tekstinä.');
+                openAttendanceImportModal();
+            }
             return false;
         }
 
@@ -5895,17 +5971,55 @@
             curTeam.nimenhuutoUrl = targetUrl;
         }
 
+        try {
+            localStorage.setItem(`salibandy_events_last_fetch_${currentTeamId}`, Date.now().toString());
+        } catch(e) {}
+
         saveState();
-        renderLiveView();
-        document.getElementById('attendance-import-modal')?.classList.remove('active');
-        showToast(`Haettu onnistuneesti ${teamEvents.length} tapahtumaa joukkueelle ${teamName}! 🎉`);
+        if (activeLineupKey === 'live') {
+            renderLiveView();
+        }
+        if (!isSilent) {
+            document.getElementById('attendance-import-modal')?.classList.remove('active');
+            showToast(`Haettu onnistuneesti ${teamEvents.length} tapahtumaa joukkueelle ${teamName}! 🎉`);
+        }
         return true;
     }
 
     function loadTeamEvents(teamId) {
         let stored = loadFromStorage(`salibandy_events_${teamId}`, null);
+        const isSekta = teamId === 'team_sekta' || teamId === 'default_team';
+        const isAkatemia = teamId === 'team_akatemia' || teamId === 'team_fbc_akatemia' || teamId === 'team_1786787084772';
+        
+        if ((!stored || !Array.isArray(stored) || stored.length === 0) && isSekta) {
+            const altKey = teamId === 'team_sekta' ? 'default_team' : 'team_sekta';
+            const altStored = loadFromStorage(`salibandy_events_${altKey}`, null);
+            if (Array.isArray(altStored) && altStored.length > 0) {
+                stored = altStored;
+                try {
+                    localStorage.setItem(`salibandy_events_${teamId}`, JSON.stringify(stored));
+                } catch(e){}
+            }
+        } else if ((!stored || !Array.isArray(stored) || stored.length === 0) && isAkatemia) {
+            const altKeys = ['team_akatemia', 'team_fbc_akatemia', 'team_1786787084772'];
+            for (const ak of altKeys) {
+                if (ak === teamId) continue;
+                const altStored = loadFromStorage(`salibandy_events_${ak}`, null);
+                if (Array.isArray(altStored) && altStored.length > 0) {
+                    stored = altStored;
+                    try {
+                        localStorage.setItem(`salibandy_events_${teamId}`, JSON.stringify(stored));
+                    } catch(e){}
+                    break;
+                }
+            }
+        }
+
         teamEvents = Array.isArray(stored) ? stored : [];
-        if (!activeEventId || !teamEvents.some(e => e.id === activeEventId)) {
+        const rawAct = loadFromStorage(`salibandy_active_event_id_${teamId}`, null);
+        if (rawAct && teamEvents.some(e => e.id === rawAct)) {
+            activeEventId = rawAct;
+        } else if (!activeEventId || !teamEvents.some(e => e.id === activeEventId)) {
             activeEventId = teamEvents[0] ? teamEvents[0].id : null;
         }
         return teamEvents;
@@ -5928,6 +6042,50 @@
         });
     }
 
+    function renderEmptyLiveState(liveGridContainer, teamName, teamUrl) {
+        liveGridContainer.innerHTML = `
+            <div class="empty-live-box" style="grid-column: 1 / -1; padding: 2.5rem 1.5rem; text-align: center; background: rgba(255, 255, 255, 0.03); border: 2px dashed rgba(255, 255, 255, 0.15); border-radius: var(--radius-lg);">
+                <div style="font-size: 2.8rem; margin-bottom: 0.6rem;">🌐</div>
+                <h3 style="font-size: 1.2rem; color: #fff; margin-bottom: 0.4rem;">Ei vielä tapahtumia joukkueelle ${escapeHtml(teamName)}</h3>
+                <p style="font-size: 0.85rem; color: var(--text-secondary); max-width: 520px; margin: 0 auto 1.2rem; line-height: 1.5;">
+                    Hae tulevat ottelut, harjoitukset ja pelaajien osallistumiset automaattisesti syöttämällä joukkueesi <strong>Nimenhuuto</strong>- tai <strong>myClub</strong> -osoite.
+                </p>
+                <div style="display: flex; justify-content: center; gap: 8px; max-width: 480px; margin: 0 auto 1rem; flex-wrap: wrap;">
+                    <input type="text" id="empty-live-url-input" class="search-input" style="flex: 1; min-width: 220px;" placeholder="Esim. https://${escapeHtml(teamName.toLowerCase().replace(/[^a-z0-9]/g, ''))}.nimenhuuto.com/events tai myClub-osoite" value="${escapeHtml(teamUrl)}">
+                    <button type="button" class="btn btn-primary" id="btn-empty-fetch-events">🔄 Hae tapahtumat</button>
+                </div>
+                <div style="display: flex; justify-content: center; gap: 8px; flex-wrap: wrap;">
+                    <button type="button" class="btn btn-sm btn-outline" id="btn-empty-paste-attendance">📋 Liitä lista käsin</button>
+                    <button type="button" class="btn btn-sm btn-outline" id="btn-empty-create-event">+ Luo tapahtuma käsin</button>
+                </div>
+            </div>
+        `;
+
+        document.getElementById('btn-empty-fetch-events')?.addEventListener('click', () => {
+            const input = document.getElementById('empty-live-url-input');
+            const url = input ? input.value.trim() : '';
+            if (!url) {
+                showToast('Syötä ensin osoite (esim. https://omatiimi.nimenhuuto.com/events)!');
+                return;
+            }
+            fetchAndSyncEvents(url, false);
+        });
+        document.getElementById('btn-empty-paste-attendance')?.addEventListener('click', openAttendanceImportModal);
+        document.getElementById('btn-empty-create-event')?.addEventListener('click', () => openLiveEventModal(null));
+
+        // Reset status counters
+        const statIn = document.getElementById('stat-count-in');
+        const statOut = document.getElementById('stat-count-out');
+        const statMaybe = document.getElementById('stat-count-maybe');
+        const statUnanswered = document.getElementById('stat-count-unanswered');
+        if (statIn) statIn.textContent = `🟢 Mukana (IN): 0`;
+        if (statOut) statOut.textContent = `🔴 Poissa (OUT): 0`;
+        if (statMaybe) statMaybe.textContent = `🟡 Ehkä: 0`;
+        if (statUnanswered) statUnanswered.textContent = `⚪ Ei vastannut: 0`;
+
+        renderLiveRosterGrid();
+    }
+
     function renderLiveView() {
         const liveGridContainer = document.getElementById('live-grid-container');
         if (!liveGridContainer) return;
@@ -5941,50 +6099,52 @@
         const teamName = curTeam ? curTeam.name : 'Joukkue';
         const teamUrl = curTeam ? (curTeam.eventsUrl || curTeam.nimenhuutoUrl || curTeam.myclubUrl || '') : '';
 
-        // Empty state: when no events exist for this specific team yet
-        if (!teamEvents || teamEvents.length === 0) {
-            liveGridContainer.innerHTML = `
-                <div class="empty-live-box" style="grid-column: 1 / -1; padding: 2.5rem 1.5rem; text-align: center; background: rgba(255, 255, 255, 0.03); border: 2px dashed rgba(255, 255, 255, 0.15); border-radius: var(--radius-lg);">
-                    <div style="font-size: 2.8rem; margin-bottom: 0.6rem;">🌐</div>
-                    <h3 style="font-size: 1.2rem; color: #fff; margin-bottom: 0.4rem;">Ei vielä tapahtumia joukkueelle ${escapeHtml(teamName)}</h3>
-                    <p style="font-size: 0.85rem; color: var(--text-secondary); max-width: 520px; margin: 0 auto 1.2rem; line-height: 1.5;">
-                        Hae tulevat ottelut, harjoitukset ja pelaajien osallistumiset automaattisesti syöttämällä joukkueesi <strong>Nimenhuuto</strong>- tai <strong>myClub</strong> -osoite.
-                    </p>
-                    <div style="display: flex; justify-content: center; gap: 8px; max-width: 480px; margin: 0 auto 1rem; flex-wrap: wrap;">
-                        <input type="text" id="empty-live-url-input" class="search-input" style="flex: 1; min-width: 220px;" placeholder="Esim. https://${escapeHtml(teamName.toLowerCase().replace(/[^a-z0-9]/g, ''))}.nimenhuuto.com/events tai myClub-osoite" value="${escapeHtml(teamUrl)}">
-                        <button type="button" class="btn btn-primary" id="btn-empty-fetch-events">🔄 Hae tapahtumat</button>
+        // If no events exist yet, but team has an eventsUrl -> AUTOMATICALLY fetch in background and show active loading state!
+        if ((!teamEvents || teamEvents.length === 0) && teamUrl) {
+            if (!isFetchingLiveEvents) {
+                isFetchingLiveEvents = true;
+                liveGridContainer.innerHTML = `
+                    <div class="empty-live-box" style="grid-column: 1 / -1; padding: 2.5rem 1.5rem; text-align: center; background: rgba(37, 99, 235, 0.05); border: 2px dashed rgba(59, 130, 246, 0.4); border-radius: var(--radius-lg);">
+                        <div style="font-size: 2.8rem; margin-bottom: 0.8rem; display: inline-block; animation: spin 1.5s linear infinite;">🔄</div>
+                        <h3 style="font-size: 1.25rem; color: #fff; margin-bottom: 0.4rem;">Haetaan joukkueen ${escapeHtml(teamName)} ottelut ja tapahtumat automaattisesti...</h3>
+                        <p style="font-size: 0.85rem; color: var(--text-secondary); max-width: 520px; margin: 0 auto 1.2rem; line-height: 1.5;">
+                            Yhdistetään osoitteeseen <strong style="color: #60a5fa;">${escapeHtml(teamUrl)}</strong>. Tapahtumat ja live-osallistujat päivittyvät automaattisesti.
+                        </p>
+                        <div style="display: flex; justify-content: center; gap: 8px; flex-wrap: wrap;">
+                            <button type="button" class="btn btn-sm btn-outline" id="btn-empty-paste-attendance">📋 Liitä lista käsin</button>
+                            <button type="button" class="btn btn-sm btn-outline" id="btn-empty-create-event">+ Luo tapahtuma käsin</button>
+                        </div>
                     </div>
-                    <div style="display: flex; justify-content: center; gap: 8px; flex-wrap: wrap;">
-                        <button type="button" class="btn btn-sm btn-outline" id="btn-empty-paste-attendance">📋 Liitä lista käsin</button>
-                        <button type="button" class="btn btn-sm btn-outline" id="btn-empty-create-event">+ Luo tapahtuma käsin</button>
-                    </div>
-                </div>
-            `;
+                `;
+                document.getElementById('btn-empty-paste-attendance')?.addEventListener('click', openAttendanceImportModal);
+                document.getElementById('btn-empty-create-event')?.addEventListener('click', () => openLiveEventModal(null));
 
-            document.getElementById('btn-empty-fetch-events')?.addEventListener('click', () => {
-                const input = document.getElementById('empty-live-url-input');
-                const url = input ? input.value.trim() : '';
-                if (!url) {
-                    showToast('Syötä ensin osoite (esim. https://omatiimi.nimenhuuto.com/events)!');
-                    return;
-                }
-                fetchAndSyncEvents(url);
-            });
-            document.getElementById('btn-empty-paste-attendance')?.addEventListener('click', openAttendanceImportModal);
-            document.getElementById('btn-empty-create-event')?.addEventListener('click', () => openLiveEventModal(null));
-
-            // Reset status counters
-            const statIn = document.getElementById('stat-count-in');
-            const statOut = document.getElementById('stat-count-out');
-            const statMaybe = document.getElementById('stat-count-maybe');
-            const statUnanswered = document.getElementById('stat-count-unanswered');
-            if (statIn) statIn.textContent = `🟢 Mukana (IN): 0`;
-            if (statOut) statOut.textContent = `🔴 Poissa (OUT): 0`;
-            if (statMaybe) statMaybe.textContent = `🟡 Ehkä: 0`;
-            if (statUnanswered) statUnanswered.textContent = `⚪ Ei vastannut: 0`;
-
-            renderLiveRosterGrid();
+                fetchAndSyncEvents(teamUrl, false).then(ok => {
+                    if (!ok && (!teamEvents || teamEvents.length === 0)) {
+                        renderEmptyLiveState(liveGridContainer, teamName, teamUrl);
+                    }
+                }).finally(() => {
+                    isFetchingLiveEvents = false;
+                });
+            }
             return;
+        }
+
+        // Empty state when really no events and no url
+        if (!teamEvents || teamEvents.length === 0) {
+            renderEmptyLiveState(liveGridContainer, teamName, teamUrl);
+            return;
+        }
+
+        // If events exist, check if we should trigger a silent background refresh if stale (> 2 minutes)
+        if (teamUrl && !isFetchingLiveEvents) {
+            const lastFetch = parseInt(loadFromStorage(`salibandy_events_last_fetch_${currentTeamId}`, '0'), 10) || 0;
+            if (Date.now() - lastFetch > 2 * 60 * 1000) {
+                isFetchingLiveEvents = true;
+                fetchAndSyncEvents(teamUrl, true).finally(() => {
+                    isFetchingLiveEvents = false;
+                });
+            }
         }
 
         const curEvent = teamEvents.find(e => e.id === activeEventId) || teamEvents[0];
@@ -8962,6 +9122,7 @@ If number is not visible, provide a number or null. Only return the JSON array.`
         // LIVE ATTENDANCE & NIMENHUUTO EVENTS
         document.getElementById('live-event-select')?.addEventListener('change', (e) => {
             activeEventId = e.target.value;
+            saveState();
             renderLiveView();
         });
 

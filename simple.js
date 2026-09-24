@@ -441,17 +441,36 @@
                         teamEvents = JSON.parse(altEvents1);
                     } else if (altEvents2 && JSON.parse(altEvents2).length > 0) {
                         teamEvents = JSON.parse(altEvents2);
-                    } else {
-                        teamEvents = [
-                            {
-                                id: 'default_event_1',
-                                title: 'SekTa - Seuraava Ottelu',
-                                date: 'Klo 19:00',
-                                location: 'Kotiareena',
-                                attendees: {}
-                            }
-                        ];
                     }
+                } else if (isAkatemiaTeam) {
+                    const altKeys = ['salibandy_events_team_akatemia', 'salibandy_events_team_fbc_akatemia', 'salibandy_events_team_1786787084772'];
+                    for (const ak of altKeys) {
+                        if (ak === 'salibandy_events_' + currentTeamId) continue;
+                        const alt = localStorage.getItem(ak);
+                        if (alt) {
+                            try {
+                                const parsed = JSON.parse(alt);
+                                if (Array.isArray(parsed) && parsed.length > 0) {
+                                    teamEvents = parsed;
+                                    break;
+                                }
+                            } catch(e){}
+                        }
+                    }
+                }
+            }
+
+            if (!teamEvents || teamEvents.length === 0) {
+                if (isSektaTeam) {
+                    teamEvents = [
+                        {
+                            id: 'default_event_1',
+                            title: 'SekTa - Seuraava Ottelu',
+                            date: 'Klo 19:00',
+                            location: 'Kotiareena',
+                            attendees: {}
+                        }
+                    ];
                 } else {
                     teamEvents = [
                         {
@@ -465,8 +484,28 @@
                 }
             }
 
-            const rawActiveEvent = localStorage.getItem('salibandy_active_event_id_' + currentTeamId);
-            activeEventId = rawActiveEvent ? JSON.parse(rawActiveEvent) : (teamEvents[0]?.id || null);
+            let rawActiveEvent = localStorage.getItem('salibandy_active_event_id_' + currentTeamId);
+            if (!rawActiveEvent && isSektaTeam) {
+                rawActiveEvent = localStorage.getItem('salibandy_active_event_id_team_sekta') || localStorage.getItem('salibandy_active_event_id_default_team');
+            }
+            try {
+                const parsedAct = rawActiveEvent ? JSON.parse(rawActiveEvent) : null;
+                activeEventId = (parsedAct && teamEvents.some(e => e.id === parsedAct)) ? parsedAct : (teamEvents[0]?.id || null);
+            } catch(e) {
+                activeEventId = teamEvents[0]?.id || null;
+            }
+
+            // Auto-fetch upcoming events in background if team has eventsUrl and events are placeholder or stale (> 2 min)
+            const teamUrl = curTeam ? (curTeam.eventsUrl || curTeam.nimenhuutoUrl || curTeam.myclubUrl || '') : '';
+            if (teamUrl) {
+                const hasOnlyPlaceholder = teamEvents.length === 1 && teamEvents[0].id === 'default_event_1';
+                const lastFetch = parseInt(localStorage.getItem('salibandy_events_last_fetch_' + currentTeamId) || '0', 10);
+                if (hasOnlyPlaceholder || !teamEvents || teamEvents.length === 0 || Date.now() - lastFetch > 2 * 60 * 1000) {
+                    setTimeout(() => {
+                        fetchAndSyncEvents(teamUrl, true);
+                    }, 800);
+                }
+            }
 
         } catch (e) {
             console.error('Error loading state:', e);
@@ -506,6 +545,23 @@
             localStorage.setItem('salibandy_events_' + currentTeamId, JSON.stringify(teamEvents));
             if (activeEventId) {
                 localStorage.setItem('salibandy_active_event_id_' + currentTeamId, JSON.stringify(activeEventId));
+            }
+            if (currentTeamId === 'default_team' || currentTeamId === 'team_sekta') {
+                const altKey = currentTeamId === 'default_team' ? 'team_sekta' : 'default_team';
+                localStorage.setItem('salibandy_events_' + altKey, JSON.stringify(teamEvents));
+                if (activeEventId) {
+                    localStorage.setItem('salibandy_active_event_id_' + altKey, JSON.stringify(activeEventId));
+                }
+            } else if (currentTeamId === 'team_akatemia' || currentTeamId === 'team_fbc_akatemia' || currentTeamId === 'team_1786787084772') {
+                const altKeys = ['team_akatemia', 'team_fbc_akatemia', 'team_1786787084772'];
+                altKeys.forEach(ak => {
+                    if (ak !== currentTeamId) {
+                        localStorage.setItem('salibandy_events_' + ak, JSON.stringify(teamEvents));
+                        if (activeEventId) {
+                            localStorage.setItem('salibandy_active_event_id_' + ak, JSON.stringify(activeEventId));
+                        }
+                    }
+                });
             }
         } catch (e) {
             console.error('Error saving local state:', e);
@@ -2341,12 +2397,16 @@
                 .map(oId => text.indexOf('/events/' + oId, startPos + 30))
                 .filter(p => p > startPos);
             const endPos = nextPositions.length > 0 ? Math.min(...nextPositions) : text.length;
-            const chunk = text.substring(Math.max(0, startPos - 100), endPos);
+            const chunk = text.substring(Math.max(0, startPos - 120), endPos);
 
             let title = 'Tapahtuma';
-            const titleMatch = chunk.match(/\[([A-ZÅÄÖa-zåäö0-9\s\.\-·]+)\]\(https:\/\/[^\/]+\/events\/\d+\)/);
-            if (titleMatch && !titleMatch[1].startsWith('SYYS') && !titleMatch[1].startsWith('LOKA') && !titleMatch[1].startsWith('MARRAS') && !titleMatch[1].startsWith('TAMMI') && !titleMatch[1].startsWith('HELMI') && !titleMatch[1].startsWith('MAALIS') && !titleMatch[1].startsWith('HUHTI') && !titleMatch[1].startsWith('TOUKO') && !titleMatch[1].startsWith('KESÄ') && !titleMatch[1].startsWith('HEINÄ') && !titleMatch[1].startsWith('ELO') && !titleMatch[1].startsWith('JOULU')) {
-                title = titleMatch[1].replace(/&middot;/g, '·').trim();
+            const titleMatches = [...chunk.matchAll(/\[([^\]]+)\]\(https:\/\/[^\/]+\/events\/\d+\)/g)];
+            for (const tm of titleMatches) {
+                const cand = tm[1].trim();
+                if (!cand.match(/^(TAMMI|HELMI|MAALIS|HUHTI|TOUKO|KESÄ|HEINÄ|ELO|SYYS|LOKA|MARRAS|JOULU)\s+\d+/i) && cand !== 'IN OUT' && !cand.match(/^In\s+\d+/i) && !cand.match(/^Out\s+\d+/i)) {
+                    title = cand.replace(/&middot;/g, '·').trim();
+                    break;
+                }
             }
 
             let dateStr = '';
@@ -2493,7 +2553,7 @@
         return events;
     }
 
-    async function fetchAndSyncEvents(targetUrl) {
+    async function fetchAndSyncEvents(targetUrl, isSilent = false) {
         const curTeam = teams.find(t => t.id === currentTeamId);
         if (!targetUrl) {
             targetUrl = curTeam ? (curTeam.eventsUrl || curTeam.nimenhuutoUrl || curTeam.myclubUrl || '') : '';
@@ -2503,7 +2563,7 @@
             if (syncUrlInput && syncUrlInput.value.trim()) {
                 targetUrl = syncUrlInput.value.trim();
             } else {
-                openSyncModal();
+                if (!isSilent) openSyncModal();
                 return false;
             }
         }
@@ -2516,7 +2576,9 @@
             targetUrl = targetUrl.replace(/\/+$/, '') + '/events';
         }
 
-        showToast('Haetaan tapahtumia verkosta... ⏳');
+        if (!isSilent) {
+            showToast('Haetaan tapahtumia verkosta... ⏳');
+        }
 
         // Multi-engine proxies: Jina Reader as #1, AllOrigins as #2, CORS proxy as #3
         const proxyUrls = [
@@ -2561,8 +2623,10 @@
         }
 
         if (!ok || !rawText) {
-            showToast('Verkkohaku ei onnistunut. Voit liittää osallistujat tekstinä!');
-            openSyncModal();
+            if (!isSilent) {
+                showToast('Verkkohaku ei onnistunut. Voit liittää osallistujat tekstinä!');
+                openSyncModal();
+            }
             return false;
         }
 
@@ -2575,8 +2639,10 @@
         }
 
         if (events.length === 0) {
-            showToast('Sivulta ei löytynyt tapahtumia.');
-            openSyncModal();
+            if (!isSilent) {
+                showToast('Sivulta ei löytynyt tapahtumia.');
+                openSyncModal();
+            }
             return false;
         }
 
@@ -2587,10 +2653,16 @@
             curTeam.nimenhuutoUrl = targetUrl;
         }
 
+        try {
+            localStorage.setItem('salibandy_events_last_fetch_' + currentTeamId, Date.now().toString());
+        } catch(e){}
+
         saveState();
         scheduleRender({ eventBar: true, cards: true, roster: true });
         closeSyncModal();
-        showToast(`Haettu ${teamEvents.length} tapahtumaa onnistuneesti! 🎉`);
+        if (!isSilent) {
+            showToast(`Haettu ${teamEvents.length} tapahtumaa onnistuneesti! 🎉`);
+        }
         return true;
     }
 

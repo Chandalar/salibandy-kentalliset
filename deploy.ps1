@@ -4,7 +4,7 @@ Write-Host "Aloitetaan paivitysten julkaisu osoitteeseen https://kokoonpano.web.
 
 # 1. Tallenna ja tyonna GitHubiin (main & gh-pages)
 git add .
-git commit -m "Palautettu FBC Akatemia joukkuelistalle ja suojattu poistamiselta sekä tombstonoitumiselta (v60.0)"
+git commit -m "Automaattinen Nimenhuuto-otteluiden taustahaku ja Live-osallistujien synkronointi tilojen välillä (v61.0)"
 git push origin main
 git checkout gh-pages
 git merge main
