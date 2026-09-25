@@ -105,7 +105,7 @@
     ];
 
     const DEFAULT_TEAMS = [
-        { id: 'default_team', name: 'SekTa', logo: '🏑', primaryColor: '#2563eb', mvColor: '#10b981' },
+        { id: 'default_team', name: 'SekTa', logo: '🏑', primaryColor: '#2563eb', mvColor: '#10b981', eventsUrl: 'https://sekta.nimenhuuto.com/events', nimenhuutoUrl: 'https://sekta.nimenhuuto.com/events' },
         { id: 'team_akatemia', name: 'FBC Akatemia', logo: '🦅', primaryColor: '#dc2626', mvColor: '#10b981' },
         { id: 'team_edustus', name: 'Edustusjoukkue', logo: '🦁', primaryColor: '#2563eb', mvColor: '#10b981' },
         { id: 'team_junnut', name: 'A-Juniorit', logo: '⚡', primaryColor: '#dc2626', mvColor: '#eab308' }
@@ -127,6 +127,139 @@
         { id: 'p_ocr_1786787489945_9', name: 'Rantasalo Elsa', number: 4, position: 'KH', notes: 'In 👍' },
         { id: 'p_ocr_1786787489945_10', name: 'Kallio Luukas', number: 2, position: 'OH', notes: 'In 👍' },
         { id: 'p_1789731527753', name: 'Vesku', number: 99, position: 'H', notes: 'In 👍' }
+    ];
+
+    const DEFAULT_SEKTA_EVENTS = [
+        {
+            id: 'event_20207056',
+            title: 'Matsi · Harkkapeli VS CAMPUS',
+            date: 'Ma 28.9. klo 20:00',
+            location: 'leaf areena, turku 2 kenttä Lisätiedot:Valkoinen paita',
+            source: 'nimenhuuto',
+            attendees: {
+                p_mv23: { status: 'in', reason: '' },
+                p_19: { status: 'in', reason: '' },
+                p_20: { status: 'in', reason: '' },
+                p_42: { status: 'in', reason: '' },
+                p_64: { status: 'in', reason: '' },
+                p_71: { status: 'out', reason: '' },
+                p_4: { status: 'in', reason: '' },
+                p_11: { status: 'in', reason: '' },
+                p_88: { status: 'in', reason: '' },
+                p_10: { status: 'in', reason: '' },
+                p_22: { status: 'in', reason: '' },
+                p_66: { status: 'in', reason: '' }
+            }
+        },
+        {
+            id: 'event_20106918',
+            title: 'Harkka · SekTa - TVV',
+            date: 'Ke 30.9. klo 20:00',
+            location: 'leaf areena, turku Lisätiedot:Kenttä 1. Valkoinen paita',
+            source: 'nimenhuuto',
+            attendees: {
+                p_mv23: { status: 'in', reason: '' },
+                p_19: { status: 'in', reason: '' },
+                p_20: { status: 'in', reason: '' },
+                p_42: { status: 'in', reason: '' },
+                p_64: { status: 'in', reason: '' },
+                p_88: { status: 'out', reason: '' }
+            }
+        },
+        {
+            id: 'event_20329753',
+            title: 'Matsi · SekTa - SBS Wirmo 2',
+            date: 'Su 4.10. klo 11:30',
+            location: 'SB-Areena, Raunistulantie 15, 20300 Turku Viimeisin kommentti: Heikki 6 päivää sitten Lisätiedot:https://tulospalvelu.salibandy.fi/match/933793',
+            source: 'nimenhuuto',
+            attendees: {
+                p_mv7: { status: 'in', reason: '' },
+                p_19: { status: 'in', reason: '' },
+                p_42: { status: 'in', reason: '' },
+                p_4: { status: 'in', reason: '' },
+                p_21: { status: 'in', reason: '' },
+                p_15: { status: 'out', reason: '' },
+                p_87: { status: 'out', reason: '' },
+                p_66: { status: 'out', reason: '' }
+            }
+        },
+        {
+            id: 'event_20329754',
+            title: 'Matsi · Airisto SB - SekTa',
+            date: 'Su 4.10. klo 14:00',
+            location: 'SB-Areena, Raunistulantie 15, 20300 Turku Lisätiedot:https://tulospalvelu.salibandy.fi/match/933794',
+            source: 'nimenhuuto',
+            attendees: {
+                p_mv7: { status: 'in', reason: '' },
+                p_19: { status: 'in', reason: '' },
+                p_42: { status: 'in', reason: '' },
+                p_4: { status: 'in', reason: '' },
+                p_21: { status: 'in', reason: '' },
+                p_15: { status: 'out', reason: '' },
+                p_87: { status: 'out', reason: '' },
+                p_66: { status: 'out', reason: '' }
+            }
+        },
+        {
+            id: 'event_20207058',
+            title: 'Harkka · Omat harkat',
+            date: 'Ma 5.10. klo 21:00',
+            location: 'Kupittaan palloiluhalli kenttä 3',
+            source: 'nimenhuuto',
+            attendees: {
+                p_19: { status: 'in', reason: '' }
+            }
+        },
+        {
+            id: 'event_20106919',
+            title: 'Harkka · SekTa - TVV',
+            date: 'Ke 7.10. klo 20:00',
+            location: 'leaf areena, turku Lisätiedot:Kenttä 1. Valkoinen paita',
+            source: 'nimenhuuto',
+            attendees: {
+                p_19: { status: 'in', reason: '' }
+            }
+        },
+        {
+            id: 'event_20207059',
+            title: 'Harkka · Omat harkat',
+            date: 'Ma 12.10. klo 21:00',
+            location: 'Kupittaan palloiluhalli kenttä 3',
+            source: 'nimenhuuto',
+            attendees: {
+                p_19: { status: 'in', reason: '' }
+            }
+        },
+        {
+            id: 'event_20106920',
+            title: 'Harkka · SekTa - TVV',
+            date: 'Ke 14.10. klo 20:00',
+            location: 'leaf areena, turku Lisätiedot:Kenttä 1. Valkoinen paita',
+            source: 'nimenhuuto',
+            attendees: {
+                p_19: { status: 'in', reason: '' }
+            }
+        },
+        {
+            id: 'event_20207060',
+            title: 'Harkka · Omat harkat',
+            date: 'Ma 19.10. klo 21:00',
+            location: 'Kupittaan palloiluhalli kenttä 3',
+            source: 'nimenhuuto',
+            attendees: {
+                p_19: { status: 'in', reason: '' }
+            }
+        },
+        {
+            id: 'event_20106921',
+            title: 'Harkka · SekTa - TVV',
+            date: 'Ke 21.10. klo 20:00',
+            location: 'leaf areena, turku Lisätiedot:Kenttä 1. Valkoinen paita',
+            source: 'nimenhuuto',
+            attendees: {
+                p_19: { status: 'in', reason: '' }
+            }
+        }
     ];
 
     function showToast(msg) {
@@ -267,12 +400,21 @@
             const isAkatemiaTeam = currentTeamId === 'team_akatemia' || currentTeamId === 'team_fbc_akatemia' || currentTeamId === 'team_1786787084772' || (curTeam && (curTeam.name || '').toLowerCase().includes('akatemia'));
 
             // Default Sekta events URL if team name matches
+            teams.forEach(t => {
+                if (t && (t.id === 'default_team' || t.id === 'team_sekta' || (t.name || '').toLowerCase().includes('sekta'))) {
+                    if (!t.eventsUrl) t.eventsUrl = 'https://sekta.nimenhuuto.com/events';
+                    if (!t.nimenhuutoUrl) t.nimenhuutoUrl = 'https://sekta.nimenhuuto.com/events';
+                }
+            });
             if (curTeam && !curTeam.eventsUrl && !curTeam.nimenhuutoUrl) {
                 if (isSektaTeam) {
                     curTeam.eventsUrl = 'https://sekta.nimenhuuto.com/events';
                     curTeam.nimenhuutoUrl = 'https://sekta.nimenhuuto.com/events';
                 }
             }
+            try {
+                localStorage.setItem('salibandy_teams_v1', JSON.stringify(teams));
+            } catch(e){}
 
             const rawRoster = localStorage.getItem('salibandy_roster_' + currentTeamId);
             roster = rawRoster ? JSON.parse(rawRoster) : [];
@@ -434,15 +576,24 @@
 
             const rawEvents = localStorage.getItem('salibandy_events_' + currentTeamId);
             teamEvents = rawEvents ? JSON.parse(rawEvents) : [];
-            if (!teamEvents || teamEvents.length === 0) {
+            const isDummy = (evs) => !Array.isArray(evs) || evs.length === 0 || (evs.length === 1 && (evs[0].id === 'default_event_1' || (evs[0].title || '').includes('Seuraava')));
+
+            if (isDummy(teamEvents)) {
                 if (isSektaTeam) {
                     const altEvents1 = localStorage.getItem('salibandy_events_default_team');
                     const altEvents2 = localStorage.getItem('salibandy_events_team_sekta');
-                    if (altEvents1 && JSON.parse(altEvents1).length > 0) {
-                        teamEvents = JSON.parse(altEvents1);
-                    } else if (altEvents2 && JSON.parse(altEvents2).length > 0) {
-                        teamEvents = JSON.parse(altEvents2);
+                    const p1 = altEvents1 ? JSON.parse(altEvents1) : null;
+                    const p2 = altEvents2 ? JSON.parse(altEvents2) : null;
+                    if (Array.isArray(p1) && !isDummy(p1)) {
+                        teamEvents = p1;
+                    } else if (Array.isArray(p2) && !isDummy(p2)) {
+                        teamEvents = p2;
+                    } else {
+                        teamEvents = JSON.parse(JSON.stringify(DEFAULT_SEKTA_EVENTS));
                     }
+                    try {
+                        localStorage.setItem('salibandy_events_' + currentTeamId, JSON.stringify(teamEvents));
+                    } catch(e){}
                 } else if (isAkatemiaTeam) {
                     const altKeys = ['salibandy_events_team_akatemia', 'salibandy_events_team_fbc_akatemia', 'salibandy_events_team_1786787084772'];
                     for (const ak of altKeys) {
@@ -451,7 +602,7 @@
                         if (alt) {
                             try {
                                 const parsed = JSON.parse(alt);
-                                if (Array.isArray(parsed) && parsed.length > 0) {
+                                if (Array.isArray(parsed) && !isDummy(parsed)) {
                                     teamEvents = parsed;
                                     break;
                                 }
@@ -461,17 +612,9 @@
                 }
             }
 
-            if (!teamEvents || teamEvents.length === 0) {
+            if (isDummy(teamEvents)) {
                 if (isSektaTeam) {
-                    teamEvents = [
-                        {
-                            id: 'default_event_1',
-                            title: 'SekTa - Seuraava Ottelu',
-                            date: 'Klo 19:00',
-                            location: 'Kotiareena',
-                            attendees: {}
-                        }
-                    ];
+                    teamEvents = JSON.parse(JSON.stringify(DEFAULT_SEKTA_EVENTS));
                 } else {
                     teamEvents = [
                         {
@@ -483,6 +626,9 @@
                         }
                     ];
                 }
+                try {
+                    localStorage.setItem('salibandy_events_' + currentTeamId, JSON.stringify(teamEvents));
+                } catch(e){}
             }
 
             let rawActiveEvent = localStorage.getItem('salibandy_active_event_id_' + currentTeamId);
@@ -495,16 +641,21 @@
             } catch(e) {
                 activeEventId = teamEvents[0]?.id || null;
             }
+            if (!activeEventId && teamEvents.length > 0) {
+                activeEventId = teamEvents[0].id;
+            }
+            try {
+                localStorage.setItem('salibandy_active_event_id_' + currentTeamId, JSON.stringify(activeEventId));
+            } catch(e){}
 
-            // Auto-fetch upcoming events in background if team has eventsUrl and events are placeholder or stale (> 2 min)
+            // Auto-fetch upcoming events in background silently if team has eventsUrl and stale (> 2 min)
             const teamUrl = curTeam ? (curTeam.eventsUrl || curTeam.nimenhuutoUrl || curTeam.myclubUrl || '') : '';
             if (teamUrl) {
-                const hasOnlyPlaceholder = teamEvents.length === 1 && teamEvents[0].id === 'default_event_1';
                 const lastFetch = parseInt(localStorage.getItem('salibandy_events_last_fetch_' + currentTeamId) || '0', 10);
-                if (hasOnlyPlaceholder || !teamEvents || teamEvents.length === 0 || Date.now() - lastFetch > 2 * 60 * 1000) {
+                if (Date.now() - lastFetch > 2 * 60 * 1000) {
                     setTimeout(() => {
                         fetchAndSyncEvents(teamUrl, true);
-                    }, 800);
+                    }, 100);
                 }
             }
 
@@ -1538,6 +1689,15 @@
     function renderEventBar() {
         if (!eventSelect) return;
         eventSelect.innerHTML = '';
+
+        if (!teamEvents || teamEvents.length === 0) {
+            const curTeam = teams.find(t => t.id === currentTeamId);
+            const isSektaTeam = currentTeamId === 'default_team' || currentTeamId === 'team_sekta' || (curTeam && (curTeam.name || '').toLowerCase().includes('sekta'));
+            if (isSektaTeam) {
+                teamEvents = JSON.parse(JSON.stringify(DEFAULT_SEKTA_EVENTS));
+                activeEventId = teamEvents[0]?.id || null;
+            }
+        }
 
         if (!teamEvents || teamEvents.length === 0) {
             const opt = document.createElement('option');
@@ -2708,7 +2868,9 @@
         }
 
         teamEvents = events;
-        activeEventId = teamEvents[0]?.id || null;
+        if (!teamEvents.some(e => e.id === activeEventId)) {
+            activeEventId = teamEvents[0]?.id || null;
+        }
         if (curTeam) {
             curTeam.eventsUrl = targetUrl;
             curTeam.nimenhuutoUrl = targetUrl;
@@ -2716,6 +2878,11 @@
 
         try {
             localStorage.setItem('salibandy_events_last_fetch_' + currentTeamId, Date.now().toString());
+            localStorage.setItem('salibandy_events_' + currentTeamId, JSON.stringify(teamEvents));
+            if (activeEventId) {
+                localStorage.setItem('salibandy_active_event_id_' + currentTeamId, JSON.stringify(activeEventId));
+            }
+            localStorage.setItem('salibandy_teams_v1', JSON.stringify(teams));
         } catch(e){}
 
         saveState();
