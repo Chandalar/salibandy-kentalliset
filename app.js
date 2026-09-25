@@ -6193,6 +6193,8 @@
                 const isMv = pos === 'MV';
                 const rowClass = isMv ? 'is-mv' : 'is-field';
 
+                const displayPos = (pos === 'KH') ? 'C' : pos;
+
                 if (player) {
                     const att = attendeesMap[player.id] || { status: 'unanswered' };
                     let attBadge = '';
@@ -6203,7 +6205,7 @@
 
                     slotsHtml += `
                         <div class="summary-slot-row ${rowClass}" data-lineup="${lKey}" data-pos="${pos}" title="Status: ${att.status.toUpperCase()} ${att.reason ? '(' + att.reason + ')' : ''}">
-                            <span class="summary-pos-tag">${pos}</span>
+                            <span class="summary-pos-tag">${displayPos}</span>
                             <span class="summary-p-num">#${player.number}</span>
                             <span class="summary-p-name">${escapeHtml(player.name)}</span>
                             ${attBadge}
@@ -6213,8 +6215,8 @@
                 } else {
                     slotsHtml += `
                         <div class="summary-slot-row is-empty" data-lineup="${lKey}" data-pos="${pos}">
-                            <span class="summary-pos-tag">${pos}</span>
-                            <span class="summary-empty-text">+ Valitse ${pos}</span>
+                            <span class="summary-pos-tag">${displayPos}</span>
+                            <span class="summary-empty-text">+ Valitse ${displayPos}</span>
                         </div>
                     `;
                 }

@@ -23,6 +23,7 @@
     let lineupReserves = {}; // Map of lineupKey -> array of playerIds
     let activeLineupTab = 'all'; // Default to 'all' so multiple lines are visible at once!
     let activeRosterFilter = 'all';
+    let simpleDensity = localStorage.getItem('salibandy_simple_density') || '2col';
 
     // Firebase & Cloud State
     const clientInstanceId = 'simple_' + Date.now() + '_' + Math.random().toString(36).substr(2, 8);
@@ -82,7 +83,7 @@
         'VP': 'Vasen pakki',
         'OP': 'Oikea pakki',
         'VH': 'Vasen hyökkääjä',
-        'KH': 'Sentteri',
+        'KH': 'Sentteri (C)',
         'OH': 'Oikea hyökkääjä',
         '6P': '6. Pelaaja',
         'VM': '6. Pelaaja'
@@ -1590,6 +1591,17 @@
         });
     }
 
+    function updateLineupContainerDensity() {
+        if (!lineupCardContainer) return;
+        if (simpleDensity === '2col') {
+            lineupCardContainer.classList.add('density-2col');
+            lineupCardContainer.classList.remove('density-1col');
+        } else {
+            lineupCardContainer.classList.add('density-1col');
+            lineupCardContainer.classList.remove('density-2col');
+        }
+    }
+
     function renderLineupTabs() {
         if (!lineupNavBar) return;
         lineupNavBar.innerHTML = '';
@@ -1625,6 +1637,23 @@
             scheduleRender({ tabs: true, cards: true });
         });
         lineupNavBar.appendChild(sixTab);
+
+        // Density toggle button (2-sarake vs 1-sarake)
+        const densityBtn = document.createElement('button');
+        densityBtn.className = 'density-toggle-btn';
+        densityBtn.title = 'Vaihda tiiviys: 2 saraketta (kaikki kentät mahtuu kerralla ruudulle) tai 1 sarake';
+        densityBtn.innerHTML = simpleDensity === '2col' 
+            ? '<span>📱📱 2-sarake</span>' 
+            : '<span>📱 1-sarake</span>';
+        densityBtn.addEventListener('click', () => {
+            simpleDensity = (simpleDensity === '2col') ? '1col' : '2col';
+            try { localStorage.setItem('salibandy_simple_density', simpleDensity); } catch(e){}
+            updateLineupContainerDensity();
+            renderLineupTabs();
+            renderLineupCards();
+            showToast(simpleDensity === '2col' ? '2 sarakkeen tiivis näkymä (kaikki kentät kerralla)' : '1 sarakkeen näkymä');
+        });
+        lineupNavBar.appendChild(densityBtn);
     }
 
     function getLineupReserves(lineupKey) {
@@ -1666,6 +1695,7 @@
 
     function renderLineupCards() {
         if (!lineupCardContainer) return;
+        updateLineupContainerDensity();
         lineupCardContainer.innerHTML = '';
 
         let configsToShow = [];
@@ -1700,21 +1730,27 @@
                 const player = roster.find(p => p.id === playerId);
                 const att = player ? (attendeesMap[player.id] || { status: 'unanswered' }) : null;
 
+                const posLabel = (pos === 'KH') ? 'C' : pos;
+
                 let posClass = 'pos-h';
                 if (pos === 'MV') posClass = 'pos-mv';
-                else if (pos === 'VP' || pos === 'OP') posClass = 'pos-p';
+                else if (pos === 'VP') posClass = 'pos-vp';
+                else if (pos === 'OP') posClass = 'pos-op';
+                else if (pos === 'KH') posClass = 'pos-c';
+                else if (pos === 'VH') posClass = 'pos-vh';
+                else if (pos === 'OH') posClass = 'pos-oh';
                 else if (pos === '6P' || pos === 'VM') posClass = 'pos-6p';
 
                 if (player) {
                     let badgeDot = att.status === 'in' ? '🟢' : att.status === 'out' ? '🔴' : att.status === 'maybe' ? '🟡' : '⚪';
                     const photoHtml = player.photo 
-                        ? `<div class="slot-photo-thumb" style="width: 22px; height: 22px; border-radius: 50%; background-image: url('${player.photo}'); background-size: cover; background-position: center; flex-shrink: 0; margin-right: 5px; border: 1px solid rgba(255,255,255,0.25);"></div>` 
+                        ? `<div class="slot-photo-thumb" style="width: 20px; height: 20px; border-radius: 50%; background-image: url('${player.photo}'); background-size: cover; background-position: center; flex-shrink: 0; margin-right: 4px; border: 1px solid rgba(255,255,255,0.25);"></div>` 
                         : '';
 
                     slotsHtml += `
                         <div class="slot-item" data-lineup="${cfg.id}" data-pos="${pos}">
                             <div class="slot-left">
-                                <span class="pos-tag ${posClass}">${pos}</span>
+                                <span class="pos-tag ${posClass}">${posLabel}</span>
                                 ${photoHtml}
                                 <div class="slot-player-name" title="${escapeHtml(player.name)}">#${player.number} ${escapeHtml(player.name)}</div>
                             </div>
@@ -1728,8 +1764,8 @@
                     slotsHtml += `
                         <div class="slot-item is-empty" data-lineup="${cfg.id}" data-pos="${pos}">
                             <div class="slot-left">
-                                <span class="pos-tag ${posClass}">${pos}</span>
-                                <div class="slot-player-empty-label">+ ${pos}</div>
+                                <span class="pos-tag ${posClass}">${posLabel}</span>
+                                <div class="slot-player-empty-label">+ ${posLabel}</div>
                             </div>
                             <div class="slot-right"></div>
                         </div>
@@ -1757,22 +1793,26 @@
                 });
             }
 
-            const reservesSectionHtml = `
-                <div class="lineup-reserves-section">
-                    <div class="reserves-header-row">
-                        <span class="reserves-label">🪑 Varalla${lineReserves.length > 0 ? ` (${lineReserves.length})` : ''}:</span>
-                        <button class="btn-add-reserve" data-lineup="${cfg.id}" title="Lisää varamies kentälliseen">+ Varamies</button>
+            let reservesSectionHtml = '';
+            if (lineReserves.length > 0) {
+                reservesSectionHtml = `
+                    <div class="lineup-reserves-section">
+                        <div class="reserves-header-row">
+                            <span class="reserves-label">🪑 Varalla (${lineReserves.length}):</span>
+                            <button class="btn-add-reserve" data-lineup="${cfg.id}" title="Lisää varamies kentälliseen">+ Varamies</button>
+                        </div>
+                        <div class="reserves-chips-row">
+                            ${reservesChipsHtml}
+                        </div>
                     </div>
-                    <div class="reserves-chips-row">
-                        ${reservesChipsHtml || '<span class="reserves-empty-note">Ei varapelaajia</span>'}
-                    </div>
-                </div>
-            `;
+                `;
+            }
 
             card.innerHTML = `
                 <div class="lineup-card-header">
                     <div class="lineup-title">${cfg.icon || '🏒'} ${escapeHtml(cfg.name)}</div>
                     <div class="lineup-actions">
+                        <button class="btn-lineup-action btn-add-reserve" data-lineup="${cfg.id}" title="Lisää varapelaaja kentälliseen">🪑+</button>
                         <button class="btn-lineup-action" data-action="clear-lineup" data-lineup="${cfg.id}">Tyhjennä</button>
                     </div>
                 </div>
@@ -1815,10 +1855,12 @@
                 showToast(`${cfg.name} tyhjennetty`);
             });
 
-            // Bind add reserve
-            card.querySelector('.btn-add-reserve')?.addEventListener('click', (e) => {
-                const lk = e.currentTarget.dataset.lineup;
-                openReservePicker(lk);
+            // Bind add reserve (both header 🪑+ button and reserves section button)
+            card.querySelectorAll('.btn-add-reserve').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const lk = e.currentTarget.dataset.lineup;
+                    openReservePicker(lk);
+                });
             });
 
             // Bind remove reserve
@@ -2015,7 +2057,8 @@
                 const pId = line[pos] || (pos === '6P' ? line['VM'] : '');
                 if (pId) {
                     if (!assignments[pId]) assignments[pId] = [];
-                    assignments[pId].push(`${cfg.shortName}: ${pos}`);
+                    const displayPos = (pos === 'KH') ? 'C' : pos;
+                    assignments[pId].push(`${cfg.shortName}: ${displayPos}`);
                 }
             });
             const reserves = getLineupReserves(cfg.id);
@@ -2069,12 +2112,20 @@
                 ? `<div class="roster-photo-thumb" style="width: 28px; height: 28px; border-radius: 50%; background-image: url('${player.photo}'); background-size: cover; background-position: center; flex-shrink: 0; border: 1px solid rgba(255,255,255,0.25);"></div>` 
                 : '';
 
+            const pPos = player.position || 'H';
+            let pPosClass = 'pos-h';
+            if (pPos === 'MV') pPosClass = 'pos-mv';
+            else if (pPos === 'VP' || pPos === 'OP' || pPos === 'P') pPosClass = 'pos-p';
+            else if (pPos === 'KH' || pPos === 'C') pPosClass = 'pos-c';
+            else if (pPos === 'VH' || pPos === 'OH') pPosClass = 'pos-h';
+            const pPosLabel = (pPos === 'KH') ? 'C' : pPos;
+
             row.innerHTML = `
                 <div class="player-row-left" data-action="edit-player" data-player-id="${player.id}" style="cursor: pointer;" title="Klikkaa muokataksesi pelaajaa tai kuvaa">
                     ${photoHtml}
                     <span class="player-num">#${player.number}</span>
                     <span class="player-name-text">${escapeHtml(player.name)}</span>
-                    <span class="player-pos-badge">${player.position || 'H'}</span>
+                    <span class="player-pos-badge ${pPosClass}">${pPosLabel}</span>
                     ${assignHtml}
                 </div>
                 <div class="player-row-right">
@@ -2161,11 +2212,19 @@
 
             const attText = att.status === 'in' ? '🟢 IN' : att.status === 'out' ? '🔴 OUT' : att.status === 'maybe' ? '🟡 EHKÄ' : '⚪ AVOIN';
 
+            const pPos = p.position || 'H';
+            let pPosClass = 'pos-h';
+            if (pPos === 'MV') pPosClass = 'pos-mv';
+            else if (pPos === 'VP' || pPos === 'OP' || pPos === 'P') pPosClass = 'pos-p';
+            else if (pPos === 'KH' || pPos === 'C') pPosClass = 'pos-c';
+            else if (pPos === 'VH' || pPos === 'OH') pPosClass = 'pos-h';
+            const pPosLabel = (pPos === 'KH') ? 'C' : pPos;
+
             item.innerHTML = `
                 <div>
                     <strong style="color: #93c5fd; font-size: 1rem;">#${p.number}</strong>
                     <span style="font-weight: 700; margin-left: 6px;">${escapeHtml(p.name)}</span>
-                    <span class="player-pos-badge" style="margin-left: 6px;">${p.position || 'H'}</span>
+                    <span class="player-pos-badge ${pPosClass}" style="margin-left: 6px;">${pPosLabel}</span>
                 </div>
                 <div>
                     <span class="status-badge-mini ${att.status}">${attText}</span>
@@ -2179,7 +2238,8 @@
                 saveState();
                 scheduleRender({ cards: true, roster: true });
                 modalEl.classList.remove('active');
-                showToast(`#${p.number} ${p.name} asetettu paikkaan ${lineName} - ${posLabel} 👍`);
+                const toastPos = (pos === 'KH') ? 'C' : pos;
+                showToast(`#${p.number} ${p.name} asetettu paikkaan ${lineName} - ${toastPos} 👍`);
             });
 
             modalBody.appendChild(item);
@@ -2287,10 +2347,11 @@
                     const currentOccupant = lineups[cfg.id] ? (lineups[cfg.id][pos] || (pos === '6P' ? lineups[cfg.id]['VM'] : '')) : '';
                     const occPlayer = roster.find(p => p.id === currentOccupant);
                     const isThisPlayer = currentOccupant === player.id;
+                    const displayPos = (pos === 'KH') ? 'C' : pos;
                     const btn = document.createElement('button');
                     btn.className = 'btn-header';
                     btn.style.cssText = `justify-content: center; padding: 6px 2px; font-size: 0.75rem; text-align: center; ${isThisPlayer ? 'background: rgba(16,185,129,0.25); border-color: #10b981; color: #34d399;' : ''}`;
-                    btn.innerHTML = `<strong>${pos}</strong><br><span style="font-size:0.62rem; color:${isThisPlayer ? '#34d399' : 'var(--text-muted)'}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:80px; display:inline-block;">${occPlayer ? '#' + occPlayer.number + ' ' + occPlayer.name.split(' ')[0] : 'Vapaa'}</span>`;
+                    btn.innerHTML = `<strong>${displayPos}</strong><br><span style="font-size:0.62rem; color:${isThisPlayer ? '#34d399' : 'var(--text-muted)'}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:80px; display:inline-block;">${occPlayer ? '#' + occPlayer.number + ' ' + occPlayer.name.split(' ')[0] : 'Vapaa'}</span>`;
 
                     btn.addEventListener('click', () => {
                         if (!lineups[cfg.id]) {
@@ -2303,7 +2364,7 @@
                         saveState();
                         scheduleRender({ cards: true, roster: true });
                         modalEl.classList.remove('active');
-                        showToast(`Sijoitettu: ${cfg.shortName} - ${pos} 👍`);
+                        showToast(`Sijoitettu: ${cfg.shortName} - ${displayPos} 👍`);
                     });
 
                     btnGrid.appendChild(btn);
@@ -2742,12 +2803,13 @@
             POS_ORDER.forEach(pos => {
                 const pId = line[pos];
                 const p = roster.find(r => r.id === pId);
+                const displayPos = (pos === 'KH') ? 'C' : pos;
                 if (p) {
                     const att = attendeesMap[p.id] || { status: 'unanswered' };
                     const attIcon = att.status === 'in' ? '🟢' : att.status === 'out' ? '🔴' : att.status === 'maybe' ? '🟡' : '';
-                    text += `${pos}: #${p.number} ${p.name} ${attIcon}\n`;
+                    text += `${displayPos}: #${p.number} ${p.name} ${attIcon}\n`;
                 } else {
-                    text += `${pos}: -\n`;
+                    text += `${displayPos}: -\n`;
                 }
             });
             if (reserves.length > 0) {
@@ -2785,12 +2847,13 @@
                 POS_ORDER.forEach(pos => {
                     const pId = line[pos];
                     const p = roster.find(r => r.id === pId);
+                    const displayPos = (pos === 'KH') ? 'C' : pos;
                     if (p) {
                         const att = attendeesMap[p.id] || { status: 'unanswered' };
                         const attIcon = att.status === 'in' ? '🟢' : att.status === 'out' ? '🔴' : att.status === 'maybe' ? '🟡' : '';
-                        text += `${pos}: #${p.number} ${p.name} ${attIcon}\n`;
+                        text += `${displayPos}: #${p.number} ${p.name} ${attIcon}\n`;
                     } else {
-                        text += `${pos}: -\n`;
+                        text += `${displayPos}: -\n`;
                     }
                 });
                 if (reserves.length > 0) {
@@ -2828,12 +2891,13 @@
                 POS_ORDER_6V5.forEach(pos => {
                     const pId = line[pos] || (pos === '6P' ? line['VM'] : '');
                     const p = roster.find(r => r.id === pId);
+                    const displayPos = (pos === 'KH') ? 'C' : pos;
                     if (p) {
                         const att = attendeesMap[p.id] || { status: 'unanswered' };
                         const attIcon = att.status === 'in' ? '🟢' : att.status === 'out' ? '🔴' : att.status === 'maybe' ? '🟡' : '';
-                        text += `${pos}: #${p.number} ${p.name} ${attIcon}\n`;
+                        text += `${displayPos}: #${p.number} ${p.name} ${attIcon}\n`;
                     } else {
-                        text += `${pos}: -\n`;
+                        text += `${displayPos}: -\n`;
                     }
                 });
                 if (reserves.length > 0) {
