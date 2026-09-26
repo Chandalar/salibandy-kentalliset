@@ -16,8 +16,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 
-    <!-- CSS Stylesheet (Cache Busted v65.0) -->
-    <link rel="stylesheet" href="styles.css?v=65.0">
+    <!-- CSS Stylesheet (Cache Busted v66.0) -->
+    <link rel="stylesheet" href="styles.css?v=66.0">
 
     <!-- Smart Mobile/Tablet Auto-Routing to Simple Mode -->
     <script>
@@ -164,16 +164,17 @@
     <div class="lineup-tabs-bar">
         <button class="tabs-scroll-arrow arrow-left" id="btn-scroll-tabs-left" title="Vieritä vasemmalle">◀</button>
         <div class="tabs-scroll" id="tabs-scroll-container">
+            <button class="tab-btn highlight-live" data-lineup="live"><span>🟢 Live-osallistujat</span></button>
             <button class="tab-btn active" data-lineup="1"><span>1. Kenttä</span></button>
             <button class="tab-btn" data-lineup="2"><span>2. Kenttä</span></button>
             <button class="tab-btn" data-lineup="3"><span>3. Kenttä</span></button>
+            <button class="tab-btn" data-lineup="4"><span>4. Kenttä</span></button>
             <button class="tab-btn highlight-yv" data-lineup="yv"><span>⚡ Ylivoima (YV)</span></button>
             <button class="tab-btn highlight-av" data-lineup="av"><span>🛡️ Alivoima (AV)</span></button>
             <button class="tab-btn highlight-6v5" data-lineup="6v5"><span>🔥 6v5 (Ilman MV)</span></button>
             <button class="tab-btn" data-lineup="custom"><span>📐 Taktiikka</span></button>
             <button class="tab-btn highlight-freeform" data-lineup="freeform"><span>🎨 Vapaapiirto</span></button>
             <button class="tab-btn btn-add-tab" id="btn-add-tab-fallback">+ Uusi kentällinen</button>
-            <button class="tab-btn highlight-summary" data-lineup="summary">📊 Yhteenveto (Kaikki kentälliset)</button>
             <button class="tab-btn btn-manage-tab" id="btn-manage-tab-fallback">⚙️ Hallitse kentällisiä</button>
         </div>
         <button class="tabs-scroll-arrow arrow-right" id="btn-scroll-tabs-right" title="Vieritä oikealle">▶</button>
@@ -286,57 +287,7 @@
             </div>
         </section>
 
-        <!-- YLEISNÄKYMÄ (KAIKKI KENTÄLLISET) PANEL -->
-        <section class="panel summary-view-panel" id="summary-view-panel" style="display: none;">
-            <div class="panel-header">
-                <h2>📊 Yleisnäkymä (Kaikki kentälliset)</h2>
-                <div class="summary-actions">
-                    <button class="btn-xs btn-outline" id="btn-add-lineup-summary">+ Uusi kentällinen</button>
-                    <button class="btn-xs btn-outline" id="btn-manage-lineups-summary">⚙️ Järjestä / Poista</button>
-                    <button class="btn-xs btn-primary" id="btn-copy-all-summary">📋 Kopioi kaikki kentät</button>
-                </div>
-            </div>
-            
-            <div class="lineup-group-filter-bar" id="summary-lineup-group-bar">
-                <div class="lineup-group-pills" id="summary-group-pills">
-                    <button class="lineup-group-pill active" data-summary-group="1-4">👥 1.–4. Kentät</button>
-                    <button class="lineup-group-pill" data-summary-group="special">⚡ Erikoistilanteet (YV / AV / 6v5)</button>
-                    <button class="lineup-group-pill" data-summary-group="all">🌐 Kaikki kentälliset</button>
-                </div>
-            </div>
-
-            <div class="summary-grid-container" id="summary-grid-container">
-                <!-- Dynamic Summary Lineup Cards -->
-            </div>
-
-            <!-- SUMMARY ROSTER PLAYER BANK (Valitse ja aseta pelaajia kentällisiin) -->
-            <div class="summary-roster-section" id="summary-roster-section">
-                <div class="summary-roster-header">
-                    <div class="summary-roster-title-wrapper">
-                        <h3>👥 Pelaajapankki (Valitse ja sijoita pelaajia kentällisiin)</h3>
-                        <span class="summary-roster-subtitle">Klikkaa pelaajaa sijoittaaksesi hänet kentälliseen, tai raahaa kortti suoraan yläpuolen ruutuun!</span>
-                    </div>
-                    <div class="summary-roster-controls">
-                        <input type="text" id="summary-roster-search" class="search-input" placeholder="Hae pelaajaa nimellä tai numerolla...">
-                        <div class="filter-pills" id="summary-filter-pills">
-                            <button class="pill-btn active" data-summary-filter="all">Kaikki</button>
-                            <button class="pill-btn highlight-unassigned" data-summary-filter="unassigned">🟡 Vapaana (Ei kentässä)</button>
-                            <button class="pill-btn pill-mv" data-summary-filter="mv">🟢 MV</button>
-                            <button class="pill-btn pill-vp" data-summary-filter="vp">VP</button>
-                            <button class="pill-btn pill-op" data-summary-filter="op">OP</button>
-                            <button class="pill-btn pill-vh" data-summary-filter="vh">VH</button>
-                            <button class="pill-btn pill-kh" data-summary-filter="kh">KH</button>
-                            <button class="pill-btn pill-oh" data-summary-filter="oh">OH</button>
-                        </div>
-                    </div>
-                </div>
-                <div class="summary-roster-grid" id="summary-roster-grid">
-                    <!-- Dynamic Player Cards -->
-                </div>
-            </div>
-        </section>
-
-        <!-- LIVE-OSALLISTUJAT (NIMENHUUTO / MYCLUB) PANEL -->
+        <!-- LIVE-OSALLISTUJAT (KENTÄLLISET & NIMENHUUTO / MYCLUB) PANEL -->
         <section class="panel summary-view-panel live-view-panel" id="live-view-panel" style="display: none;">
             <div class="panel-header">
                 <h2>🟢 Live-osallistujat (Nimenhuuto & myClub)</h2>
@@ -345,6 +296,8 @@
                     <button class="btn-xs btn-outline highlight-customize" id="btn-live-import-attendance">📋 Liitä lista</button>
                     <button class="btn-xs btn-outline" id="btn-live-new-event">+ Uusi tapahtuma</button>
                     <button class="btn-xs btn-outline" id="btn-live-config-integration">⚙️ Linkit</button>
+                    <button class="btn-xs btn-outline" id="btn-add-lineup-live">+ Uusi kentällinen</button>
+                    <button class="btn-xs btn-outline" id="btn-manage-lineups-live">⚙️ Järjestä / Poista</button>
                     <button class="btn-xs btn-outline" id="btn-copy-all-live">📋 Kopioi</button>
                 </div>
             </div>
@@ -1333,9 +1286,9 @@ Out:
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
-    <!-- Core Application Logic (Cache Busted v65.0) -->
-    <script src="firebase-config.js?v=65.0"></script>
-    <script src="app.js?v=65.0"></script>
+    <!-- Core Application Logic (Cache Busted v66.0) -->
+    <script src="firebase-config.js?v=66.0"></script>
+    <script src="app.js?v=66.0"></script>
 
 </body>
 </html>

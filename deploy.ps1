@@ -4,7 +4,7 @@ Write-Host "Aloitetaan paivitysten julkaisu osoitteeseen https://kokoonpano.web.
 
 # 1. Tallenna ja tyonna GitHubiin (main & gh-pages)
 git add .
-git commit -m "Tietokonenakyman 4 kentallisen rinnakkainen tiivis 4-sarakkeinen nakyma yhdella ruudulla, kenttaryhmittelyvalitsimet ja mobiiliskaalaus (v65.0)"
+git commit -m "Yleisnakyman poisto, Live-osallistujat ensisijaisena yhtenaisena kentallisten paanakymana (v66.0)"
 git push origin main
 git checkout gh-pages
 git merge main

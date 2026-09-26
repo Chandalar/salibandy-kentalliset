@@ -2404,15 +2404,7 @@
             lineupConfigs = loadLineupConfigs(currentTeamId);
         }
 
-        // 1. FIRST TAB (leftmost): Yleisnäkymä (Kaikki kentälliset)
-        const summaryBtn = document.createElement('button');
-        summaryBtn.className = `tab-btn highlight-summary ${activeLineupKey === 'summary' ? 'active' : ''}`;
-        summaryBtn.dataset.lineup = 'summary';
-        summaryBtn.innerHTML = '<span>📊 Yleisnäkymä (Kaikki kentälliset)</span>';
-        summaryBtn.addEventListener('click', () => switchTab('summary'));
-        tabsScrollContainer.appendChild(summaryBtn);
-
-        // 2. SECOND TAB: Live-osallistujat (Nimenhuuto / myClub)
+        // 1. FIRST TAB (leftmost): Live-osallistujat (Nimenhuuto / myClub)
         const liveBtn = document.createElement('button');
         liveBtn.className = `tab-btn highlight-live ${activeLineupKey === 'live' ? 'active' : ''}`;
         liveBtn.dataset.lineup = 'live';
@@ -2420,7 +2412,7 @@
         liveBtn.addEventListener('click', () => switchTab('live'));
         tabsScrollContainer.appendChild(liveBtn);
 
-        // 3. Custom Lineups (1. Kenttä, 2. Kenttä, etc.)
+        // 2. Custom Lineups (1. Kenttä, 2. Kenttä, etc.)
         lineupConfigs.forEach(config => {
             const btn = document.createElement('button');
             btn.className = `tab-btn ${activeLineupKey === config.id ? 'active' : ''}`;
@@ -2436,7 +2428,7 @@
             tabsScrollContainer.appendChild(btn);
         });
 
-        // 4. Action buttons
+        // 3. Action buttons
         const addBtn = document.createElement('button');
         addBtn.className = 'tab-btn btn-add-tab';
         addBtn.innerHTML = '+ Uusi kentällinen';
@@ -2458,6 +2450,7 @@
     }
 
     function switchTab(key) {
+        if (key === 'summary') key = 'live';
         activeLineupKey = key;
         activePageId = 'p1';
         renderTabs();
@@ -2466,23 +2459,12 @@
         const rosterPanelSection = document.getElementById('roster-panel-section');
         const pitchPanelSection = document.getElementById('pitch-panel-section');
         const lineupPanelSection = document.getElementById('lineup-panel-section');
-        const summaryViewPanel = document.getElementById('summary-view-panel');
         const liveViewPanel = document.getElementById('live-view-panel');
         const mainWorkspace = document.querySelector('.main-workspace');
 
         const isDrawingOnlyTab = (activeLineupKey === 'custom' || activeLineupKey === 'freeform');
 
-        if (activeLineupKey === 'summary') {
-            document.body.classList.add('is-summary-view');
-            document.body.classList.remove('is-live-view');
-            if (rosterPanelSection) rosterPanelSection.style.display = 'none';
-            if (pitchPanelSection) pitchPanelSection.style.display = 'none';
-            if (lineupPanelSection) lineupPanelSection.style.display = 'none';
-            if (liveViewPanel) liveViewPanel.style.display = 'none';
-            if (summaryViewPanel) summaryViewPanel.style.display = 'flex';
-            if (mainWorkspace) mainWorkspace.classList.remove('no-right-panel');
-            renderSummaryView();
-        } else if (activeLineupKey === 'live') {
+        if (activeLineupKey === 'live') {
             document.body.classList.add('is-live-view');
             document.body.classList.remove('is-summary-view');
             activeMobileTab = 'live';
@@ -2493,7 +2475,6 @@
             if (rosterPanelSection) rosterPanelSection.style.display = 'none';
             if (pitchPanelSection) pitchPanelSection.style.display = 'none';
             if (lineupPanelSection) lineupPanelSection.style.display = 'none';
-            if (summaryViewPanel) summaryViewPanel.style.display = 'none';
             if (liveViewPanel) liveViewPanel.style.display = 'flex';
             if (mainWorkspace) mainWorkspace.classList.remove('no-right-panel');
             renderLiveView();
@@ -2508,7 +2489,6 @@
             }
             if (rosterPanelSection) rosterPanelSection.style.display = 'flex';
             if (pitchPanelSection) pitchPanelSection.style.display = 'flex';
-            if (summaryViewPanel) summaryViewPanel.style.display = 'none';
             if (liveViewPanel) liveViewPanel.style.display = 'none';
 
             if (isDrawingOnlyTab) {
@@ -5341,176 +5321,10 @@
     }
 
     // ==========================================
-    // SUMMARY VIEW (Kaikki kentälliset rinnakkain + Pelaajapankki)
+    // SUMMARY VIEW (Alias to Live View)
     // ==========================================
     function renderSummaryView() {
-        const summaryGridContainer = document.getElementById('summary-grid-container');
-        if (!summaryGridContainer) return;
-        summaryGridContainer.innerHTML = '';
-
-        const posKeys = ['MV', 'VP', 'OP', 'VH', 'KH', 'OH'];
-        const nonDrawingConfigs = lineupConfigs.filter(c => c.id !== 'custom' && c.id !== 'freeform' && c.type !== 'drawing_only');
-        const displayConfigs = filterLineupConfigsByGroup(nonDrawingConfigs, summaryGroupFilter);
-
-        // Update active group pill
-        const summaryPillsContainer = document.getElementById('summary-group-pills');
-        if (summaryPillsContainer) {
-            summaryPillsContainer.querySelectorAll('.lineup-group-pill').forEach(btn => {
-                const grp = btn.dataset.summaryGroup;
-                if (grp === summaryGroupFilter) {
-                    btn.classList.add('active');
-                } else {
-                    btn.classList.remove('active');
-                }
-            });
-        }
-
-        displayConfigs.forEach(cConfig => {
-            const lKey = cConfig.id;
-            const lName = cConfig.name;
-            const curLineup = lineups[lKey] || {};
-
-            const col = document.createElement('div');
-            col.className = 'summary-lineup-card';
-
-            let slotsHtml = '';
-            posKeys.forEach(pos => {
-                const pid = curLineup[pos];
-                const player = roster.find(p => p.id === pid);
-                const isMv = pos === 'MV';
-                const rowClass = isMv ? 'is-mv' : 'is-field';
-
-                if (player) {
-                    slotsHtml += `
-                        <div class="summary-slot-row ${rowClass}" data-lineup="${lKey}" data-pos="${pos}" title="Klikkaa vaihtaaksesi pelaajaa, tai raahaa uusi pelaaja tähän!">
-                            <span class="summary-pos-tag">${pos}</span>
-                            <span class="summary-p-num">#${player.number}</span>
-                            <span class="summary-p-name">${escapeHtml(player.name)}</span>
-                            ${player.isLoan ? '<span class="loan-pill-tiny">⭐</span>' : ''}
-                            <button class="summary-remove-slot" data-action="summary-remove-slot" data-lineup="${lKey}" data-pos="${pos}" title="Poista paikalta">✕</button>
-                        </div>
-                    `;
-                } else {
-                    slotsHtml += `
-                        <div class="summary-slot-row is-empty" data-lineup="${lKey}" data-pos="${pos}" title="Klikkaa valitaksesi pelaajan, tai raahaa pelaaja alapuolelta tähän!">
-                            <span class="summary-pos-tag">${pos}</span>
-                            <span class="summary-empty-text">+ Valitse ${pos}</span>
-                        </div>
-                    `;
-                }
-
-                // Indented reserves for this position in summary
-                const posReserves = getPosReserves(lKey, pos);
-                if (posReserves && posReserves.length > 0) {
-                    posReserves.forEach(rId => {
-                        const rPlayer = roster.find(p => p.id === rId);
-                        if (!rPlayer) return;
-                        slotsHtml += `
-                            <div class="summary-slot-row summary-reserve-row" data-lineup="${lKey}" data-pos="${pos}">
-                                <span class="summary-pos-tag">↳ VM</span>
-                                <span class="summary-p-num">#${rPlayer.number}</span>
-                                <span class="summary-p-name">${escapeHtml(rPlayer.name)}</span>
-                                <button class="summary-remove-slot" data-action="summary-remove-reserve" data-lineup="${lKey}" data-pos="${pos}" data-reserve-id="${rPlayer.id}" title="Poista varamies">✕</button>
-                            </div>
-                        `;
-                    });
-                }
-            });
-
-            // General reserves in summary
-            const genReserves = getGeneralReserves(lKey);
-            if (genReserves && genReserves.length > 0) {
-                genReserves.forEach(rId => {
-                    const rPlayer = roster.find(p => p.id === rId);
-                    if (!rPlayer) return;
-                    slotsHtml += `
-                        <div class="summary-slot-row summary-reserve-row" data-lineup="${lKey}" data-pos="general">
-                            <span class="summary-pos-tag">🪑 VM</span>
-                            <span class="summary-p-num">#${rPlayer.number}</span>
-                            <span class="summary-p-name">${escapeHtml(rPlayer.name)}</span>
-                            <button class="summary-remove-slot" data-action="summary-remove-reserve" data-lineup="${lKey}" data-pos="general" data-reserve-id="${rPlayer.id}" title="Poista varamies">✕</button>
-                        </div>
-                    `;
-                });
-            }
-
-            col.innerHTML = `
-                <div class="summary-card-header">
-                    <div class="summary-card-title">${escapeHtml(lName)}</div>
-                    <button class="btn-xs btn-outline" data-action="switch-to-lineup" data-lineup="${lKey}">Avaa 🏒</button>
-                </div>
-                <div class="summary-card-body">
-                    ${slotsHtml}
-                </div>
-            `;
-
-            // Setup drag & drop targets on each slot row
-            col.querySelectorAll('.summary-slot-row').forEach(row => {
-                row.ondragover = (e) => {
-                    e.preventDefault();
-                    e.dataTransfer.dropEffect = 'move';
-                    row.style.background = 'rgba(59, 130, 246, 0.35)';
-                    row.style.borderColor = '#60a5fa';
-                };
-                row.ondragleave = () => {
-                    row.style.background = '';
-                    row.style.borderColor = '';
-                };
-                row.ondrop = (e) => {
-                    e.preventDefault();
-                    row.style.background = '';
-                    row.style.borderColor = '';
-                    const playerId = e.dataTransfer ? e.dataTransfer.getData('text/plain') : null;
-                    const lk = row.dataset.lineup;
-                    const pos = row.dataset.pos;
-                    if (playerId && lk && pos && pos !== 'general') {
-                        assignPlayerToLineupSlot(lk, pos, playerId);
-                    }
-                };
-            });
-
-            summaryGridContainer.appendChild(col);
-        });
-
-        // Bind Summary clicks
-        summaryGridContainer.querySelectorAll('[data-action="switch-to-lineup"]').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const lk = e.currentTarget.dataset.lineup;
-                switchTab(lk);
-            });
-        });
-
-        summaryGridContainer.querySelectorAll('.summary-slot-row').forEach(row => {
-            row.addEventListener('click', (e) => {
-                if (e.target.dataset.action === 'summary-remove-slot') {
-                    const lk = e.target.dataset.lineup;
-                    const pos = e.target.dataset.pos;
-                    if (lineups[lk]) lineups[lk][pos] = '';
-                    saveState();
-                    renderSummaryView();
-                    return;
-                }
-                if (e.target.dataset.action === 'summary-remove-reserve') {
-                    const lk = e.target.dataset.lineup;
-                    const pos = e.target.dataset.pos;
-                    const rId = e.target.dataset.reserveId;
-                    if (pos === 'general') {
-                        removeGeneralReserve(lk, rId);
-                    } else {
-                        removePosReserve(lk, pos, rId);
-                    }
-                    saveState();
-                    renderSummaryView();
-                    return;
-                }
-                const lk = row.dataset.lineup;
-                const pos = row.dataset.pos;
-                if (lk && pos && pos !== 'general') openSlotPickerModal(lk, pos);
-            });
-        });
-
-        // Render lower player bank
-        renderSummaryRosterGrid();
+        renderLiveView();
     }
 
     function renderSummaryRosterGrid() {
@@ -9336,6 +9150,8 @@ If number is not visible, provide a number or null. Only return the JSON array.`
 
         document.getElementById('btn-add-lineup-summary')?.addEventListener('click', () => openLineupConfigModal());
         document.getElementById('btn-manage-lineups-summary')?.addEventListener('click', () => openManageLineupsModal());
+        document.getElementById('btn-add-lineup-live')?.addEventListener('click', () => openLineupConfigModal());
+        document.getElementById('btn-manage-lineups-live')?.addEventListener('click', () => openManageLineupsModal());
 
         // Summary Lineup Group Filter Pills (1-4, special, all)
         document.getElementById('summary-group-pills')?.addEventListener('click', (e) => {
