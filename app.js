@@ -464,6 +464,7 @@
     let liveRosterFilter = 'all';
     let liveRosterSearchQuery = '';
     let selectedPlayerForAttendance = null;
+    let draggedLiveSlot = null;
 
     function filterLineupConfigsByGroup(configs, groupFilter) {
         if (!configs || !Array.isArray(configs)) return [];
@@ -6251,7 +6252,8 @@
                     else attBadge = '<span class="live-status-pill status-unanswered">⚪ ?</span>';
 
                     slotsHtml += `
-                        <div class="summary-slot-row ${rowClass}" data-lineup="${lKey}" data-pos="${pos}" title="Status: ${att.status.toUpperCase()} ${att.reason ? '(' + att.reason + ')' : ''}">
+                        <div class="summary-slot-row ${rowClass} has-player" draggable="true" data-lineup="${lKey}" data-pos="${pos}" data-player-id="${player.id}" title="Vedä toiselle paikalle vaihtaaksesi/siirtääksesi. Status: ${att.status.toUpperCase()} ${att.reason ? '(' + att.reason + ')' : ''}">
+                            <span class="drag-handle-hint" title="Vedä siirtääksesi tai vaihtaaksesi">⠿</span>
                             <span class="summary-pos-tag">${displayPos}</span>
                             <span class="summary-p-num">#${player.number}</span>
                             <span class="summary-p-name">${escapeHtml(player.name)}</span>
@@ -6280,7 +6282,8 @@
                                          att.status === 'maybe' ? '<span class="live-status-pill status-maybe">🟡 EHKÄ</span>' :
                                          '<span class="live-status-pill status-unanswered">⚪ ?</span>';
                         slotsHtml += `
-                            <div class="summary-slot-row summary-reserve-row" data-lineup="${lKey}" data-pos="${pos}">
+                            <div class="summary-slot-row summary-reserve-row has-player" draggable="true" data-lineup="${lKey}" data-pos="${pos}" data-is-reserve="true" data-reserve-id="${rPlayer.id}" data-player-id="${rPlayer.id}" title="Vedä siirtääksesi kentälliseen">
+                                <span class="drag-handle-hint" title="Vedä siirtääksesi">⠿</span>
                                 <span class="summary-pos-tag">↳ VM</span>
                                 <span class="summary-p-num">#${rPlayer.number}</span>
                                 <span class="summary-p-name">${escapeHtml(rPlayer.name)}</span>
@@ -6304,7 +6307,8 @@
                                      att.status === 'maybe' ? '<span class="live-status-pill status-maybe">🟡 EHKÄ</span>' :
                                      '<span class="live-status-pill status-unanswered">⚪ ?</span>';
                     slotsHtml += `
-                        <div class="summary-slot-row summary-reserve-row" data-lineup="${lKey}" data-pos="general">
+                        <div class="summary-slot-row summary-reserve-row has-player" draggable="true" data-lineup="${lKey}" data-pos="general" data-is-reserve="true" data-reserve-id="${rPlayer.id}" data-player-id="${rPlayer.id}" title="Vedä siirtääksesi kentälliseen">
+                            <span class="drag-handle-hint" title="Vedä siirtääksesi">⠿</span>
                             <span class="summary-pos-tag">🪑 VM</span>
                             <span class="summary-p-num">#${rPlayer.number}</span>
                             <span class="summary-p-name">${escapeHtml(rPlayer.name)}</span>
@@ -6325,38 +6329,130 @@
                 </div>
             `;
 
-            // Setup drag & drop targets
+            // Setup drag & drop targets and sources for slot rows
             col.querySelectorAll('.summary-slot-row').forEach(row => {
-                row.ondragover = (e) => {
-                    e.preventDefault();
-                    e.dataTransfer.dropEffect = 'move';
-                    row.style.background = 'rgba(16, 185, 129, 0.35)';
-                    row.style.borderColor = '#10b981';
-                };
-                row.ondragleave = () => {
-                    row.style.background = '';
-                    row.style.borderColor = '';
-                };
-                row.ondrop = (e) => {
-                    e.preventDefault();
-                    row.style.background = '';
-                    row.style.borderColor = '';
-                    const playerId = e.dataTransfer ? e.dataTransfer.getData('text/plain') : null;
-                    const lk = row.dataset.lineup;
-                    const pos = row.dataset.pos;
-                    if (playerId && lk && pos && pos !== 'general') {
-                        const playerAtt = attendeesMap[playerId] || { status: 'unanswered' };
-                        if (playerAtt.status === 'out') {
-                            showToast(`⚠️ Huom: Pelaaja on ilmoittautunut POISSA (OUT) tähän peliin!`);
+                const lk = row.dataset.lineup;
+                const pos = row.dataset.pos;
+                const pid = row.dataset.playerId;
+                const isReserve = row.dataset.isReserve === 'true';
+                const reserveId = row.dataset.reserveId;
+
+                // Drag source (if slot has a player)
+                if (row.classList.contains('has-player') && pid) {
+                    row.ondragstart = (e) => {
+                        draggedLiveSlot = {
+                            sourceLineup: lk,
+                            sourcePos: pos,
+                            playerId: pid,
+                            isReserve: isReserve,
+                            reserveId: reserveId
+                        };
+                        e.dataTransfer.effectAllowed = 'move';
+                        e.dataTransfer.setData('text/plain', pid);
+                        e.dataTransfer.setData('application/json', JSON.stringify({
+                            type: 'slot-player',
+                            sourceLineup: lk,
+                            sourcePos: pos,
+                            playerId: pid,
+                            isReserve: isReserve,
+                            reserveId: reserveId
+                        }));
+                        row.classList.add('is-dragging');
+                    };
+
+                    row.ondragend = () => {
+                        row.classList.remove('is-dragging');
+                        clearAllLiveDragStates();
+                        row._justDragged = true;
+                        setTimeout(() => { row._justDragged = false; }, 300);
+                        draggedLiveSlot = null;
+                    };
+
+                    // Mobile / Touch pointer drag
+                    setupSlotPointerDragging(row, lk, pos, pid, isReserve, reserveId);
+                }
+
+                // Drop target (for all rows where pos !== 'general')
+                if (pos && pos !== 'general') {
+                    row.ondragover = (e) => {
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = 'move';
+
+                        // If dragging from same slot, don't show highlight
+                        if (draggedLiveSlot &&
+                            draggedLiveSlot.sourceLineup === lk &&
+                            draggedLiveSlot.sourcePos === pos &&
+                            !draggedLiveSlot.isReserve) {
+                            row.classList.remove('drag-target-hover', 'drag-swap-hover');
+                            return;
                         }
-                        assignPlayerToLineupSlot(lk, pos, playerId);
-                        renderLiveView();
-                    }
-                };
+
+                        // Check if target slot is occupied -> Swap hover (orange) vs Target hover (green)
+                        const targetPlayerId = (lineups[lk] || {})[pos];
+                        if (targetPlayerId) {
+                            row.classList.add('drag-swap-hover');
+                            row.classList.remove('drag-target-hover');
+                        } else {
+                            row.classList.add('drag-target-hover');
+                            row.classList.remove('drag-swap-hover');
+                        }
+                    };
+
+                    row.ondragleave = () => {
+                        row.classList.remove('drag-target-hover', 'drag-swap-hover');
+                    };
+
+                    row.ondrop = (e) => {
+                        e.preventDefault();
+                        row.classList.remove('drag-target-hover', 'drag-swap-hover');
+
+                        let dragData = null;
+                        try {
+                            const raw = e.dataTransfer.getData('application/json');
+                            if (raw) dragData = JSON.parse(raw);
+                        } catch(err) {}
+
+                        const source = draggedLiveSlot || dragData;
+                        const plainPlayerId = e.dataTransfer ? e.dataTransfer.getData('text/plain') : null;
+
+                        if (source && source.sourceLineup && source.sourcePos) {
+                            executeSlotMoveOrSwap(source, { targetLineup: lk, targetPos: pos });
+                        } else if (source && source.playerId) {
+                            executeBankDrop(source.playerId, lk, pos);
+                        } else if (plainPlayerId) {
+                            executeBankDrop(plainPlayerId, lk, pos);
+                        }
+                        draggedLiveSlot = null;
+                    };
+                }
             });
 
             liveGridContainer.appendChild(col);
         });
+
+        // Setup Player Bank as drop target for removing players from slots
+        const bankSection = document.getElementById('live-roster-section');
+        if (bankSection) {
+            bankSection.ondragover = (e) => {
+                if (draggedLiveSlot) {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
+                    bankSection.classList.add('drag-bank-hover');
+                }
+            };
+            bankSection.ondragleave = (e) => {
+                if (!bankSection.contains(e.relatedTarget)) {
+                    bankSection.classList.remove('drag-bank-hover');
+                }
+            };
+            bankSection.ondrop = (e) => {
+                bankSection.classList.remove('drag-bank-hover');
+                if (!draggedLiveSlot) return;
+                e.preventDefault();
+                executeRemoveFromSlot(draggedLiveSlot);
+                draggedLiveSlot = null;
+            };
+        }
 
         // Bind clicks
         liveGridContainer.querySelectorAll('[data-action="switch-to-lineup"]').forEach(btn => {
@@ -6368,6 +6464,10 @@
 
         liveGridContainer.querySelectorAll('.summary-slot-row').forEach(row => {
             row.addEventListener('click', (e) => {
+                if (row._justDragged) {
+                    row._justDragged = false;
+                    return;
+                }
                 if (e.target.dataset.action === 'summary-remove-slot') {
                     const lk = e.target.dataset.lineup;
                     const pos = e.target.dataset.pos;
@@ -6394,6 +6494,236 @@
                 if (lk && pos && pos !== 'general') openSlotPickerModal(lk, pos);
             });
         });
+
+        // Helper: Execute slot move or swap
+        function executeSlotMoveOrSwap(source, target) {
+            if (!source || !target) return;
+            const sLk = source.sourceLineup;
+            const sPos = source.sourcePos;
+            const tLk = target.targetLineup;
+            const tPos = target.targetPos;
+
+            if (!tLk || !tPos || tPos === 'general') return;
+            if (sLk === tLk && sPos === tPos && !source.isReserve) return;
+
+            if (source.isReserve) {
+                const pid = source.playerId;
+                if (sPos === 'general') {
+                    removeGeneralReserve(sLk, pid);
+                } else {
+                    removePosReserve(sLk, sPos, pid);
+                }
+                if (!lineups[tLk]) lineups[tLk] = createEmptyLineupSlots();
+                lineups[tLk][tPos] = pid;
+                saveState();
+                renderLiveView();
+                const p = roster.find(x => x.id === pid);
+                showToast(`Siirretty varamiehistä: ${p ? p.name : 'Pelaaja'} ➔ ${getLineupName(tLk)} (${tPos}) 👍`);
+                return;
+            }
+
+            if (!lineups[sLk]) lineups[sLk] = createEmptyLineupSlots();
+            if (!lineups[tLk]) lineups[tLk] = createEmptyLineupSlots();
+
+            const sPid = lineups[sLk][sPos] || source.playerId;
+            const tPid = lineups[tLk][tPos] || '';
+
+            if (!sPid) return;
+
+            const sPlayer = roster.find(p => p.id === sPid);
+            const sName = sPlayer ? sPlayer.name : 'Pelaaja';
+
+            if (tPid) {
+                // SWAP
+                const tPlayer = roster.find(p => p.id === tPid);
+                const tName = tPlayer ? tPlayer.name : 'Pelaaja';
+
+                lineups[sLk][sPos] = tPid;
+                lineups[tLk][tPos] = sPid;
+
+                saveState();
+                renderLiveView();
+                showToast(`Vaihdettu paikat: ${sName} ⇄ ${tName} 🔄`);
+            } else {
+                // MOVE
+                lineups[sLk][sPos] = '';
+                lineups[tLk][tPos] = sPid;
+
+                saveState();
+                renderLiveView();
+                showToast(`Siirretty: ${sName} ➔ ${getLineupName(tLk)} (${tPos}) 👍`);
+            }
+        }
+
+        // Helper: Remove player from slot back to bank
+        function executeRemoveFromSlot(source) {
+            if (!source) return;
+            const sLk = source.sourceLineup;
+            const sPos = source.sourcePos;
+            const pid = source.playerId;
+            const player = roster.find(p => p.id === pid);
+            const pName = player ? player.name : 'Pelaaja';
+
+            if (source.isReserve) {
+                if (sPos === 'general') {
+                    removeGeneralReserve(sLk, pid);
+                } else {
+                    removePosReserve(sLk, sPos, pid);
+                }
+            } else {
+                if (lineups[sLk]) {
+                    lineups[sLk][sPos] = '';
+                }
+            }
+
+            saveState();
+            renderLiveView();
+            showToast(`Poistettu kentällisestä: ${pName} ✕`);
+        }
+
+        // Helper: Bank drop
+        function executeBankDrop(playerId, targetLk, targetPos) {
+            if (!playerId || !targetLk || !targetPos || targetPos === 'general') return;
+            const curEv = teamEvents.find(e => e.id === activeEventId) || teamEvents[0];
+            const attMap = curEv ? (curEv.attendees || {}) : {};
+            const pAtt = attMap[playerId] || { status: 'unanswered' };
+            if (pAtt.status === 'out') {
+                showToast(`⚠️ Huom: Pelaaja on ilmoittautunut POISSA (OUT) tähän peliin!`);
+            }
+            assignPlayerToLineupSlot(targetLk, targetPos, playerId);
+            renderLiveView();
+        }
+
+        // Helper: Clear visual drag classes
+        function clearAllLiveDragStates() {
+            document.querySelectorAll('.drag-target-hover, .drag-swap-hover, .is-dragging, .drag-bank-hover').forEach(el => {
+                el.classList.remove('drag-target-hover', 'drag-swap-hover', 'is-dragging', 'drag-bank-hover');
+            });
+            const ghost = document.querySelector('.slot-drag-ghost');
+            if (ghost) ghost.remove();
+        }
+
+        // Helper: Touch / pointer dragging for mobile
+        function setupSlotPointerDragging(row, lk, pos, pid, isReserve, reserveId) {
+            let isPointerDown = false;
+            let isDragging = false;
+            let startX = 0;
+            let startY = 0;
+            let ghostEl = null;
+
+            const onPointerDown = (e) => {
+                if (e.button && e.button !== 0) return;
+                if (e.target.closest('[data-action="summary-remove-slot"], [data-action="summary-remove-reserve"]')) return;
+
+                isPointerDown = true;
+                isDragging = false;
+                startX = e.clientX;
+                startY = e.clientY;
+
+                window.addEventListener('pointermove', onPointerMove, { passive: false });
+                window.addEventListener('pointerup', onPointerUp);
+                window.addEventListener('pointercancel', onPointerUp);
+            };
+
+            const onPointerMove = (e) => {
+                if (!isPointerDown) return;
+                const dx = e.clientX - startX;
+                const dy = e.clientY - startY;
+
+                if (!isDragging && (Math.hypot(dx, dy) > 8)) {
+                    isDragging = true;
+                    row.classList.add('is-dragging');
+                    draggedLiveSlot = {
+                        sourceLineup: lk,
+                        sourcePos: pos,
+                        playerId: pid,
+                        isReserve: isReserve,
+                        reserveId: reserveId
+                    };
+
+                    const player = roster.find(p => p.id === pid);
+                    const displayPos = (pos === 'KH') ? 'C' : (pos === 'general' ? 'VM' : pos);
+                    ghostEl = document.createElement('div');
+                    ghostEl.className = 'slot-drag-ghost';
+                    ghostEl.innerHTML = `<span class="badge">${displayPos}</span> #${player ? player.number : ''} ${escapeHtml(player ? player.name : 'Pelaaja')}`;
+                    document.body.appendChild(ghostEl);
+                }
+
+                if (isDragging) {
+                    if (e.cancelable) e.preventDefault();
+                    if (ghostEl) {
+                        ghostEl.style.left = e.clientX + 'px';
+                        ghostEl.style.top = e.clientY + 'px';
+                    }
+
+                    const elUnder = document.elementFromPoint(e.clientX, e.clientY);
+                    const targetSlot = elUnder ? elUnder.closest('.summary-slot-row') : null;
+                    const bankSec = elUnder ? elUnder.closest('#live-roster-section') : null;
+
+                    document.querySelectorAll('.drag-target-hover, .drag-swap-hover, .drag-bank-hover').forEach(el => {
+                        if (el !== targetSlot && el !== bankSec) {
+                            el.classList.remove('drag-target-hover', 'drag-swap-hover', 'drag-bank-hover');
+                        }
+                    });
+
+                    if (targetSlot) {
+                        const tLk = targetSlot.dataset.lineup;
+                        const tPos = targetSlot.dataset.pos;
+                        if (tLk && tPos && tPos !== 'general' && (tLk !== lk || tPos !== pos || isReserve)) {
+                            const targetPlayerId = (lineups[tLk] || {})[tPos];
+                            if (targetPlayerId) {
+                                targetSlot.classList.add('drag-swap-hover');
+                                targetSlot.classList.remove('drag-target-hover');
+                            } else {
+                                targetSlot.classList.add('drag-target-hover');
+                                targetSlot.classList.remove('drag-swap-hover');
+                            }
+                        }
+                    } else if (bankSec) {
+                        bankSec.classList.add('drag-bank-hover');
+                    }
+                }
+            };
+
+            const onPointerUp = (e) => {
+                window.removeEventListener('pointermove', onPointerMove);
+                window.removeEventListener('pointerup', onPointerUp);
+                window.removeEventListener('pointercancel', onPointerUp);
+
+                if (ghostEl) {
+                    ghostEl.remove();
+                    ghostEl = null;
+                }
+
+                if (isDragging) {
+                    row.classList.remove('is-dragging');
+                    row._justDragged = true;
+                    setTimeout(() => { row._justDragged = false; }, 350);
+
+                    const elUnder = document.elementFromPoint(e.clientX, e.clientY);
+                    const targetSlot = elUnder ? elUnder.closest('.summary-slot-row') : null;
+                    const bankSec = elUnder ? elUnder.closest('#live-roster-section') : null;
+
+                    clearAllLiveDragStates();
+
+                    if (targetSlot) {
+                        const tLk = targetSlot.dataset.lineup;
+                        const tPos = targetSlot.dataset.pos;
+                        if (tLk && tPos && tPos !== 'general') {
+                            executeSlotMoveOrSwap(draggedLiveSlot, { targetLineup: tLk, targetPos: tPos });
+                        }
+                    } else if (bankSec) {
+                        executeRemoveFromSlot(draggedLiveSlot);
+                    }
+                }
+
+                isPointerDown = false;
+                isDragging = false;
+                draggedLiveSlot = null;
+            };
+
+            row.addEventListener('pointerdown', onPointerDown);
+        }
 
         // Render lower live roster grid
         renderLiveRosterGrid();
@@ -6541,11 +6871,16 @@
             `;
 
             card.addEventListener('dragstart', (e) => {
+                draggedLiveSlot = null;
                 e.dataTransfer.setData('text/plain', p.id);
+                e.dataTransfer.setData('application/json', JSON.stringify({ type: 'roster-player', playerId: p.id }));
                 card.classList.add('is-dragging');
             });
             card.addEventListener('dragend', () => {
                 card.classList.remove('is-dragging');
+                document.querySelectorAll('.drag-target-hover, .drag-swap-hover, .is-dragging, .drag-bank-hover').forEach(el => {
+                    el.classList.remove('drag-target-hover', 'drag-swap-hover', 'is-dragging', 'drag-bank-hover');
+                });
             });
 
             card.addEventListener('click', (e) => {

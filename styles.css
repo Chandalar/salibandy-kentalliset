@@ -2416,6 +2416,89 @@ body[data-court-color="grid"] .faceoff-dot {
     border-color: var(--accent-field);
 }
 
+.summary-slot-row[draggable="true"],
+.summary-slot-row.has-player {
+    cursor: grab;
+}
+
+.summary-slot-row[draggable="true"]:active,
+.summary-slot-row.has-player:active {
+    cursor: grabbing;
+}
+
+.summary-slot-row .drag-handle-hint {
+    font-size: 0.72rem;
+    line-height: 1;
+    color: var(--text-muted);
+    opacity: 0.35;
+    margin-right: 1px;
+    user-select: none;
+    transition: opacity 0.15s ease;
+    cursor: grab;
+}
+
+.summary-slot-row:hover .drag-handle-hint {
+    opacity: 0.9;
+    color: #60a5fa;
+}
+
+.summary-slot-row.is-dragging {
+    opacity: 0.35 !important;
+    outline: 2px dashed #60a5fa !important;
+    outline-offset: -2px;
+}
+
+.summary-slot-row.drag-target-hover {
+    background: rgba(16, 185, 129, 0.45) !important;
+    outline: 2px solid #10b981 !important;
+    outline-offset: -2px;
+    box-shadow: 0 0 10px rgba(16, 185, 129, 0.5) !important;
+    transform: scale(1.02);
+}
+
+.summary-slot-row.drag-swap-hover {
+    background: rgba(245, 158, 11, 0.45) !important;
+    outline: 2px solid #f59e0b !important;
+    outline-offset: -2px;
+    box-shadow: 0 0 10px rgba(245, 158, 11, 0.5) !important;
+    transform: scale(1.02);
+}
+
+.live-roster-section.drag-bank-hover {
+    background: rgba(239, 68, 68, 0.12) !important;
+    border-color: #ef4444 !important;
+    box-shadow: 0 0 16px rgba(239, 68, 68, 0.3) !important;
+}
+
+/* Floating drag ghost for touch / pointer dragging */
+.slot-drag-ghost {
+    position: fixed;
+    pointer-events: none;
+    z-index: 99999;
+    background: #1e3a8a;
+    border: 2px solid #60a5fa;
+    color: #ffffff;
+    border-radius: 6px;
+    padding: 5px 12px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    font-family: var(--font-heading);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transform: translate(-50%, -50%);
+    white-space: nowrap;
+}
+
+.slot-drag-ghost .badge {
+    background: rgba(255, 255, 255, 0.2);
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-size: 0.68rem;
+    color: #93c5fd;
+}
+
 .summary-slot-row.is-mv {
     border-left: 3px solid var(--accent-mv);
 }
