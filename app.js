@@ -232,6 +232,7 @@
         { id: '1', name: '1. Kenttä', type: 'preset' },
         { id: '2', name: '2. Kenttä', type: 'preset' },
         { id: '3', name: '3. Kenttä', type: 'preset' },
+        { id: '4', name: '4. Kenttä', type: 'preset' },
         { id: 'yv', name: '⚡ Ylivoima (YV)', type: 'preset' },
         { id: 'av', name: '🛡️ Alivoima (AV)', type: 'preset' },
         { id: '6v5', name: '🔥 6v5 (Ilman MV)', type: 'preset' },
@@ -243,6 +244,7 @@
         '1': { MV: 'p_mv23', VP: 'p_19', OP: 'p_20', VH: 'p_64', KH: 'p_42', OH: 'p_88', VM: '' },
         '2': { MV: 'p_mv45', VP: 'p_71', OP: 'p_4', VH: 'p_11', KH: 'p_55', OH: 'p_2', VM: '' },
         '3': { MV: '', VP: '', OP: '', VH: '', KH: '', OH: '', VM: '' },
+        '4': { MV: '', VP: '', OP: '', VH: '', KH: '', OH: '', VM: '' },
         'yv': { MV: 'p_mv23', VP: 'p_19', OP: 'p_42', VH: 'p_64', KH: 'p_55', OH: 'p_88', VM: '' },
         'av': { MV: 'p_mv23', VP: 'p_20', OP: 'p_71', VH: '', KH: 'p_42', OH: '', VM: '' },
         '6v5': { MV: '', VP: 'p_19', OP: 'p_20', VH: 'p_64', KH: 'p_42', OH: 'p_88', VM: '' },
@@ -272,6 +274,7 @@
         '1': { MV: 'p_ocr_1786787489945_1', VP: 'p_ocr_1786787489945_7', OP: 'p_ocr_1786787489945_8', VH: 'p_ocr_1786787489945_0', KH: 'p_ocr_1786787489945_2', OH: 'p_ocr_1786787489945_6', VM: '' },
         '2': { MV: '', VP: 'p_ocr_1786787489945_3', OP: 'p_ocr_1786787489945_4', VH: 'p_ocr_1786787489945_5', KH: 'p_ocr_1786787489945_9', OH: 'p_ocr_1786787489945_10', VM: '' },
         '3': { MV: '', VP: '', OP: '', VH: '', KH: 'p_1789731527753', OH: '', VM: '' },
+        '4': { MV: '', VP: '', OP: '', VH: '', KH: '', OH: '', VM: '' },
         'yv': { MV: '', VP: 'p_ocr_1786787489945_7', OP: 'p_ocr_1786787489945_8', VH: 'p_ocr_1786787489945_0', KH: 'p_ocr_1786787489945_2', OH: 'p_ocr_1786787489945_6', VM: '' },
         'av': { MV: 'p_ocr_1786787489945_1', VP: 'p_ocr_1786787489945_7', OP: 'p_ocr_1786787489945_8', VH: 'p_ocr_1786787489945_0', KH: 'p_ocr_1786787489945_2', OH: '', VM: '' },
         '6v5': { MV: '', VP: 'p_ocr_1786787489945_7', OP: 'p_ocr_1786787489945_8', VH: 'p_ocr_1786787489945_0', KH: 'p_ocr_1786787489945_2', OH: 'p_ocr_1786787489945_6', VM: 'p_ocr_1786787489945_5' },
@@ -444,6 +447,7 @@
     let tempOcrParsedPlayers = [];
     let selectedPlayerForAssignment = null;
     let selectedSlotTarget = { lineupKey: '', pos: '' };
+    let summaryGroupFilter = '1-4'; // '1-4', 'special', 'all'
     let summaryRosterFilter = 'all';
     let summaryRosterSearchQuery = '';
     let activeAssigningPlayerId = null;
@@ -456,9 +460,35 @@
     } else if (!activeEventId || !teamEvents.some(e => e.id === activeEventId)) {
         activeEventId = teamEvents[0] ? teamEvents[0].id : null;
     }
+    let liveGroupFilter = '1-4'; // '1-4', 'special', 'all'
     let liveRosterFilter = 'all';
     let liveRosterSearchQuery = '';
     let selectedPlayerForAttendance = null;
+
+    function filterLineupConfigsByGroup(configs, groupFilter) {
+        if (!configs || !Array.isArray(configs)) return [];
+        if (groupFilter === '1-4') {
+            return configs.filter(c => {
+                const id = String(c.id).toLowerCase();
+                const name = String(c.name).toLowerCase();
+                if (['1', '2', '3', '4', '5'].includes(id)) return true;
+                if (/^[1-5](\.|\s|$)/.test(name)) return true;
+                if (['yv', 'av', '6v5', 'custom', 'freeform'].includes(id)) return false;
+                if (name.includes('ylivoima') || name.includes('alivoima') || name.includes('6v5') || name.includes('taktiikka') || name.includes('vapaa')) return false;
+                return true;
+            });
+        }
+        if (groupFilter === 'special') {
+            return configs.filter(c => {
+                const id = String(c.id).toLowerCase();
+                const name = String(c.name).toLowerCase();
+                if (['yv', 'av', '6v5'].includes(id)) return true;
+                if (name.includes('yv') || name.includes('av') || name.includes('6v5') || name.includes('ylivoima') || name.includes('alivoima')) return true;
+                return false;
+            });
+        }
+        return configs;
+    }
 
     function getCourtKey(courtId) {
         return `${activeLineupKey}_${activePageId}_${courtId}`;
@@ -968,7 +998,9 @@
     function initMobileUI() {
         // Auto-detect UI mode dynamically based on viewport width (covers Z Fold 5 fold/unfold)
         const userManualOverride = loadFromStorage('salibandy_ui_mode_user_override', false);
-        if (!userManualOverride) {
+        if (typeof window !== 'undefined' && window.innerWidth >= 1024) {
+            currentUIMode = 'desktop';
+        } else if (!userManualOverride) {
             const isPhone = (typeof window !== 'undefined') && (window.innerWidth < 768);
             currentUIMode = isPhone ? 'mobile' : 'desktop';
         }
@@ -986,7 +1018,11 @@
         if (typeof window !== 'undefined') {
             window.addEventListener('resize', () => {
                 const userOverride = loadFromStorage('salibandy_ui_mode_user_override', false);
-                if (!userOverride) {
+                if (window.innerWidth >= 1024) {
+                    if (currentUIMode !== 'desktop') {
+                        applyUIMode('desktop');
+                    }
+                } else if (!userOverride) {
                     const shouldBePhone = (window.innerWidth < 768);
                     const newMode = shouldBePhone ? 'mobile' : 'desktop';
                     if (currentUIMode !== newMode) {
@@ -5313,7 +5349,21 @@
         summaryGridContainer.innerHTML = '';
 
         const posKeys = ['MV', 'VP', 'OP', 'VH', 'KH', 'OH'];
-        const displayConfigs = lineupConfigs.filter(c => c.id !== 'custom' && c.id !== 'freeform' && c.type !== 'drawing_only');
+        const nonDrawingConfigs = lineupConfigs.filter(c => c.id !== 'custom' && c.id !== 'freeform' && c.type !== 'drawing_only');
+        const displayConfigs = filterLineupConfigsByGroup(nonDrawingConfigs, summaryGroupFilter);
+
+        // Update active group pill
+        const summaryPillsContainer = document.getElementById('summary-group-pills');
+        if (summaryPillsContainer) {
+            summaryPillsContainer.querySelectorAll('.lineup-group-pill').forEach(btn => {
+                const grp = btn.dataset.summaryGroup;
+                if (grp === summaryGroupFilter) {
+                    btn.classList.add('active');
+                } else {
+                    btn.classList.remove('active');
+                }
+            });
+        }
 
         displayConfigs.forEach(cConfig => {
             const lKey = cConfig.id;
@@ -6345,7 +6395,21 @@
 
         // Render Lineup Cards with Attendance Badges
         const posKeys = ['MV', 'VP', 'OP', 'VH', 'KH', 'OH'];
-        const displayConfigs = lineupConfigs.filter(c => c.id !== 'custom' && c.id !== 'freeform' && c.type !== 'drawing_only');
+        const nonDrawingConfigs = lineupConfigs.filter(c => c.id !== 'custom' && c.id !== 'freeform' && c.type !== 'drawing_only');
+        const displayConfigs = filterLineupConfigsByGroup(nonDrawingConfigs, liveGroupFilter);
+
+        // Update active group pill
+        const livePillsContainer = document.getElementById('live-group-pills');
+        if (livePillsContainer) {
+            livePillsContainer.querySelectorAll('.lineup-group-pill').forEach(btn => {
+                const grp = btn.dataset.liveGroup;
+                if (grp === liveGroupFilter) {
+                    btn.classList.add('active');
+                } else {
+                    btn.classList.remove('active');
+                }
+            });
+        }
 
         displayConfigs.forEach(cConfig => {
             const lKey = cConfig.id;
@@ -9273,6 +9337,16 @@ If number is not visible, provide a number or null. Only return the JSON array.`
         document.getElementById('btn-add-lineup-summary')?.addEventListener('click', () => openLineupConfigModal());
         document.getElementById('btn-manage-lineups-summary')?.addEventListener('click', () => openManageLineupsModal());
 
+        // Summary Lineup Group Filter Pills (1-4, special, all)
+        document.getElementById('summary-group-pills')?.addEventListener('click', (e) => {
+            const btn = e.target.closest('.lineup-group-pill');
+            if (!btn) return;
+            document.querySelectorAll('#summary-group-pills .lineup-group-pill').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            summaryGroupFilter = btn.dataset.summaryGroup || '1-4';
+            renderSummaryView();
+        });
+
         // Summary Roster Search
         document.getElementById('summary-roster-search')?.addEventListener('input', (e) => {
             summaryRosterSearchQuery = e.target.value || '';
@@ -9300,6 +9374,16 @@ If number is not visible, provide a number or null. Only return the JSON array.`
             if (activeAssigningPlayerId) {
                 removePlayerFromAllLineups(activeAssigningPlayerId);
             }
+        });
+
+        // Live Lineup Group Filter Pills (1-4, special, all)
+        document.getElementById('live-group-pills')?.addEventListener('click', (e) => {
+            const btn = e.target.closest('.lineup-group-pill');
+            if (!btn) return;
+            document.querySelectorAll('#live-group-pills .lineup-group-pill').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            liveGroupFilter = btn.dataset.liveGroup || '1-4';
+            renderLiveView();
         });
 
         // LIVE ATTENDANCE & NIMENHUUTO EVENTS

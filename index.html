@@ -16,8 +16,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 
-    <!-- CSS Stylesheet (Cache Busted v64.0) -->
-    <link rel="stylesheet" href="styles.css?v=64.0">
+    <!-- CSS Stylesheet (Cache Busted v65.0) -->
+    <link rel="stylesheet" href="styles.css?v=65.0">
 
     <!-- Smart Mobile/Tablet Auto-Routing to Simple Mode -->
     <script>
@@ -297,9 +297,13 @@
                 </div>
             </div>
             
-            <p class="panel-hint" style="padding: 0.6rem 0.9rem 0;">
-                💡 Täppää mitä tahansa sijoituspaikkaa valitaksesi tai muuttaaksesi pelaajaa, tai raahaa pelaaja alapuolen pelaajapankista!
-            </p>
+            <div class="lineup-group-filter-bar" id="summary-lineup-group-bar">
+                <div class="lineup-group-pills" id="summary-group-pills">
+                    <button class="lineup-group-pill active" data-summary-group="1-4">👥 1.–4. Kentät</button>
+                    <button class="lineup-group-pill" data-summary-group="special">⚡ Erikoistilanteet (YV / AV / 6v5)</button>
+                    <button class="lineup-group-pill" data-summary-group="all">🌐 Kaikki kentälliset</button>
+                </div>
+            </div>
 
             <div class="summary-grid-container" id="summary-grid-container">
                 <!-- Dynamic Summary Lineup Cards -->
@@ -361,9 +365,13 @@
                 </div>
             </div>
             
-            <p class="panel-hint" style="padding: 0 0.9rem 0.4rem;">
-                💡 Näet alla pelaajien live-ilmoittautumiset valittuun peliin. Vihreät 🟢 IN -pelaajat ovat mukana ja valmiina kentällisiin!
-            </p>
+            <div class="lineup-group-filter-bar" id="live-lineup-group-bar">
+                <div class="lineup-group-pills" id="live-group-pills">
+                    <button class="lineup-group-pill active" data-live-group="1-4">👥 1.–4. Kentät</button>
+                    <button class="lineup-group-pill" data-live-group="special">⚡ Erikoistilanteet (YV / AV / 6v5)</button>
+                    <button class="lineup-group-pill" data-live-group="all">🌐 Kaikki kentälliset</button>
+                </div>
+            </div>
 
             <div class="summary-grid-container" id="live-grid-container">
                 <!-- Dynamic Live Lineup Cards with Attendance Badges -->
@@ -1325,9 +1333,9 @@ Out:
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
-    <!-- Core Application Logic (Cache Busted v64.0) -->
-    <script src="firebase-config.js?v=64.0"></script>
-    <script src="app.js?v=64.0"></script>
+    <!-- Core Application Logic (Cache Busted v65.0) -->
+    <script src="firebase-config.js?v=65.0"></script>
+    <script src="app.js?v=65.0"></script>
 
 </body>
 </html>
