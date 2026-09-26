@@ -2618,7 +2618,7 @@ body[data-court-color="grid"] .faceoff-dot {
 
 .summary-roster-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(175px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
     gap: 0.35rem;
     max-height: 480px;
     overflow-y: auto;
@@ -2629,8 +2629,8 @@ body[data-court-color="grid"] .faceoff-dot {
 .summary-player-card {
     display: flex;
     align-items: center;
-    gap: 0.45rem;
-    padding: 0.32rem 0.5rem;
+    gap: 0.4rem;
+    padding: 0.25rem 0.45rem;
     background: var(--bg-card);
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: var(--radius-sm);
@@ -2639,22 +2639,23 @@ body[data-court-color="grid"] .faceoff-dot {
     user-select: none;
     touch-action: manipulation;
     position: relative;
+    min-height: 36px;
 }
 
 .summary-player-card:hover {
     background: var(--bg-card-hover);
     border-color: var(--accent-field);
-    transform: translateY(-2px);
+    transform: translateY(-1px);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
 }
 
 .summary-player-card.is-unassigned {
-    border-left: 4px solid #eab308;
+    border-left: 3px solid #eab308;
     background: rgba(234, 179, 8, 0.07);
 }
 
 .summary-player-card.is-assigned {
-    border-left: 4px solid #3b82f6;
+    border-left: 3px solid #3b82f6;
 }
 
 .summary-player-card.is-placed-standard {
@@ -2679,12 +2680,12 @@ body[data-court-color="grid"] .faceoff-dot {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 32px;
-    height: 32px;
+    width: 26px;
+    height: 26px;
     background: #1e293b;
-    border-radius: 8px;
+    border-radius: 6px;
     font-weight: 800;
-    font-size: 0.85rem;
+    font-size: 0.78rem;
     color: #93c5fd;
     flex-shrink: 0;
 }
@@ -2696,7 +2697,7 @@ body[data-court-color="grid"] .faceoff-dot {
 .summary-p-details {
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 1px;
     flex: 1;
     min-width: 0;
 }
@@ -2704,12 +2705,22 @@ body[data-court-color="grid"] .faceoff-dot {
 .summary-p-name-row {
     display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: 4px;
+    min-width: 0;
+}
+
+.summary-p-name-left {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    min-width: 0;
+    overflow: hidden;
 }
 
 .summary-p-name {
     font-weight: 700;
-    font-size: 0.85rem;
+    font-size: 0.8rem;
     color: #ffffff;
     white-space: nowrap;
     overflow: hidden;
@@ -2717,39 +2728,42 @@ body[data-court-color="grid"] .faceoff-dot {
 }
 
 .summary-p-pos-tag {
-    font-size: 0.65rem;
+    font-size: 0.62rem;
     font-weight: 700;
-    padding: 1px 4px;
+    padding: 1px 3px;
     background: rgba(255, 255, 255, 0.1);
-    border-radius: 4px;
+    border-radius: 3px;
     color: var(--text-secondary);
+    flex-shrink: 0;
 }
 
 .summary-p-assignments {
     display: flex;
     flex-wrap: wrap;
-    gap: 3px;
-    margin-top: 2px;
+    gap: 2px;
+    margin-top: 1px;
 }
 
 .summary-assign-tag {
-    font-size: 0.62rem;
+    font-size: 0.6rem;
     font-weight: 600;
-    padding: 1px 5px;
-    border-radius: 4px;
+    padding: 1px 4px;
+    border-radius: 3px;
     background: rgba(59, 130, 246, 0.2);
     color: #93c5fd;
     border: 1px solid rgba(59, 130, 246, 0.4);
+    line-height: 1.1;
 }
 
 .summary-unassigned-tag {
-    font-size: 0.62rem;
+    font-size: 0.6rem;
     font-weight: 600;
-    padding: 1px 5px;
-    border-radius: 4px;
+    padding: 1px 4px;
+    border-radius: 3px;
     background: rgba(234, 179, 8, 0.15);
     color: #fde047;
     border: 1px solid rgba(234, 179, 8, 0.3);
+    line-height: 1.1;
 }
 
 /* Modal for Quick Assign */

@@ -5423,7 +5423,7 @@
 
             let assignTagsHtml = '';
             if (isUnassigned) {
-                assignTagsHtml = `<span class="summary-unassigned-tag">🟡 Ei kentällisessä</span>`;
+                assignTagsHtml = `<span class="summary-unassigned-tag">🟡 Vapaa</span>`;
             } else {
                 assigns.forEach(a => {
                     const shortName = a.lineupName.replace('Kenttä', 'K.').replace('Ylivoima (YV)', 'YV').replace('Alivoima (AV)', 'AV');
@@ -6838,10 +6838,10 @@
             card.title = `Klikkaa muuttaaksesi ilmoittautumisstatusta tai sijoittaaksesi pelaajan!`;
 
             let attPill = '';
-            if (att.status === 'in') attPill = '<span class="live-status-pill status-in">🟢 IN (Mukana)</span>';
-            else if (att.status === 'out') attPill = `<span class="live-status-pill status-out">🔴 OUT ${att.reason ? '(' + escapeHtml(att.reason) + ')' : '(Poissa)'}</span>`;
-            else if (att.status === 'maybe') attPill = `<span class="live-status-pill status-maybe">🟡 EHKÄ ${att.reason ? '(' + escapeHtml(att.reason) + ')' : ''}</span>`;
-            else attPill = '<span class="live-status-pill status-unanswered">⚪ Ei vastausta</span>';
+            if (att.status === 'in') attPill = '<span class="live-status-pill status-in">🟢 IN</span>';
+            else if (att.status === 'out') attPill = `<span class="live-status-pill status-out" title="${escapeHtml(att.reason || 'Poissa')}">🔴 OUT</span>`;
+            else if (att.status === 'maybe') attPill = `<span class="live-status-pill status-maybe" title="${escapeHtml(att.reason || 'Ehkä')}">🟡 EHKÄ</span>`;
+            else attPill = '<span class="live-status-pill status-unanswered">⚪ ?</span>';
 
             let assignTagsHtml = '';
             if (isUnassigned) {
@@ -6857,12 +6857,11 @@
                 <div class="summary-p-badge">#${p.number}</div>
                 <div class="summary-p-details">
                     <div class="summary-p-name-row">
-                        <span class="summary-p-name">${escapeHtml(p.name)}</span>
-                        <span class="summary-p-pos-tag">${p.position}</span>
-                    </div>
-                    <div style="margin-top: 4px; display: flex; align-items: center; justify-content: space-between; gap: 6px; flex-wrap: wrap;">
-                        <div class="live-pill-wrapper" data-action="edit-status">${attPill}</div>
-                        <button type="button" class="btn-xs btn-primary highlight-live" data-action="assign-player-live" style="padding: 3px 10px; font-size: 0.74rem; font-weight: 700; border-radius: 6px;">🏒 Sijoita kenttään</button>
+                        <div class="summary-p-name-left">
+                            <span class="summary-p-name">${escapeHtml(p.name)}</span>
+                            <span class="summary-p-pos-tag">${p.position}</span>
+                        </div>
+                        ${attPill}
                     </div>
                     <div class="summary-p-assignments">
                         ${assignTagsHtml}
@@ -7154,6 +7153,42 @@
         if (descEl) descEl.textContent = `Tapahtuma: ${curEvent.title} (${curEvent.date})`;
         if (reasonInput) reasonInput.value = curAtt.reason || '';
         if (playerIdInput) playerIdInput.value = player.id;
+
+        const assignInfoEl = document.getElementById('player-attendance-modal-assignments');
+        const unassignBtn = document.getElementById('btn-attendance-modal-unassign');
+
+        const posKeys = ['MV', 'VP', 'OP', 'VH', 'KH', 'OH'];
+        const assigns = [];
+        const displayConfigs = lineupConfigs.filter(c => c.id !== 'custom' && c.id !== 'freeform' && c.type !== 'drawing_only');
+        displayConfigs.forEach(c => {
+            const lk = c.id;
+            const curLineup = lineups[lk] || {};
+            posKeys.forEach(pos => {
+                if (curLineup[pos] === player.id) {
+                    assigns.push(`${c.name.replace('Kenttä', 'K.')}: ${pos}`);
+                }
+                const pRes = getPosReserves(lk, pos);
+                if (pRes && pRes.includes(player.id)) {
+                    assigns.push(`${c.name.replace('Kenttä', 'K.')}: ↳${pos}`);
+                }
+            });
+            const gRes = getGeneralReserves(lk);
+            if (gRes && gRes.includes(player.id)) {
+                assigns.push(`${c.name.replace('Kenttä', 'K.')}: 🪑VM`);
+            }
+        });
+
+        if (assignInfoEl) {
+            if (assigns.length > 0) {
+                assignInfoEl.innerHTML = `<span style="color: #60a5fa; font-weight: 700;">${escapeHtml(assigns.join(', '))}</span>`;
+            } else {
+                assignInfoEl.innerHTML = `<span style="color: #eab308; font-weight: 600;">🟡 Ei kentällisessä</span>`;
+            }
+        }
+
+        if (unassignBtn) {
+            unassignBtn.style.display = assigns.length > 0 ? 'inline-flex' : 'none';
+        }
 
         modal.classList.add('active');
     }
@@ -9634,6 +9669,36 @@ If number is not visible, provide a number or null. Only return the JSON array.`
                 const status = e.currentTarget.dataset.setStatus;
                 setPlayerAttendanceStatus(status);
             });
+        });
+
+        document.getElementById('btn-attendance-modal-assign')?.addEventListener('click', () => {
+            if (!selectedPlayerForAttendance) return;
+            const p = selectedPlayerForAttendance;
+            const reasonInput = document.getElementById('form-attendance-reason');
+            if (reasonInput && reasonInput.value.trim()) {
+                const curEvent = teamEvents.find(e => e.id === activeEventId) || teamEvents[0];
+                if (curEvent && curEvent.attendees && curEvent.attendees[p.id]) {
+                    curEvent.attendees[p.id].reason = reasonInput.value.trim();
+                    saveState();
+                }
+            }
+            document.getElementById('player-attendance-modal')?.classList.remove('active');
+            openAssignModal(p);
+        });
+
+        document.getElementById('btn-attendance-modal-unassign')?.addEventListener('click', () => {
+            if (!selectedPlayerForAttendance) return;
+            const p = selectedPlayerForAttendance;
+            removePlayerFromAllLineups(p.id);
+            saveState();
+            renderLiveView();
+            const assignInfoEl = document.getElementById('player-attendance-modal-assignments');
+            if (assignInfoEl) {
+                assignInfoEl.innerHTML = `<span style="color: #eab308; font-weight: 600;">🟡 Ei kentällisessä</span>`;
+            }
+            const unassignBtn = document.getElementById('btn-attendance-modal-unassign');
+            if (unassignBtn) unassignBtn.style.display = 'none';
+            showToast(`Pelaaja #${p.number} ${p.name} poistettu kentällisistä ✕`);
         });
 
         document.getElementById('btn-copy-all-live')?.addEventListener('click', () => openExportTextModal(null));

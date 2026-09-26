@@ -4,7 +4,7 @@ Write-Host "Aloitetaan paivitysten julkaisu osoitteeseen https://kokoonpano.web.
 
 # 1. Tallenna ja tyonna GitHubiin (main & gh-pages)
 git add .
-git commit -m "Lisaa pelaajien vetaminen (drag-and-drop / vaihto / siirto) suoraan kentallisten valilla ja poisto pankkiin (v67.0)"
+git commit -m "Tiivista live-pelaajaringin kortit (poista iso sijoitusnappi) ja lisaa Sijoita kentalliseen -toiminto pelaajamodaaliin (v68.0)"
 git push origin main
 git checkout gh-pages
 git merge main
