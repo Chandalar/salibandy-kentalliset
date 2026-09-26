@@ -6586,17 +6586,28 @@
             return true;
         });
 
-        // Sort: IN first, then unassigned, then by number
+        const standardLineIds = ['1', '2', '3', '4'];
+        const isPlacedInStandardLine = (pId) => {
+            const assigns = playerAssignments[pId] || [];
+            return assigns.some(a => standardLineIds.includes(String(a.lineupKey)) && !a.pos.startsWith('↳') && a.pos !== '🪑VM');
+        };
+
+        // Sort: Placed in 1-4 sink to bottom! Unplaced come first (IN first, then by number)
         filtered.sort((a, b) => {
+            const placedA = isPlacedInStandardLine(a.id);
+            const placedB = isPlacedInStandardLine(b.id);
+            if (placedA !== placedB) {
+                return placedA ? 1 : -1;
+            }
             const attA = attendeesMap[a.id] || { status: 'unanswered' };
             const attB = attendeesMap[b.id] || { status: 'unanswered' };
             const weight = (s) => s === 'in' ? 0 : s === 'maybe' ? 1 : s === 'unanswered' ? 2 : 3;
             if (weight(attA.status) !== weight(attB.status)) return weight(attA.status) - weight(attB.status);
-            return a.number - b.number;
+            return (a.number || 0) - (b.number || 0);
         });
 
         // Update counts in filter pills
-        const inUnassignedCount = roster.filter(p => (attendeesMap[p.id]?.status === 'in') && (playerAssignments[p.id] || []).length === 0).length;
+        const inUnassignedCount = roster.filter(p => (attendeesMap[p.id]?.status === 'in') && !isPlacedInStandardLine(p.id)).length;
         const btnInUnassigned = document.querySelector('[data-live-filter="in-unassigned"]');
         if (btnInUnassigned) btnInUnassigned.textContent = `🟡 Vapaat IN (${inUnassignedCount})`;
 
@@ -6609,10 +6620,11 @@
             const att = attendeesMap[p.id] || { status: 'unanswered' };
             const assigns = playerAssignments[p.id] || [];
             const isUnassigned = assigns.length === 0;
+            const isPlacedStandard = isPlacedInStandardLine(p.id);
             const isMv = p.position === 'MV';
 
             const card = document.createElement('div');
-            card.className = `summary-player-card ${isMv ? 'is-mv' : 'is-field'} is-live-${att.status}`;
+            card.className = `summary-player-card ${isMv ? 'is-mv' : 'is-field'} is-live-${att.status} ${isPlacedStandard ? 'is-placed-standard' : ''}`;
             card.draggable = true;
             card.dataset.playerId = p.id;
             card.title = `Klikkaa muuttaaksesi ilmoittautumisstatusta tai sijoittaaksesi pelaajan!`;

@@ -18,7 +18,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
 
     <!-- Stylesheet -->
-    <link rel="stylesheet" href="simple.css?v=63.0">
+    <link rel="stylesheet" href="simple.css?v=64.0">
 
     <script>
     (function() {
@@ -81,14 +81,32 @@
 
         <!-- LIVE ROSTER BANK -->
         <div class="roster-card">
-            <div class="roster-card-header" style="display: flex; justify-content: space-between; align-items: center;">
+            <div class="roster-card-header">
                 <div class="roster-title">👥 Pelaajat & Live-status</div>
-                <div style="display: flex; gap: 6px;">
-                    <button class="btn-header" id="btn-simple-ai-import" style="font-size: 0.78rem; padding: 5px 10px; background: rgba(59, 130, 246, 0.2); border: 1px solid rgba(59, 130, 246, 0.4);" title="Tuo pelaajia tekstistä tai valokuvasta tekoälyllä">✨ Tekoäly / Kuva</button>
-                    <button class="btn-header highlight" id="btn-simple-add-player" style="font-size: 0.78rem; padding: 5px 10px;" title="Lisää uusi pelaaja joukkueeseen">➕ Lisää pelaaja</button>
+                <div class="roster-header-actions">
+                    <button class="btn-header" id="btn-toggle-roster-density" title="Vaihda 2-sarake / 1-sarake näkymää">▦ 2-sarake</button>
+                    <button class="btn-header" id="btn-simple-ai-import" title="Tuo pelaajia tekstistä tai valokuvasta tekoälyllä">✨ Tekoäly / Kuva</button>
+                    <button class="btn-header highlight" id="btn-simple-add-player" title="Lisää uusi pelaaja joukkueeseen">➕ Lisää pelaaja</button>
                 </div>
             </div>
-            <div class="player-list" id="simple-roster-list">
+
+            <!-- ROSTER FILTER TABS & SEARCH -->
+            <div class="roster-controls-bar">
+                <div class="roster-filter-pills" id="roster-filter-pills">
+                    <button class="roster-filter-pill active" data-filter="all">Kaikki (<span id="pill-cnt-all">0</span>)</button>
+                    <button class="roster-filter-pill highlight-free" data-filter="free-in">✨ Vapaat IN (<span id="pill-cnt-free-in">0</span>)</button>
+                    <button class="roster-filter-pill" data-filter="in">🟢 Mukana (<span id="pill-cnt-in">0</span>)</button>
+                    <button class="roster-filter-pill" data-filter="placed">📌 Kentällä (<span id="pill-cnt-placed">0</span>)</button>
+                    <button class="roster-filter-pill" data-filter="out">🔴 Poissa (<span id="pill-cnt-out">0</span>)</button>
+                    <button class="roster-filter-pill" data-filter="open">⚪ Avoin (<span id="pill-cnt-open">0</span>)</button>
+                    <button class="roster-filter-pill" data-filter="mv">🧤 MV (<span id="pill-cnt-mv">0</span>)</button>
+                </div>
+                <div class="roster-search-wrapper">
+                    <input type="text" id="roster-search-input" class="roster-search-input" placeholder="🔍 Etsi nimellä tai numerolla...">
+                </div>
+            </div>
+
+            <div class="player-list density-2col" id="simple-roster-list">
                 <!-- Dynamic Player Rows -->
             </div>
         </div>
@@ -232,9 +250,9 @@
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
-    <!-- Firebase Config & Simple Engine (v63.0) -->
-    <script src="firebase-config.js?v=63.0"></script>
-    <script src="simple.js?v=63.0"></script>
+    <!-- Firebase Config & Simple Engine (v64.0) -->
+    <script src="firebase-config.js?v=64.0"></script>
+    <script src="simple.js?v=64.0"></script>
 
 </body>
 </html>

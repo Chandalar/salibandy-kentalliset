@@ -2466,6 +2466,15 @@ body[data-court-color="grid"] .faceoff-dot {
     border-left: 4px solid #3b82f6;
 }
 
+.summary-player-card.is-placed-standard {
+    opacity: 0.72;
+    background: rgba(15, 23, 42, 0.45);
+}
+
+.summary-player-card.is-placed-standard:hover {
+    opacity: 1;
+}
+
 .summary-player-card.is-mv {
     border-left-color: #10b981;
 }

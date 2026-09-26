@@ -4,7 +4,7 @@ Write-Host "Aloitetaan paivitysten julkaisu osoitteeseen https://kokoonpano.web.
 
 # 1. Tallenna ja tyonna GitHubiin (main & gh-pages)
 git add .
-git commit -m "Pelit ja tapahtumat valmiiksi esiladattu ja automaattisesti haettu ilman Hae-napin painallusta (v63.0)"
+git commit -m "2-sarakkeen tiivis pelaajalista, kentallisiin 1-4 sijoitettujen pelaajien automaattinen siirtyminen pohjalle ja suodatusvaihtoehdot (v64.0)"
 git push origin main
 git checkout gh-pages
 git merge main

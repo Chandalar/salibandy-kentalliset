@@ -24,6 +24,38 @@
     let activeLineupTab = 'all'; // Default to 'all' so multiple lines are visible at once!
     let activeRosterFilter = 'all';
     let simpleDensity = localStorage.getItem('salibandy_simple_density') || '2col';
+    let rosterDensity = localStorage.getItem('salibandy_roster_density') || '2col';
+    let rosterSearchQuery = '';
+
+    function isPlayerIn1to4(playerId) {
+        if (!playerId) return false;
+        const lines1to4 = ['1', '2', '3', '4'];
+        for (let i = 0; i < lines1to4.length; i++) {
+            const lk = lines1to4[i];
+            const line = lineups[lk];
+            if (line) {
+                for (let j = 0; j < POS_ORDER.length; j++) {
+                    if (line[POS_ORDER[j]] === playerId) return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    function updateRosterDensityUI() {
+        const list = document.getElementById('simple-roster-list');
+        const btn = document.getElementById('btn-toggle-roster-density');
+        if (!list) return;
+        if (rosterDensity === '2col') {
+            list.classList.add('density-2col');
+            list.classList.remove('density-1col');
+            if (btn) btn.innerHTML = '▦ 2-sarake';
+        } else {
+            list.classList.add('density-1col');
+            list.classList.remove('density-2col');
+            if (btn) btn.innerHTML = '▤ 1-sarake';
+        }
+    }
 
     // Firebase & Cloud State
     const clientInstanceId = 'simple_' + Date.now() + '_' + Math.random().toString(36).substr(2, 8);
@@ -1743,10 +1775,15 @@
         `;
 
         statsBar.querySelectorAll('.stat-chip').forEach(chip => {
+            const f = chip.dataset.filter;
+            const targetFilter = (f === 'unanswered') ? 'open' : f;
+            if (activeRosterFilter === targetFilter || (f === 'unanswered' && activeRosterFilter === 'unanswered')) {
+                chip.classList.add('active');
+            }
             chip.addEventListener('click', () => {
-                const f = chip.dataset.filter;
-                activeRosterFilter = (activeRosterFilter === f) ? 'all' : f;
-                scheduleRender({ roster: true });
+                activeRosterFilter = (activeRosterFilter === targetFilter || (f === 'unanswered' && activeRosterFilter === 'unanswered')) ? 'all' : targetFilter;
+                renderStatsBar(attendeesMap);
+                renderRosterList();
             });
         });
     }
@@ -2204,6 +2241,7 @@
     function renderRosterList() {
         if (!rosterListContainer) return;
         rosterListContainer.innerHTML = '';
+        updateRosterDensityUI();
 
         const curEvent = teamEvents.find(e => e.id === activeEventId);
         const attendeesMap = curEvent ? (curEvent.attendees || {}) : {};
@@ -2228,22 +2266,95 @@
             });
         });
 
+        // Compute pill counters
+        const cntAll = roster.length;
+        let cntFreeIn = 0, cntIn = 0, cntPlaced = 0, cntOut = 0, cntOpen = 0, cntMv = 0;
+
+        roster.forEach(p => {
+            const att = attendeesMap[p.id] || { status: 'unanswered' };
+            const isPlaced = isPlayerIn1to4(p.id);
+            if (att.status === 'in') {
+                cntIn++;
+                if (!isPlaced) cntFreeIn++;
+            } else if (att.status === 'out') {
+                cntOut++;
+            } else if (att.status === 'unanswered') {
+                cntOpen++;
+            }
+            if (isPlaced) {
+                cntPlaced++;
+            }
+            if ((p.position || '').toUpperCase() === 'MV') {
+                cntMv++;
+            }
+        });
+
+        const setPillCnt = (id, val) => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = val;
+        };
+        setPillCnt('pill-cnt-all', cntAll);
+        setPillCnt('pill-cnt-free-in', cntFreeIn);
+        setPillCnt('pill-cnt-in', cntIn);
+        setPillCnt('pill-cnt-placed', cntPlaced);
+        setPillCnt('pill-cnt-out', cntOut);
+        setPillCnt('pill-cnt-open', cntOpen);
+        setPillCnt('pill-cnt-mv', cntMv);
+
+        // Update active class on filter pill buttons
+        document.querySelectorAll('.roster-filter-pill').forEach(btn => {
+            const f = btn.dataset.filter;
+            const isActive = (f === activeRosterFilter) || (f === 'open' && activeRosterFilter === 'unanswered');
+            btn.classList.toggle('active', isActive);
+        });
+
+        // Filter players
         let filtered = roster.filter(p => {
             const att = attendeesMap[p.id] || { status: 'unanswered' };
-            if (activeRosterFilter === 'in') return att.status === 'in';
-            if (activeRosterFilter === 'out') return att.status === 'out';
-            if (activeRosterFilter === 'maybe') return att.status === 'maybe';
-            if (activeRosterFilter === 'unanswered') return att.status === 'unanswered';
-            if (activeRosterFilter === 'free') return (assignments[p.id] || []).length === 0;
+            const isPlaced = isPlayerIn1to4(p.id);
+
+            if (activeRosterFilter === 'free-in') {
+                if (att.status !== 'in' || isPlaced) return false;
+            } else if (activeRosterFilter === 'in') {
+                if (att.status !== 'in') return false;
+            } else if (activeRosterFilter === 'placed') {
+                if (!isPlaced) return false;
+            } else if (activeRosterFilter === 'out') {
+                if (att.status !== 'out') return false;
+            } else if (activeRosterFilter === 'open' || activeRosterFilter === 'unanswered') {
+                if (att.status !== 'unanswered') return false;
+            } else if (activeRosterFilter === 'maybe') {
+                if (att.status !== 'maybe') return false;
+            } else if (activeRosterFilter === 'free') {
+                if ((assignments[p.id] || []).length > 0) return false;
+            } else if (activeRosterFilter === 'mv') {
+                if ((p.position || '').toUpperCase() !== 'MV') return false;
+            }
+
+            if (rosterSearchQuery) {
+                const q = rosterSearchQuery.toLowerCase();
+                const nameMatch = (p.name || '').toLowerCase().includes(q);
+                const numMatch = String(p.number ?? '').includes(q);
+                const posMatch = (p.position || '').toLowerCase().includes(q);
+                if (!nameMatch && !numMatch && !posMatch) return false;
+            }
+
             return true;
         });
 
-        // Sort: IN first, then unassigned, then by number
+        // Sort: Placed in 1-4 sink to the bottom! Unplaced come first, sorted by IN status, then jersey number
         filtered.sort((a, b) => {
+            const placedA = isPlayerIn1to4(a.id);
+            const placedB = isPlayerIn1to4(b.id);
+            if (placedA !== placedB) {
+                return placedA ? 1 : -1; // Unplaced (false) comes first (top), placed (true) sinks to bottom
+            }
             const attA = attendeesMap[a.id] || { status: 'unanswered' };
             const attB = attendeesMap[b.id] || { status: 'unanswered' };
             const weight = s => s === 'in' ? 0 : s === 'maybe' ? 1 : s === 'unanswered' ? 2 : 3;
-            if (weight(attA.status) !== weight(attB.status)) return weight(attA.status) - weight(attB.status);
+            if (weight(attA.status) !== weight(attB.status)) {
+                return weight(attA.status) - weight(attB.status);
+            }
             return (a.number || 0) - (b.number || 0);
         });
 
@@ -2256,20 +2367,22 @@
             const att = attendeesMap[player.id] || { status: 'unanswered' };
             const pAssigns = assignments[player.id] || [];
             const isAssigned = pAssigns.length > 0;
+            const isPlaced = isPlayerIn1to4(player.id);
+            const isFreeIn = (att.status === 'in' && !isPlaced);
 
             const row = document.createElement('div');
-            row.className = 'player-row';
+            row.className = `player-row ${isPlaced ? 'is-placed' : ''} ${isFreeIn ? 'is-unassigned-in' : ''}`;
 
             let attBtnClass = att.status;
             let attBtnText = att.status === 'in' ? '🟢 IN' : att.status === 'out' ? '🔴 OUT' : att.status === 'maybe' ? '🟡 EHKÄ' : '⚪ AVOIN';
 
             let assignHtml = '';
             if (isAssigned) {
-                assignHtml = `<div class="player-assigned-badges">${pAssigns.map(a => `<span class="player-assigned-badge">${escapeHtml(a)}</span>`).join('')}</div>`;
+                assignHtml = pAssigns.map(a => `<span class="player-assigned-badge" title="${escapeHtml(a)}">${escapeHtml(a)}</span>`).join('');
             }
 
             const photoHtml = player.photo 
-                ? `<div class="roster-photo-thumb" style="width: 28px; height: 28px; border-radius: 50%; background-image: url('${player.photo}'); background-size: cover; background-position: center; flex-shrink: 0; border: 1px solid rgba(255,255,255,0.25);"></div>` 
+                ? `<div class="roster-photo-thumb" style="width: 24px; height: 24px; border-radius: 50%; background-image: url('${player.photo}'); background-size: cover; background-position: center; flex-shrink: 0; border: 1px solid rgba(255,255,255,0.25);"></div>` 
                 : '';
 
             const pPos = player.position || 'H';
@@ -2281,31 +2394,35 @@
             const pPosLabel = (pPos === 'KH') ? 'C' : pPos;
 
             row.innerHTML = `
-                <div class="player-row-left" data-action="edit-player" data-player-id="${player.id}" style="cursor: pointer;" title="Klikkaa muokataksesi pelaajaa tai kuvaa">
-                    ${photoHtml}
-                    <span class="player-num">#${player.number}</span>
-                    <span class="player-name-text">${escapeHtml(player.name)}</span>
-                    <span class="player-pos-badge ${pPosClass}">${pPosLabel}</span>
-                    ${assignHtml}
+                <div class="player-row-header">
+                    <div class="player-header-left" data-action="edit-player" data-player-id="${player.id}" title="Klikkaa muokataksesi pelaajaa">
+                        ${photoHtml}
+                        <span class="player-num">#${player.number}</span>
+                        <span class="player-name-text" title="${escapeHtml(player.name)}">${escapeHtml(player.name)}</span>
+                        <span class="player-pos-badge ${pPosClass}">${pPosLabel}</span>
+                    </div>
+                    <button class="status-toggle-btn ${attBtnClass}" data-action="toggle-status" data-player-id="${player.id}" title="Klikkaa vaihtaaksesi statusta">${attBtnText}</button>
                 </div>
-                <div class="player-row-right">
-                    <button class="status-toggle-btn ${attBtnClass}" data-action="toggle-status" data-player-id="${player.id}">${attBtnText}</button>
-                    <button class="btn-assign-quick" data-action="assign-player" data-player-id="${player.id}">+ Sijoita</button>
+                <div class="player-row-footer">
+                    <div class="player-assigned-badges">
+                        ${assignHtml || '<span class="player-unassigned-tag">Vapaa</span>'}
+                    </div>
+                    <button class="btn-assign-quick ${isAssigned ? 'is-assigned' : ''}" data-action="assign-player" data-player-id="${player.id}">${isAssigned ? 'Muuta' : '+ Sijoita'}</button>
                 </div>
             `;
 
             // Click left side to edit player
-            row.querySelector('.player-row-left')?.addEventListener('click', () => {
+            row.querySelector('.player-header-left')?.addEventListener('click', () => {
                 openPlayerEditModal(player);
             });
 
             // Toggle attendance status on click
-            row.querySelector('[data-action="toggle-status"]').addEventListener('click', () => {
+            row.querySelector('[data-action="toggle-status"]')?.addEventListener('click', () => {
                 togglePlayerStatus(player.id);
             });
 
             // Assign player
-            row.querySelector('[data-action="assign-player"]').addEventListener('click', () => {
+            row.querySelector('[data-action="assign-player"]')?.addEventListener('click', () => {
                 openPlayerAssignTargetPicker(player);
             });
 
@@ -3580,6 +3697,28 @@ If no number is visible, provide a number or null. Only return the JSON array.`;
         // Add Player to Roster
         document.getElementById('btn-simple-add-player')?.addEventListener('click', () => {
             openPlayerEditModal(null);
+        });
+
+        // Roster Density Toggle (2-sarake vs 1-sarake)
+        document.getElementById('btn-toggle-roster-density')?.addEventListener('click', () => {
+            rosterDensity = (rosterDensity === '2col') ? '1col' : '2col';
+            try { localStorage.setItem('salibandy_roster_density', rosterDensity); } catch(e) {}
+            updateRosterDensityUI();
+            showToast(rosterDensity === '2col' ? '2 sarakkeen tiivis pelaajalista ▦' : '1 sarakkeen pelaajalista ▤');
+        });
+
+        // Roster Filter Pills
+        document.querySelectorAll('.roster-filter-pill').forEach(pill => {
+            pill.addEventListener('click', () => {
+                activeRosterFilter = pill.dataset.filter || 'all';
+                renderRosterList();
+            });
+        });
+
+        // Roster Search Input
+        document.getElementById('roster-search-input')?.addEventListener('input', (e) => {
+            rosterSearchQuery = (e.target.value || '').trim();
+            renderRosterList();
         });
 
         // AI & Gemini Player Import (v59.0)
