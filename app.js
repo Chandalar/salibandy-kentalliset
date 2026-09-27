@@ -5613,11 +5613,12 @@
             const isUnassigned = assigns.length === 0;
             const isMv = p.position === 'MV';
 
+            const posClass = `pos-${(p.position || '').toLowerCase()}`;
             const card = document.createElement('div');
             card.className = `summary-player-card ${isMv ? 'is-mv' : 'is-field'} ${isUnassigned ? 'is-unassigned' : 'is-assigned'}`;
             card.draggable = true;
             card.dataset.playerId = p.id;
-            card.title = `Klikkaa sijoittaaksesi pelaajan kentälliseen, tai raahaa yläpuolen ruutuun!`;
+            card.title = `${escapeHtml(p.name)} (#${p.number}) - Klikkaa sijoittaaksesi pelaajan kentälliseen, tai raahaa yläpuolen ruutuun!`;
 
             let assignTagsHtml = '';
             if (isUnassigned) {
@@ -5633,9 +5634,11 @@
                 <div class="summary-p-badge">#${p.number}</div>
                 <div class="summary-p-details">
                     <div class="summary-p-name-row">
-                        <span class="summary-p-name">${escapeHtml(p.name)}</span>
-                        <span class="summary-p-pos-tag">${p.position}</span>
-                        ${p.isLoan ? '<span class="loan-pill-tiny">⭐</span>' : ''}
+                        <div class="summary-p-name-left">
+                            <span class="summary-p-name" title="${escapeHtml(p.name)}">${escapeHtml(p.name)}</span>
+                            <span class="summary-p-pos-tag ${posClass}">${escapeHtml(p.position)}</span>
+                            ${p.isLoan ? '<span class="loan-pill-tiny" title="Lainapelaaja">⭐</span>' : ''}
+                        </div>
                     </div>
                     <div class="summary-p-assignments">
                         ${assignTagsHtml}
@@ -7051,13 +7054,16 @@
                 });
             }
 
+            const posClass = `pos-${(p.position || '').toLowerCase()}`;
+            card.title = `${escapeHtml(p.name)} (#${p.number})`;
             card.innerHTML = `
                 <div class="summary-p-badge">#${p.number}</div>
                 <div class="summary-p-details">
                     <div class="summary-p-name-row">
                         <div class="summary-p-name-left">
-                            <span class="summary-p-name">${escapeHtml(p.name)}</span>
-                            <span class="summary-p-pos-tag">${p.position}</span>
+                            <span class="summary-p-name" title="${escapeHtml(p.name)}">${escapeHtml(p.name)}</span>
+                            <span class="summary-p-pos-tag ${posClass}">${escapeHtml(p.position)}</span>
+                            ${p.isLoan ? '<span class="loan-pill-tiny" title="Lainapelaaja">⭐</span>' : ''}
                         </div>
                         ${attPill}
                     </div>
