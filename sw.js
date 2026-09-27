@@ -1,9 +1,9 @@
 /* ============================================================
-   SERVICE WORKER – Kentälliset PWA v68.0
+   SERVICE WORKER – Kentälliset PWA v69.0
    Fast, ultra-lightweight, 100% offline-ready & local-first
    ============================================================ */
 
-const CACHE_NAME = 'kentalliset-v68.0';
+const CACHE_NAME = 'kentalliset-v69.0';
 const APP_SHELL = [
     './',
     './index.html',
@@ -15,6 +15,7 @@ const APP_SHELL = [
     './firebase-config.js',
     './manifest.json',
     './floorball-ball.svg',
+    './sekta-logo.png',
     './icons/icon-192.svg',
     './icons/icon-512.svg',
     './icons/icon-maskable-512.svg'

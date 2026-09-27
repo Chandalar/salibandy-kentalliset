@@ -13,8 +13,11 @@
         { 
             id: 'team_sekta', 
             name: 'SekTa',
-            logo: '🏑',
-            primaryColor: '#2563eb',
+            shareId: 'st_team_sekta',
+            logo: 'sekta-logo.png',
+            photo: 'sekta-logo.png',
+            primaryColor: '#6b5bd7',
+            secondaryColor: '#f2a24a',
             mvColor: '#10b981',
             tokenStyle: 'circle',
             arenaName: 'Kotiareena',
@@ -27,8 +30,10 @@
         { 
             id: 'team_akatemia', 
             name: 'FBC Akatemia',
+            shareId: 'st_team_akatemia',
             logo: '🦅',
             primaryColor: '#dc2626',
+            secondaryColor: '#991b1b',
             mvColor: '#10b981',
             tokenStyle: 'circle',
             arenaName: 'FBC Areena',
@@ -39,8 +44,10 @@
         { 
             id: 'team_edustus', 
             name: 'Edustusjoukkue',
+            shareId: 'st_team_edustus',
             logo: '🦁',
             primaryColor: '#2563eb',
+            secondaryColor: '#1e40af',
             mvColor: '#10b981',
             tokenStyle: 'circle',
             arenaName: 'Kotiareena',
@@ -51,8 +58,10 @@
         { 
             id: 'team_junnut', 
             name: 'A-Juniorit',
+            shareId: 'st_team_junnut',
             logo: '⚡',
             primaryColor: '#dc2626',
+            secondaryColor: '#991b1b',
             mvColor: '#eab308',
             tokenStyle: 'circle',
             arenaName: 'Junnuareena',
@@ -319,6 +328,159 @@
             .replace(/'/g, '&#039;');
     }
 
+    // Helper: Check if logo string is an image URL/data URL
+    function isImageLogo(logo) {
+        if (!logo || typeof logo !== 'string') return false;
+        return logo.startsWith('data:image') || 
+               logo.startsWith('http://') || 
+               logo.startsWith('https://') || 
+               logo.startsWith('/') || 
+               logo.endsWith('.png') || 
+               logo.endsWith('.jpg') || 
+               logo.endsWith('.jpeg') || 
+               logo.endsWith('.svg') || 
+               logo.endsWith('.webp') || 
+               logo.includes('.png') || 
+               logo.includes('.svg');
+    }
+
+    // Canvas Image Cache for Court Watermark & Logos
+    const _courtLogoCache = new Map();
+    function getCourtCachedImage(src, onLoaded) {
+        if (!src) return null;
+        if (_courtLogoCache.has(src)) {
+            const cached = _courtLogoCache.get(src);
+            if (cached && cached.complete && cached.naturalWidth > 0) return cached;
+            return cached;
+        }
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.src = src;
+        img.onload = () => {
+            if (typeof onLoaded === 'function') onLoaded();
+        };
+        _courtLogoCache.set(src, img);
+        return img;
+    }
+
+    // Normalize team name/ID to canonical key to prevent duplicates
+    function normalizeTeamKey(nameOrId) {
+        if (!nameOrId) return '';
+        const s = String(nameOrId).trim().toLowerCase().replace(/^🤝\s*/, '').trim();
+        if (s === 'team_sekta' || s === 'default_team' || s === 'st_team_sekta' || s === 'shared_st_team_sekta' || s.includes('sekta')) {
+            return 'sekta';
+        }
+        if (s === 'team_akatemia' || s === 'team_fbc_akatemia' || s === 'team_1786787084772' || s === 'st_team_akatemia' || s === 'shared_st_team_akatemia' || s.includes('akatemia')) {
+            return 'akatemia';
+        }
+        if (s === 'team_edustus' || s.includes('edustus')) {
+            return 'edustus';
+        }
+        if (s === 'team_junnut' || s.includes('junnut') || s.includes('juniorit')) {
+            return 'junnut';
+        }
+        return s.replace(/[^a-z0-9]/g, '');
+    }
+
+    // Deduplicate and merge teams into canonical representations
+    function deduplicateTeams(rawTeams) {
+        if (!Array.isArray(rawTeams) || rawTeams.length === 0) {
+            return JSON.parse(JSON.stringify(DEFAULT_TEAMS));
+        }
+        const mergedMap = new Map();
+        const deletedIds = Array.isArray(deletedTeamIds) ? deletedTeamIds : [];
+
+        rawTeams.forEach(t => {
+            if (!t || !t.id || deletedIds.includes(t.id)) return;
+            const cleanName = (t.name || '').replace(/^🤝\s*/, '').trim();
+            const normKey = normalizeTeamKey(t.id) || normalizeTeamKey(cleanName);
+            const mapKey = normKey || ('id_' + t.id);
+
+            if (!mergedMap.has(mapKey)) {
+                const canonTeam = { ...t };
+                if (normKey === 'sekta') {
+                    canonTeam.id = 'team_sekta';
+                    canonTeam.name = 'SekTa';
+                    canonTeam.shareId = 'st_team_sekta';
+                    if (!canonTeam.logo || canonTeam.logo === '🏑' || canonTeam.logo === '??') {
+                        canonTeam.logo = 'sekta-logo.png';
+                        canonTeam.photo = 'sekta-logo.png';
+                    }
+                    if (!canonTeam.primaryColor || canonTeam.primaryColor === '#2563eb') {
+                        canonTeam.primaryColor = '#6b5bd7';
+                        canonTeam.secondaryColor = '#f2a24a';
+                    }
+                    if (!canonTeam.eventsUrl) canonTeam.eventsUrl = 'https://sekta.nimenhuuto.com/events';
+                    if (!canonTeam.nimenhuutoUrl) canonTeam.nimenhuutoUrl = 'https://sekta.nimenhuuto.com/events';
+                } else if (normKey === 'akatemia') {
+                    canonTeam.id = 'team_akatemia';
+                    canonTeam.name = 'FBC Akatemia';
+                    canonTeam.shareId = 'st_team_akatemia';
+                    if (!canonTeam.logo) canonTeam.logo = '🦅';
+                } else if (normKey === 'edustus') {
+                    canonTeam.id = 'team_edustus';
+                    canonTeam.name = 'Edustusjoukkue';
+                    canonTeam.shareId = 'st_team_edustus';
+                } else if (normKey === 'junnut') {
+                    canonTeam.id = 'team_junnut';
+                    canonTeam.name = 'A-Juniorit';
+                    canonTeam.shareId = 'st_team_junnut';
+                } else {
+                    canonTeam.name = cleanName || 'Joukkue';
+                    if (!canonTeam.shareId) canonTeam.shareId = 'st_' + String(canonTeam.id).replace(/[^a-zA-Z0-9_]/g, '');
+                }
+                mergedMap.set(mapKey, canonTeam);
+            } else {
+                const existing = mergedMap.get(mapKey);
+                // Preserve custom logo/photo
+                if (isImageLogo(t.logo)) {
+                    existing.logo = t.logo;
+                    existing.photo = t.logo;
+                } else if (!isImageLogo(existing.logo) && t.logo && t.logo !== '🏑' && t.logo !== '??') {
+                    existing.logo = t.logo;
+                }
+                if (t.photo) existing.photo = t.photo;
+                if (t.primaryColor && t.primaryColor !== '#2563eb') existing.primaryColor = t.primaryColor;
+                if (t.secondaryColor) existing.secondaryColor = t.secondaryColor;
+                if (t.mvColor && !existing.mvColor) existing.mvColor = t.mvColor;
+                if (t.arenaName && (!existing.arenaName || existing.arenaName === 'Kotiareena')) existing.arenaName = t.arenaName;
+                if (t.eventsUrl && !existing.eventsUrl) existing.eventsUrl = t.eventsUrl;
+
+                // Data migration from duplicate ID
+                if (t.id !== existing.id) {
+                    try {
+                        const oldRoster = localStorage.getItem(`salibandy_roster_${t.id}`);
+                        const newRoster = localStorage.getItem(`salibandy_roster_${existing.id}`);
+                        if (oldRoster && (!newRoster || newRoster === '[]')) {
+                            localStorage.setItem(`salibandy_roster_${existing.id}`, oldRoster);
+                        }
+                        const oldLineups = localStorage.getItem(`salibandy_lineups_${t.id}`);
+                        const newLineups = localStorage.getItem(`salibandy_lineups_${existing.id}`);
+                        if (oldLineups && !newLineups) {
+                            localStorage.setItem(`salibandy_lineups_${existing.id}`, oldLineups);
+                        }
+                        localStorage.removeItem(`salibandy_roster_${t.id}`);
+                        localStorage.removeItem(`salibandy_lineups_${t.id}`);
+                        localStorage.removeItem(`salibandy_lineup_configs_${t.id}`);
+                        localStorage.removeItem(`salibandy_positions_${t.id}`);
+                        localStorage.removeItem(`salibandy_drawings_${t.id}`);
+                    } catch(e){}
+                }
+            }
+        });
+
+        const result = Array.from(mergedMap.values());
+        if (!result.some(t => normalizeTeamKey(t.id) === 'sekta')) {
+            result.unshift(JSON.parse(JSON.stringify(DEFAULT_TEAMS[0])));
+        }
+        if (!result.some(t => normalizeTeamKey(t.id) === 'akatemia')) {
+            const sIdx = result.findIndex(t => normalizeTeamKey(t.id) === 'sekta');
+            if (sIdx !== -1) result.splice(sIdx + 1, 0, JSON.parse(JSON.stringify(DEFAULT_TEAMS[1])));
+            else result.push(JSON.parse(JSON.stringify(DEFAULT_TEAMS[1])));
+        }
+        return result;
+    }
+
     // Global State
     let deletedTeamIds = loadFromStorage('salibandy_deleted_team_ids', []);
     if (Array.isArray(deletedTeamIds)) {
@@ -332,72 +494,20 @@
         localStorage.setItem('salibandy_deleted_team_ids', JSON.stringify(deletedTeamIds));
     }
 
-    let teams = loadFromStorage('salibandy_teams_v1', DEFAULT_TEAMS);
+    let rawTeams = loadFromStorage('salibandy_teams_v1', DEFAULT_TEAMS);
+    let teams = deduplicateTeams(rawTeams);
     let currentTeamId = loadFromStorage('salibandy_active_team_id', 'team_sekta');
 
-    if (Array.isArray(teams)) {
-        // Filter out deleted teams and deduplicate by ID
-        const seenTeamIds = new Set();
-        const validTeams = [];
-        teams.forEach(t => {
-            if (!t || !t.id || deletedTeamIds.includes(t.id)) return;
-            if (!seenTeamIds.has(t.id)) {
-                seenTeamIds.add(t.id);
-                if (!t.name || t.name.startsWith('data:') || t.name.length > 40) {
-                    t.name = 'SekTa';
-                }
-                if (t.id && (t.id.startsWith('data:') || t.id.length > 50)) {
-                    t.id = 'team_sekta';
-                }
-                const isSekTa = t.id === 'team_sekta' || t.id === 'default_team' || (t.name && t.name.toLowerCase().includes('sekta'));
-                if (isSekTa) {
-                    if (!t.eventsUrl) t.eventsUrl = 'https://sekta.nimenhuuto.com/events';
-                    if (!t.nimenhuutoUrl) t.nimenhuutoUrl = 'https://sekta.nimenhuuto.com/events';
-                }
-                const isAkatemia = t.id === 'team_akatemia' || t.id === 'team_fbc_akatemia' || t.id === 'team_1786787084772' || (t.name && t.name.toLowerCase().includes('akatemia'));
-                if (!t.logo) {
-                    t.logo = (t.id === 'team_edustus') ? '🦁' : ((t.id === 'team_junnut') ? '⚡' : (isAkatemia ? '🦅' : '🏑'));
-                }
-                if (!t.primaryColor) t.primaryColor = (t.id === 'team_junnut' || isAkatemia) ? '#dc2626' : '#2563eb';
-                if (!t.mvColor) t.mvColor = (t.id === 'team_junnut') ? '#eab308' : '#10b981';
-                if (!t.tokenStyle) t.tokenStyle = 'circle';
-                if (!t.rinkColor) t.rinkColor = 'black';
-                if (t.showCourtLogo === undefined) t.showCourtLogo = true;
-                validTeams.push(t);
-            }
-        });
-        teams = validTeams.length > 0 ? validTeams : DEFAULT_TEAMS;
-
-        // Ensure SekTa is present in teams
-        const hasSekTa = teams.some(t => t && (t.id === 'team_sekta' || t.id === 'default_team' || (t.name && t.name.toLowerCase().includes('sekta'))));
-        if (!hasSekTa) {
-            teams.unshift(JSON.parse(JSON.stringify(DEFAULT_TEAMS[0])));
-        }
-
-        // Ensure FBC Akatemia is present in teams
-        const hasAkatemia = teams.some(t => t && (t.id === 'team_akatemia' || t.id === 'team_fbc_akatemia' || t.id === 'team_1786787084772' || (t.name && t.name.toLowerCase().includes('akatemia'))));
-        if (!hasAkatemia) {
-            const sektaIdx = teams.findIndex(t => t && (t.id === 'team_sekta' || t.id === 'default_team' || (t.name && t.name.toLowerCase().includes('sekta'))));
-            if (sektaIdx !== -1) {
-                teams.splice(sektaIdx + 1, 0, JSON.parse(JSON.stringify(DEFAULT_TEAMS[1])));
-            } else {
-                teams.push(JSON.parse(JSON.stringify(DEFAULT_TEAMS[1])));
-            }
-        }
-
-        // Always guarantee eventsUrl on SekTa teams
-        teams.forEach(t => {
-            if (t && (t.id === 'team_sekta' || t.id === 'default_team' || (t.name && t.name.toLowerCase().includes('sekta')))) {
-                if (!t.eventsUrl) t.eventsUrl = 'https://sekta.nimenhuuto.com/events';
-                if (!t.nimenhuutoUrl) t.nimenhuutoUrl = 'https://sekta.nimenhuuto.com/events';
-            }
-        });
-        localStorage.setItem('salibandy_teams_v1', JSON.stringify(teams));
-
-        if (!teams.some(t => t.id === currentTeamId)) {
-            currentTeamId = teams[0].id;
-        }
+    if (normalizeTeamKey(currentTeamId) === 'sekta') {
+        currentTeamId = 'team_sekta';
+    } else if (normalizeTeamKey(currentTeamId) === 'akatemia') {
+        currentTeamId = 'team_akatemia';
+    } else if (!teams.some(t => t.id === currentTeamId)) {
+        currentTeamId = teams[0].id;
     }
+
+    localStorage.setItem('salibandy_teams_v1', JSON.stringify(teams));
+    localStorage.setItem('salibandy_active_team_id', JSON.stringify(currentTeamId));
 
     cleanCorruptedUserTeams();
 
@@ -497,8 +607,8 @@
 
     function renderCourtWatermarkHtml(curTeam) {
         if (!curTeam || curTeam.showCourtLogo === false || !curTeam.logo) return '';
-        if (curTeam.logo.startsWith('data:image') || curTeam.logo.startsWith('http')) {
-            return `<img src="${escapeHtml(curTeam.logo)}" alt="Logo watermark">`;
+        if (isImageLogo(curTeam.logo)) {
+            return `<img src="${escapeHtml(curTeam.logo)}" alt="Logo watermark" style="max-width:100%;max-height:100%;object-fit:contain;pointer-events:none;">`;
         }
         return `<span class="watermark-emoji">${escapeHtml(curTeam.logo)}</span>`;
     }
@@ -542,7 +652,7 @@
         const logoWrapper = document.getElementById('header-team-logo-wrapper');
         if (logoWrapper) {
             if (curTeam.logo) {
-                if (curTeam.logo.startsWith('data:image') || curTeam.logo.startsWith('http')) {
+                if (isImageLogo(curTeam.logo)) {
                     logoWrapper.innerHTML = `<img src="${escapeHtml(curTeam.logo)}" class="header-team-logo-img" alt="Logo">`;
                 } else {
                     logoWrapper.innerHTML = `<span class="header-team-logo-emoji">${escapeHtml(curTeam.logo)}</span>`;
@@ -737,6 +847,7 @@
             const teamMeta = {
                 name: cleanTeamName,
                 logo: (teamObj && teamObj.logo) ? teamObj.logo : '🦁',
+                photo: (teamObj && (teamObj.photo || teamObj.logo)) ? (teamObj.photo || teamObj.logo) : '',
                 primaryColor: (teamObj && teamObj.primaryColor) ? teamObj.primaryColor : '#2563eb',
                 secondaryColor: (teamObj && teamObj.secondaryColor) ? teamObj.secondaryColor : '#1e40af',
                 mvColor: (teamObj && teamObj.mvColor) ? teamObj.mvColor : '#10b981',
@@ -819,17 +930,24 @@
                 document.body.classList.add('viewer-mode');
             }
 
+            const matchedTeam = teams.find(t => t.shareId === teamShareId || normalizeTeamKey(t.id) === normalizeTeamKey(teamShareId));
+            if (matchedTeam) {
+                currentTeamId = matchedTeam.id;
+            }
+
             listenToSharedTeamFirestore(teamShareId);
         } else {
             const curTeam = teams.find(t => t.id === currentTeamId);
-            if (curTeam && curTeam.shareId) {
-                currentSharedTeamId = curTeam.shareId;
-                listenToSharedTeamFirestore(curTeam.shareId);
+            const shareIdToListen = (curTeam && curTeam.shareId) ? curTeam.shareId : (normalizeTeamKey(currentTeamId) === 'sekta' ? 'st_team_sekta' : null);
+            if (shareIdToListen) {
+                currentSharedTeamId = shareIdToListen;
+                listenToSharedTeamFirestore(shareIdToListen);
             }
         }
     }
 
     function listenToSharedTeamFirestore(shareId) {
+        if (!shareId) return;
         if (!window.SalibandyFirebase || !window.SalibandyFirebase.isReady()) {
             if (window.SalibandyFirebase && window.SalibandyFirebase.whenReady) {
                 window.SalibandyFirebase.whenReady().then(() => listenToSharedTeamFirestore(shareId));
@@ -844,7 +962,6 @@
 
         unsubscribeSharedTeam = db.collection('shared_teams').doc(shareId).onSnapshot(doc => {
             if (!doc.exists) {
-                showToast('Jaettua joukkuetta ei löytynyt pilvestä.');
                 return;
             }
             const data = doc.data();
@@ -857,13 +974,19 @@
 
             const meta = data.teamMeta || {};
             const sharedTeamName = meta.name || data.teamName || 'Jaettu joukkue';
-            let foundTeam = teams.find(t => t.id === 'shared_' + shareId || (t.shareId && t.shareId === shareId));
+            const cleanSharedName = sharedTeamName.replace(/^🤝\s*/, '').trim();
+            const normKey = normalizeTeamKey(shareId) || normalizeTeamKey(cleanSharedName);
+
+            let foundTeam = teams.find(t => t.shareId === shareId || (normKey && normalizeTeamKey(t.id) === normKey));
+            const newLogo = meta.logo || meta.photo;
+
             if (!foundTeam) {
                 foundTeam = { 
-                    id: 'shared_' + shareId, 
-                    name: '🤝 ' + sharedTeamName, 
+                    id: (normKey === 'sekta') ? 'team_sekta' : ((normKey === 'akatemia') ? 'team_akatemia' : ('shared_' + shareId)), 
+                    name: cleanSharedName, 
                     shareId: shareId,
-                    logo: meta.logo || '🦁',
+                    logo: newLogo || '🦁',
+                    photo: meta.photo || newLogo || '',
                     primaryColor: meta.primaryColor || '#2563eb',
                     secondaryColor: meta.secondaryColor || '#1e40af',
                     mvColor: meta.mvColor || '#10b981',
@@ -877,9 +1000,12 @@
                 };
                 teams.push(foundTeam);
             } else {
-                foundTeam.name = '🤝 ' + sharedTeamName;
+                foundTeam.name = cleanSharedName;
                 foundTeam.shareId = shareId;
-                if (meta.logo) foundTeam.logo = meta.logo;
+                if (newLogo) {
+                    foundTeam.logo = newLogo;
+                    foundTeam.photo = newLogo;
+                }
                 if (meta.primaryColor) foundTeam.primaryColor = meta.primaryColor;
                 if (meta.secondaryColor) foundTeam.secondaryColor = meta.secondaryColor;
                 if (meta.mvColor) foundTeam.mvColor = meta.mvColor;
@@ -893,7 +1019,26 @@
                 if (meta.courtColor) courtColor = meta.courtColor;
                 if (meta.matchInfo) foundTeam.matchInfo = meta.matchInfo;
             }
-            currentTeamId = foundTeam.id;
+
+            // Sync logo and colors to any canonical matching team in local storage
+            teams.forEach(t => {
+                if (!t) return;
+                const tNorm = normalizeTeamKey(t.id) || normalizeTeamKey(t.name);
+                if (tNorm === normKey) {
+                    if (newLogo) {
+                        t.logo = newLogo;
+                        t.photo = newLogo;
+                    }
+                    if (meta.primaryColor) t.primaryColor = meta.primaryColor;
+                    if (meta.secondaryColor) t.secondaryColor = meta.secondaryColor;
+                    if (meta.mvColor) t.mvColor = meta.mvColor;
+                    if (meta.arenaName || meta.arena) t.arenaName = meta.arenaName || meta.arena;
+                }
+            });
+
+            teams = deduplicateTeams(teams);
+            const activeMatch = teams.find(t => t.shareId === shareId || (normKey && normalizeTeamKey(t.id) === normKey));
+            if (activeMatch) currentTeamId = activeMatch.id;
 
             if (data.roster) roster = data.roster;
             if (data.lineupConfigs) lineupConfigs = data.lineupConfigs;
@@ -1671,46 +1816,8 @@
 
             if (cloudData.teams && Array.isArray(cloudData.teams)) {
                 const cleanCloudTeams = cloudData.teams.filter(t => t && t.id && !deletedTeamIds.includes(t.id));
-                const mergedMap = new Map();
-                cleanCloudTeams.forEach(t => {
-                    if (!mergedMap.has(t.id)) {
-                        mergedMap.set(t.id, t);
-                    }
-                });
-
-                teams.forEach(localT => {
-                    if (!localT || !localT.id || deletedTeamIds.includes(localT.id)) return;
-                    if (!mergedMap.has(localT.id)) {
-                        mergedMap.set(localT.id, localT);
-                        needCloudUpdateBack = true;
-                    } else {
-                        const existing = mergedMap.get(localT.id);
-                        if (!existing.shareId && localT.shareId) {
-                            existing.shareId = localT.shareId;
-                            needCloudUpdateBack = true;
-                        }
-                    }
-                });
-
-                teams = Array.from(mergedMap.values());
-                const hasSekTa = teams.some(t => t && (t.id === 'team_sekta' || t.id === 'default_team' || (t.name && t.name.toLowerCase().includes('sekta'))));
-                if (!hasSekTa) {
-                    teams.unshift(JSON.parse(JSON.stringify(DEFAULT_TEAMS[0])));
-                    needCloudUpdateBack = true;
-                }
-                const hasAkatemia = teams.some(t => t && (t.id === 'team_akatemia' || t.id === 'team_fbc_akatemia' || t.id === 'team_1786787084772' || (t.name && t.name.toLowerCase().includes('akatemia'))));
-                if (!hasAkatemia) {
-                    const sektaIdx = teams.findIndex(t => t && (t.id === 'team_sekta' || t.id === 'default_team' || (t.name && t.name.toLowerCase().includes('sekta'))));
-                    if (sektaIdx !== -1) {
-                        teams.splice(sektaIdx + 1, 0, JSON.parse(JSON.stringify(DEFAULT_TEAMS[1])));
-                    } else {
-                        teams.push(JSON.parse(JSON.stringify(DEFAULT_TEAMS[1])));
-                    }
-                    needCloudUpdateBack = true;
-                }
-                if (teams.length === 0) {
-                    teams = JSON.parse(JSON.stringify(DEFAULT_TEAMS));
-                }
+                teams = deduplicateTeams(cleanCloudTeams.concat(teams));
+                needCloudUpdateBack = true;
 
                 if (cloudData.currentTeamId && teams.some(t => t.id === cloudData.currentTeamId)) {
                     currentTeamId = cloudData.currentTeamId;
@@ -2182,11 +2289,17 @@
         const teamSelect = document.getElementById('team-select');
         if (!teamSelect) return;
         teamSelect.innerHTML = '';
+        const seenKeys = new Set();
         teams.forEach(t => {
+            if (!t || !t.id || (Array.isArray(deletedTeamIds) && deletedTeamIds.includes(t.id))) return;
+            const normKey = normalizeTeamKey(t.id) || normalizeTeamKey(t.name) || t.id;
+            if (seenKeys.has(normKey)) return;
+            seenKeys.add(normKey);
+
             const opt = document.createElement('option');
             opt.value = t.id;
-            opt.textContent = t.name;
-            if (t.id === currentTeamId) opt.selected = true;
+            opt.textContent = (t.name || 'Joukkue').replace(/^🤝\s*/, '');
+            if (t.id === currentTeamId || normKey === normalizeTeamKey(currentTeamId)) opt.selected = true;
             teamSelect.appendChild(opt);
         });
     }
@@ -3827,14 +3940,25 @@
 
         // Center Watermark Logo
         if (curTeam && curTeam.showCourtLogo !== false && curTeam.logo) {
-            ctx.save();
-            ctx.globalAlpha = 0.20;
-            const logoSize = Math.round(Math.min(w, h) * 0.22);
-            ctx.font = `bold ${logoSize}px "Outfit", sans-serif`;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(curTeam.logo, w / 2, h / 2);
-            ctx.restore();
+            if (isImageLogo(curTeam.logo)) {
+                const courtImg = getCourtCachedImage(curTeam.logo, () => renderCourtBoards());
+                if (courtImg && courtImg.complete && courtImg.naturalWidth > 0) {
+                    ctx.save();
+                    ctx.globalAlpha = 0.22;
+                    const logoSize = Math.round(Math.min(w, h) * 0.28);
+                    ctx.drawImage(courtImg, (w - logoSize) / 2, (h - logoSize) / 2, logoSize, logoSize);
+                    ctx.restore();
+                }
+            } else {
+                ctx.save();
+                ctx.globalAlpha = 0.20;
+                const logoSize = Math.round(Math.min(w, h) * 0.22);
+                ctx.font = `bold ${logoSize}px "Outfit", sans-serif`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(curTeam.logo, w / 2, h / 2);
+                ctx.restore();
+            }
         }
 
         // Arena Name Badge
@@ -7875,7 +7999,7 @@
             previewEl.innerHTML = '🏑';
             return;
         }
-        if (tempTeamLogo.startsWith('data:image') || tempTeamLogo.startsWith('http')) {
+        if (isImageLogo(tempTeamLogo)) {
             previewEl.innerHTML = `<img src="${escapeHtml(tempTeamLogo)}" style="max-width:100%;max-height:100%;object-fit:contain;" alt="Logo preview">`;
         } else {
             previewEl.innerHTML = escapeHtml(tempTeamLogo);
@@ -7887,6 +8011,7 @@
         if (!curTeam) return;
 
         curTeam.logo = tempTeamLogo;
+        curTeam.photo = tempTeamLogo;
         curTeam.primaryColor = tempPrimaryColor;
         curTeam.mvColor = tempMvColor;
         curTeam.tokenStyle = tempTokenStyle;
@@ -7898,14 +8023,24 @@
         const courtLogoCheck = document.getElementById('cust-show-court-logo');
         if (courtLogoCheck) curTeam.showCourtLogo = courtLogoCheck.checked;
 
+        if (!curTeam.shareId) {
+            curTeam.shareId = getShareIdForCurrentTeam();
+        }
+
         saveState();
+
+        // Immediately push to cloud so all connected devices update their logo live!
+        if (curTeam.shareId) {
+            pushSharedTeamToCloud(curTeam.shareId, curTeam);
+        }
+
         applyThemeAndSettings();
         renderCourtBoards();
         renderActiveLineupSlots();
         if (activeLineupKey === 'summary') renderSummaryView();
 
         document.getElementById('team-customize-modal')?.classList.remove('active');
-        showToast('Joukkueen kustomointi tallennettu! ✨');
+        showToast('Joukkueen ilme & kuva tallennettu ja synkronoitu! 🎉');
     }
 
     // ==========================================
@@ -8281,13 +8416,24 @@
 
         // Center Watermark / Logo
         if (curTeam.showCourtLogo !== false && curTeam.logo) {
-            ctx.save();
-            ctx.globalAlpha = 0.22;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.font = '110px sans-serif';
-            ctx.fillText(curTeam.logo, courtX + courtW / 2, courtY + courtH / 2);
-            ctx.restore();
+            if (isImageLogo(curTeam.logo)) {
+                const courtImg = getCourtCachedImage(curTeam.logo);
+                if (courtImg && courtImg.complete && courtImg.naturalWidth > 0) {
+                    ctx.save();
+                    ctx.globalAlpha = 0.22;
+                    const imgSize = 140;
+                    ctx.drawImage(courtImg, courtX + (courtW - imgSize) / 2, courtY + (courtH - imgSize) / 2, imgSize, imgSize);
+                    ctx.restore();
+                }
+            } else {
+                ctx.save();
+                ctx.globalAlpha = 0.22;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.font = '110px sans-serif';
+                ctx.fillText(curTeam.logo, courtX + courtW / 2, courtY + courtH / 2);
+                ctx.restore();
+            }
         }
 
         // Arena Name in Corner
