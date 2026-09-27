@@ -1115,7 +1115,10 @@
                 reserves: lineupReserves,
                 events: teamEvents
             };
-            db.collection('shared_teams').doc(shareId).set(payload, { merge: true }).then(() => {
+            const safePayload = JSON.parse(JSON.stringify(payload, (k, v) => (v === undefined ? null : v)));
+            safePayload.updatedAt = serverTs;
+
+            db.collection('shared_teams').doc(shareId).set(safePayload, { merge: true }).then(() => {
                 console.log(`[Simple][${clientInstanceId}] Shared team '${cleanTeamName}' synced to cloud (${shareId})`);
             }).catch(err => {
                 console.warn(`[Simple][${clientInstanceId}] Share Firestore write warning:`, err);
@@ -1159,11 +1162,21 @@
                 return;
             }
 
+            // Remote timestamp parsing: support both _lastModifiedAt and updatedAt Timestamp
+            const remoteTs = Number(data._lastModifiedAt) || (data.updatedAt && typeof data.updatedAt.toMillis === 'function' ? data.updatedAt.toMillis() : (data.updatedAt && data.updatedAt.seconds ? data.updatedAt.seconds * 1000 : 0));
+
             // Skip snapshot if local mutation occurred AFTER remote doc timestamp
-            if (data._lastModifiedAt && lastLocalMutationAt && data._lastModifiedAt < lastLocalMutationAt) {
-                console.log(`[Simple][${clientInstanceId}] Ignoring stale remote snapshot prior to local mutation (${data._lastModifiedAt} < ${lastLocalMutationAt})`);
+            if (remoteTs && lastLocalMutationAt && remoteTs < lastLocalMutationAt) {
+                console.log(`[Simple][${clientInstanceId}] Ignoring stale remote snapshot prior to local mutation (${remoteTs} < ${lastLocalMutationAt})`);
                 return;
             }
+
+            // Also ignore if a local mutation just happened in the last 2.5 seconds
+            if (lastLocalMutationAt && (Date.now() - lastLocalMutationAt < 2500)) {
+                console.log(`[Simple][${clientInstanceId}] Ignoring remote snapshot due to recent local mutation within 2.5s`);
+                return;
+            }
+
             console.log(`[Simple][${clientInstanceId}] Applying remote update from ${data._lastModifiedBy}!`);
 
             const meta = data.teamMeta || {};
@@ -1335,8 +1348,14 @@
                 return;
             }
 
-            if (cloudData._lastModifiedAt && lastLocalMutationAt && cloudData._lastModifiedAt < lastLocalMutationAt) {
+            const cloudTs = Number(cloudData._lastModifiedAt) || (cloudData.updatedAt && typeof cloudData.updatedAt.toMillis === 'function' ? cloudData.updatedAt.toMillis() : (cloudData.updatedAt && cloudData.updatedAt.seconds ? cloudData.updatedAt.seconds * 1000 : 0));
+            if (cloudTs && lastLocalMutationAt && cloudTs < lastLocalMutationAt) {
                 console.log('[Simple] Ignoring stale personal cloud snapshot prior to local mutation');
+                updateCloudButtonUI(true);
+                return;
+            }
+            if (lastLocalMutationAt && (Date.now() - lastLocalMutationAt < 2500)) {
+                console.log('[Simple] Ignoring personal cloud snapshot due to recent local mutation within 2.5s');
                 updateCloudButtonUI(true);
                 return;
             }

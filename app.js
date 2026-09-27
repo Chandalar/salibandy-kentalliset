@@ -6,6 +6,8 @@
 (function() {
     'use strict';
 
+    const clientInstanceId = 'client_' + Date.now() + '_' + Math.random().toString(36).substr(2, 8);
+
     // ==========================================
     // INITIAL DEFAULT DATA & TEAMS
     // ==========================================
@@ -1037,7 +1039,10 @@
                 events: teamEvents,
                 deletedPlayerIds: getDeletedPlayerIds(currentTeamId)
             };
-            db.collection('shared_teams').doc(shareId).set(payload, { merge: true }).then(() => {
+            const safePayload = JSON.parse(JSON.stringify(payload, (k, v) => (v === undefined ? null : v)));
+            safePayload.updatedAt = serverTs;
+
+            db.collection('shared_teams').doc(shareId).set(safePayload, { merge: true }).then(() => {
                 console.log(`[Advanced] Shared team '${cleanTeamName}' synced to cloud (${shareId})`);
             }).catch(err => {
                 console.warn('Share Firestore write warning:', err);
@@ -1109,9 +1114,23 @@
                 return;
             }
 
+            // Remote timestamp parsing: support both _lastModifiedAt and updatedAt Timestamp
+            const remoteTs = Number(data._lastModifiedAt) || (data.updatedAt && typeof data.updatedAt.toMillis === 'function' ? data.updatedAt.toMillis() : (data.updatedAt && data.updatedAt.seconds ? data.updatedAt.seconds * 1000 : 0));
+
             // Skip snapshot if local mutation occurred AFTER remote doc timestamp
-            if (data._lastModifiedAt && lastLocalMutationAt && data._lastModifiedAt < lastLocalMutationAt) {
-                console.log(`[Advanced][${clientInstanceId}] Ignoring stale remote snapshot prior to local mutation (${data._lastModifiedAt} < ${lastLocalMutationAt})`);
+            if (remoteTs && lastLocalMutationAt && remoteTs < lastLocalMutationAt) {
+                console.log(`[Advanced][${clientInstanceId}] Ignoring stale remote snapshot prior to local mutation (${remoteTs} < ${lastLocalMutationAt})`);
+                return;
+            }
+
+            // Also ignore if a local mutation just happened in the last 2.5 seconds
+            if (lastLocalMutationAt && (Date.now() - lastLocalMutationAt < 2500)) {
+                console.log(`[Advanced][${clientInstanceId}] Ignoring remote snapshot due to recent local mutation within 2.5s`);
+                return;
+            }
+
+            // If user is actively dragging an element, skip tearing down the DOM
+            if (document.querySelector('.is-dragging') || draggedLiveSlot) {
                 return;
             }
 
@@ -1845,7 +1864,7 @@
         const serverTs = (typeof window !== 'undefined' && window.firebase && window.firebase.firestore && window.firebase.firestore.FieldValue)
             ? window.firebase.firestore.FieldValue.serverTimestamp() : new Date();
 
-        return {
+        const payload = {
             email: currentUser ? currentUser.email : '',
             updatedAt: serverTs,
             _lastModifiedBy: clientInstanceId,
@@ -1868,6 +1887,9 @@
             pages: pagesMap,
             events: eventsMap
         };
+        const safePayload = JSON.parse(JSON.stringify(payload, (k, v) => (v === undefined ? null : v)));
+        safePayload.updatedAt = serverTs;
+        return safePayload;
     }
 
     function forceCloudSync() {
@@ -1897,7 +1919,6 @@
             });
     }
 
-    const clientInstanceId = 'client_' + Date.now() + '_' + Math.random().toString(36).substr(2, 8);
     let lastLoadedCloudPayloadString = '';
     let isAnyDraggingActive = false;
 
@@ -1939,8 +1960,21 @@
                 return;
             }
 
+            // Skip snapshot if local mutation occurred AFTER remote personal doc timestamp
+            const cloudTs = Number(cloudData._lastModifiedAt) || (cloudData.updatedAt && typeof cloudData.updatedAt.toMillis === 'function' ? cloudData.updatedAt.toMillis() : (cloudData.updatedAt && cloudData.updatedAt.seconds ? cloudData.updatedAt.seconds * 1000 : 0));
+            if (cloudTs && lastLocalMutationAt && cloudTs < lastLocalMutationAt) {
+                console.log(`[Advanced][${clientInstanceId}] Ignoring stale personal cloud snapshot (${cloudTs} < ${lastLocalMutationAt})`);
+                return;
+            }
+
+            // Also ignore if a local mutation just happened in the last 2.5 seconds
+            if (lastLocalMutationAt && (Date.now() - lastLocalMutationAt < 2500)) {
+                console.log(`[Advanced][${clientInstanceId}] Ignoring personal cloud snapshot due to recent local mutation within 2.5s`);
+                return;
+            }
+
             // If user is currently dragging or interacting on the screen, skip tearing down the DOM
-            if (isAnyDraggingActive) {
+            if (isAnyDraggingActive || document.querySelector('.is-dragging') || draggedLiveSlot) {
                 return;
             }
 
@@ -1983,10 +2017,16 @@
                 }
             }
 
+            const curTeam = teams.find(t => t.id === currentTeamId);
+            const isCurShared = (curTeam && (curTeam.isShared || curTeam.shareId || curTeam.cloudSynced)) || (currentTeamId === 'team_sekta' || currentTeamId === 'default_team' || (curTeam && (curTeam.name || '').toLowerCase().includes('sekta')));
+
             if (cloudData.rosters) {
                 Object.keys(cloudData.rosters).forEach(tId => {
                     if (deletedTeamIds.includes(tId)) {
                         localStorage.removeItem(`salibandy_roster_${tId}`);
+                        return;
+                    }
+                    if (tId === currentTeamId && isCurShared) {
                         return;
                     }
                     const delIds = getDeletedPlayerIds(tId);
@@ -2013,6 +2053,9 @@
                         localStorage.removeItem(`salibandy_lineup_configs_${tId}`);
                         return;
                     }
+                    if (tId === currentTeamId && isCurShared) {
+                        return;
+                    }
                     localStorage.setItem(`salibandy_lineup_configs_${tId}`, JSON.stringify(cloudData.lineupConfigs[tId]));
                 });
             }
@@ -2022,6 +2065,9 @@
                         localStorage.removeItem(`salibandy_lineups_${tId}`);
                         return;
                     }
+                    if (tId === currentTeamId && isCurShared) {
+                        return;
+                    }
                     localStorage.setItem(`salibandy_lineups_${tId}`, JSON.stringify(cloudData.lineups[tId]));
                 });
             }
@@ -2029,6 +2075,9 @@
                 Object.keys(cloudData.reserves).forEach(tId => {
                     if (deletedTeamIds.includes(tId)) {
                         localStorage.removeItem(`salibandy_reserves_${tId}`);
+                        return;
+                    }
+                    if (tId === currentTeamId && isCurShared) {
                         return;
                     }
                     localStorage.setItem(`salibandy_reserves_${tId}`, JSON.stringify(cloudData.reserves[tId]));
@@ -2117,35 +2166,39 @@
                 });
             }
 
-            roster = loadRosterForTeam(currentTeamId);
-            lineupConfigs = loadLineupConfigs(currentTeamId);
-            lineups = loadLineupsForTeam(currentTeamId, lineupConfigs);
-            lineupReserves = loadFromStorage(`salibandy_reserves_${currentTeamId}`, {});
-            lineupDrawings = loadFromStorage(`salibandy_drawings_${currentTeamId}`, {});
-            lineupDrawings = sanitizeDrawings(lineupDrawings);
-            lineupCourtPositions = loadFromStorage(`salibandy_positions_${currentTeamId}`, {});
-            lineupBalls = loadFromStorage(`salibandy_balls_${currentTeamId}`, {});
-            lineupCones = loadFromStorage(`salibandy_cones_${currentTeamId}`, {});
-            lineupOpponents = loadFromStorage(`salibandy_opponents_${currentTeamId}`, {});
-            lineupExtraPlayers = loadFromStorage(`salibandy_extra_players_${currentTeamId}`, {});
-            lineupTextNotes = loadFromStorage(`salibandy_text_notes_${currentTeamId}`, {});
-            lineupPages = loadFromStorage(`salibandy_pages_${currentTeamId}`, {});
-            teamEvents = loadTeamEvents(currentTeamId);
+            if (!isCurShared) {
+                roster = loadRosterForTeam(currentTeamId);
+                lineupConfigs = loadLineupConfigs(currentTeamId);
+                lineups = loadLineupsForTeam(currentTeamId, lineupConfigs);
+                lineupReserves = loadFromStorage(`salibandy_reserves_${currentTeamId}`, {});
+                lineupDrawings = loadFromStorage(`salibandy_drawings_${currentTeamId}`, {});
+                lineupDrawings = sanitizeDrawings(lineupDrawings);
+                lineupCourtPositions = loadFromStorage(`salibandy_positions_${currentTeamId}`, {});
+                lineupBalls = loadFromStorage(`salibandy_balls_${currentTeamId}`, {});
+                lineupCones = loadFromStorage(`salibandy_cones_${currentTeamId}`, {});
+                lineupOpponents = loadFromStorage(`salibandy_opponents_${currentTeamId}`, {});
+                lineupExtraPlayers = loadFromStorage(`salibandy_extra_players_${currentTeamId}`, {});
+                lineupTextNotes = loadFromStorage(`salibandy_text_notes_${currentTeamId}`, {});
+                lineupPages = loadFromStorage(`salibandy_pages_${currentTeamId}`, {});
+                teamEvents = loadTeamEvents(currentTeamId);
 
-            saveStateLocalOnly();
+                saveStateLocalOnly();
 
-            renderTeamDropdown();
-            renderTabs();
-            renderTacticalPageBadges();
-            updateRosterCounters();
-            renderRoster();
-            if (activeLineupKey === 'summary') {
-                renderSummaryView();
-            } else if (activeLineupKey === 'live') {
-                renderLiveView();
+                renderTeamDropdown();
+                renderTabs();
+                renderTacticalPageBadges();
+                updateRosterCounters();
+                renderRoster();
+                if (activeLineupKey === 'summary') {
+                    renderSummaryView();
+                } else if (activeLineupKey === 'live') {
+                    renderLiveView();
+                } else {
+                    renderActiveLineupSlots();
+                    renderCourtBoards();
+                }
             } else {
-                renderActiveLineupSlots();
-                renderCourtBoards();
+                renderTeamDropdown();
             }
 
             updateCloudSyncBadge(true);
@@ -2386,7 +2439,7 @@
         const list = getPosReserves(lineupKey, pos);
         if (!list.includes(playerId)) {
             list.push(playerId);
-            saveState();
+            saveState(true);
         }
     }
 
@@ -2395,7 +2448,7 @@
         const idx = list.indexOf(playerId);
         if (idx >= 0) {
             list.splice(idx, 1);
-            saveState();
+            saveState(true);
         }
     }
 
@@ -2411,7 +2464,7 @@
         const list = getGeneralReserves(lineupKey);
         if (!list.includes(playerId)) {
             list.push(playerId);
-            saveState();
+            saveState(true);
         }
     }
 
@@ -2420,7 +2473,7 @@
         const idx = list.indexOf(playerId);
         if (idx >= 0) {
             list.splice(idx, 1);
-            saveState();
+            saveState(true);
         }
     }
 
@@ -2456,7 +2509,10 @@
 
         // 2. Synchronize to shared team document if current team is shared or has shareId
         const curTeam = teams.find(t => t.id === currentTeamId);
-        const activeShareId = (curTeam && curTeam.shareId) ? curTeam.shareId : currentSharedTeamId;
+        let activeShareId = (curTeam && curTeam.shareId) ? curTeam.shareId : currentSharedTeamId;
+        if (!activeShareId && (currentTeamId === 'team_sekta' || currentTeamId === 'default_team' || (curTeam && (curTeam.name || '').toLowerCase().includes('sekta')))) {
+            activeShareId = 'st_team_sekta';
+        }
         if (activeShareId && !isViewerMode && window.SalibandyFirebase && window.SalibandyFirebase.isReady()) {
             if (sharedTeamSyncDebounceTimer) clearTimeout(sharedTeamSyncDebounceTimer);
             if (immediateSync) {
@@ -5843,8 +5899,15 @@
                     }
                 }
 
-                saveState();
-                renderSummaryView();
+                saveState(true);
+                if (activeLineupKey === 'summary') {
+                    renderSummaryView();
+                } else if (activeLineupKey === 'live') {
+                    renderLiveView();
+                } else {
+                    renderActiveLineupSlots();
+                    renderCourtBoards();
+                }
                 openAssignPlayerToLineupModal(player); // Refresh modal buttons
             });
         });
@@ -5875,8 +5938,15 @@
             }
         });
 
-        saveState();
-        renderSummaryView();
+        saveState(true);
+        if (activeLineupKey === 'summary') {
+            renderSummaryView();
+        } else if (activeLineupKey === 'live') {
+            renderLiveView();
+        } else {
+            renderActiveLineupSlots();
+            renderCourtBoards();
+        }
         document.getElementById('assign-player-modal')?.classList.remove('active');
         showToast(`${pName} poistettu kaikista kentällisistä!`);
     }
@@ -6765,18 +6835,22 @@
                     row._justDragged = false;
                     return;
                 }
-                if (e.target.dataset.action === 'summary-remove-slot') {
-                    const lk = e.target.dataset.lineup;
-                    const pos = e.target.dataset.pos;
+                const removeSlotBtn = e.target.closest('[data-action="summary-remove-slot"]');
+                if (removeSlotBtn) {
+                    e.stopPropagation();
+                    const lk = removeSlotBtn.dataset.lineup;
+                    const pos = removeSlotBtn.dataset.pos;
                     if (lineups[lk]) lineups[lk][pos] = '';
                     saveState(true);
                     renderLiveView();
                     return;
                 }
-                if (e.target.dataset.action === 'summary-remove-reserve') {
-                    const lk = e.target.dataset.lineup;
-                    const pos = e.target.dataset.pos;
-                    const rId = e.target.dataset.reserveId;
+                const removeReserveBtn = e.target.closest('[data-action="summary-remove-reserve"]');
+                if (removeReserveBtn) {
+                    e.stopPropagation();
+                    const lk = removeReserveBtn.dataset.lineup;
+                    const pos = removeReserveBtn.dataset.pos;
+                    const rId = removeReserveBtn.dataset.reserveId;
                     if (pos === 'general') {
                         removeGeneralReserve(lk, rId);
                     } else {
@@ -6812,7 +6886,7 @@
                 }
                 if (!lineups[tLk]) lineups[tLk] = createEmptyLineupSlots();
                 lineups[tLk][tPos] = pid;
-                saveState();
+                saveState(true);
                 renderLiveView();
                 const p = roster.find(x => x.id === pid);
                 showToast(`Siirretty varamiehistä: ${p ? p.name : 'Pelaaja'} ➔ ${getLineupName(tLk)} (${tPos}) 👍`);
@@ -6838,7 +6912,7 @@
                 lineups[sLk][sPos] = tPid;
                 lineups[tLk][tPos] = sPid;
 
-                saveState();
+                saveState(true);
                 renderLiveView();
                 showToast(`Vaihdettu paikat: ${sName} ⇄ ${tName} 🔄`);
             } else {
@@ -6846,7 +6920,7 @@
                 lineups[sLk][sPos] = '';
                 lineups[tLk][tPos] = sPid;
 
-                saveState();
+                saveState(true);
                 renderLiveView();
                 showToast(`Siirretty: ${sName} ➔ ${getLineupName(tLk)} (${tPos}) 👍`);
             }
@@ -7755,7 +7829,7 @@
                     } else {
                         assignPlayerToLineupSlot(lineupKey, pos, player.id);
                     }
-                    saveState();
+                    saveState(true);
                     renderActiveLineupSlots();
                     if (activeLineupKey === 'summary') {
                         renderSummaryView();
@@ -7907,7 +7981,7 @@
         if (!lineups[lineupKey]) lineups[lineupKey] = createEmptyLineupSlots();
         lineups[lineupKey][pos] = playerId;
 
-        saveState();
+        saveState(true);
         renderRoster();
         if (activeLineupKey === 'summary') {
             renderSummaryView();
@@ -9858,6 +9932,8 @@ If number is not visible, provide a number or null. Only return the JSON array.`
                     renderRoster();
                     if (activeLineupKey === 'summary') {
                         renderSummaryView();
+                    } else if (activeLineupKey === 'live') {
+                        renderLiveView();
                     } else {
                         renderActiveLineupSlots();
                         renderCourtBoards();
