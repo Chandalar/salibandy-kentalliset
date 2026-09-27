@@ -153,22 +153,49 @@
                logo.includes('.svg');
     }
 
-    function normalizeTeamKey(nameOrId) {
+    function isLocalDraftTeam(team) {
+        if (!team) return false;
+        if (team.isLocalDraft === true) return true;
+        if (String(team.id || '').startsWith('local_')) return true;
+        const nameLow = (team.name || '').toLowerCase();
+        if (nameLow.includes('luonnos') || nameLow.includes('lokaali') || nameLow.includes('oma kopio')) return true;
+        return false;
+    }
+
+    function normalizeTeamKey(nameOrId, teamObj) {
+        if (teamObj && isLocalDraftTeam(teamObj)) {
+            return 'local_' + teamObj.id;
+        }
         if (!nameOrId) return '';
         const s = String(nameOrId).trim().toLowerCase().replace(/^🤝\s*/, '').trim();
-        if (s === 'team_sekta' || s === 'default_team' || s === 'st_team_sekta' || s === 'shared_st_team_sekta' || s.includes('sekta')) {
+        if (s.includes('luonnos') || s.includes('lokaali') || s.includes('oma kopio') || s.startsWith('local_')) {
+            return 'local_' + s;
+        }
+        if (s === 'team_sekta' || s === 'default_team' || s === 'st_team_sekta' || s === 'shared_st_team_sekta' || s === 'sekta' || s.startsWith('sekta ') || s.includes('sekta')) {
             return 'sekta';
         }
-        if (s === 'team_akatemia' || s === 'team_fbc_akatemia' || s === 'team_1786787084772' || s === 'st_team_akatemia' || s === 'shared_st_team_akatemia' || s.includes('akatemia')) {
+        if (s === 'team_akatemia' || s === 'team_fbc_akatemia' || s === 'team_1786787084772' || s === 'st_team_akatemia' || s === 'shared_st_team_akatemia' || s === 'akatemia' || s.includes('akatemia')) {
             return 'akatemia';
         }
-        if (s === 'team_edustus' || s.includes('edustus')) {
+        if (s === 'team_edustus' || s === 'st_team_edustus' || s.includes('edustus')) {
             return 'edustus';
         }
-        if (s === 'team_junnut' || s.includes('junnut') || s.includes('juniorit')) {
+        if (s === 'team_junnut' || s === 'st_team_junnut' || s.includes('junnut') || s.includes('juniorit')) {
             return 'junnut';
         }
-        return s.replace(/[^a-z0-9]/g, '');
+        return '';
+    }
+
+    function getTeamCanonicalKey(t) {
+        if (!t) return '';
+        if (isLocalDraftTeam(t)) return 'local_' + (t.id || 'draft');
+        const byId = normalizeTeamKey(t.id, t);
+        if (byId) return byId;
+        const byName = normalizeTeamKey(t.name, t);
+        if (byName) return byName;
+        const byShare = normalizeTeamKey(t.shareId, t);
+        if (byShare) return byShare;
+        return String(t.id || t.name || '').replace(/[^a-z0-9_]/gi, '');
     }
 
     function deduplicateTeams(rawTeams) {
@@ -181,7 +208,7 @@
         rawTeams.forEach(t => {
             if (!t || !t.id || deletedIds.includes(t.id)) return;
             const cleanName = (t.name || '').replace(/^🤝\s*/, '').trim();
-            const normKey = normalizeTeamKey(t.id) || normalizeTeamKey(cleanName);
+            const normKey = getTeamCanonicalKey(t);
             const mapKey = normKey || ('id_' + t.id);
 
             if (!mergedMap.has(mapKey)) {
@@ -215,7 +242,9 @@
                     canonTeam.shareId = 'st_team_junnut';
                 } else {
                     canonTeam.name = cleanName || 'Joukkue';
-                    if (!canonTeam.shareId) canonTeam.shareId = 'st_' + String(canonTeam.id).replace(/[^a-zA-Z0-9_]/g, '');
+                    if (!isLocalDraftTeam(canonTeam) && !canonTeam.shareId) {
+                        canonTeam.shareId = 'st_' + String(canonTeam.id).replace(/[^a-zA-Z0-9_]/g, '');
+                    }
                 }
                 mergedMap.set(mapKey, canonTeam);
             } else {
@@ -256,11 +285,11 @@
         });
 
         const result = Array.from(mergedMap.values());
-        if (!result.some(t => normalizeTeamKey(t.id) === 'sekta')) {
+        if (!result.some(t => getTeamCanonicalKey(t) === 'sekta')) {
             result.unshift(JSON.parse(JSON.stringify(DEFAULT_TEAMS[0])));
         }
-        if (!result.some(t => normalizeTeamKey(t.id) === 'akatemia')) {
-            const sIdx = result.findIndex(t => normalizeTeamKey(t.id) === 'sekta');
+        if (!result.some(t => getTeamCanonicalKey(t) === 'akatemia')) {
+            const sIdx = result.findIndex(t => getTeamCanonicalKey(t) === 'sekta');
             if (sIdx !== -1) result.splice(sIdx + 1, 0, JSON.parse(JSON.stringify(DEFAULT_TEAMS[1])));
             else result.push(JSON.parse(JSON.stringify(DEFAULT_TEAMS[1])));
         }
@@ -272,12 +301,19 @@
 
     function isCloudTeam(team) {
         if (!team) return false;
+        if (isLocalDraftTeam(team)) return false;
+        if (team.shareId === null && team.isShared === false) return false;
+        if (String(team.id || '').startsWith('local_')) return false;
+
         if (CANONICAL_CLOUD_TEAM_IDS.includes(team.id)) return true;
         if (team.shareId && CANONICAL_CLOUD_SHARE_IDS.includes(team.shareId)) return true;
         if (currentSharedTeamId && (team.shareId === currentSharedTeamId || team.id === 'shared_' + currentSharedTeamId)) return true;
         if (String(team.id).startsWith('shared_')) return true;
+        
         const nameLow = (team.name || '').toLowerCase();
-        if (nameLow.includes('sekta') || nameLow.includes('akatemia') || nameLow.includes('edustus')) return true;
+        if (nameLow === 'sekta' || nameLow === 'fbc akatemia' || nameLow === 'akatemia' || nameLow === 'edustusjoukkue') {
+            return true;
+        }
         if (team.isShared === true || team.cloudSynced === true) return true;
         return false;
     }
@@ -1382,6 +1418,14 @@
                 </div>
             </div>
 
+            <div style="background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.35); border-radius: 8px; padding: 12px; margin-bottom: 12px;">
+                <div style="font-size: 0.76rem; font-weight: 700; color: #93c5fd; margin-bottom: 4px;">💾 Oma lokaali luonnos (Yksityinen kokeilu)</div>
+                <p style="font-size: 0.78rem; color: #cbd5e1; margin: 0 0 8px 0; line-height: 1.35;">
+                    Haluatko tehdä omia kokeiluja kentällisistä ilman, että ne näkyvät muille? Monista tämä joukkue omaksi luonnokseksi!
+                </p>
+                <button type="button" class="btn-tool primary" id="btn-simple-modal-copy-local" style="width: 100%; padding: 8px 12px; font-size: 0.82rem; font-weight: 700;">📋 Monista omaksi lokaaliksi luonnokseksi</button>
+            </div>
+
             <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 6px;">
                 <button type="button" id="btn-simple-regenerate-link" style="background: none; border: none; color: #ef4444; font-size: 0.75rem; cursor: pointer; padding: 4px 0; text-decoration: underline;">
                     🔄 Luo uusi jakotunniste (jos haluat mitätöidä vanhan)
@@ -1398,6 +1442,9 @@
         });
         document.getElementById('btn-copy-adv-link')?.addEventListener('click', () => {
             navigator.clipboard.writeText(advUrl).then(() => showToast('Fläppitaulun jakolinkki kopioitu! 📋'));
+        });
+        document.getElementById('btn-simple-modal-copy-local')?.addEventListener('click', () => {
+            duplicateTeamAsLocal();
         });
         document.getElementById('btn-simple-regenerate-link')?.addEventListener('click', () => {
             if (confirm(`Haluatko luoda uuden jakotunnisteen joukkueelle '${teamName}'? Vanhat jakolinkit lakkaavat toimimasta.`)) {
@@ -1564,35 +1611,140 @@
         }
     }
 
+    function switchTeam(teamId) {
+        saveToStorageLocalOnly();
+        currentTeamId = teamId;
+        localStorage.setItem('salibandy_active_team_id', JSON.stringify(currentTeamId));
+        loadState(currentTeamId);
+        renderAll(true);
+
+        const selectedTeam = teams.find(t => t.id === currentTeamId);
+        if (selectedTeam && selectedTeam.shareId) {
+            listenToSharedTeamFirestore(selectedTeam.shareId);
+        } else if (unsubscribeSharedTeam) {
+            unsubscribeSharedTeam();
+            unsubscribeSharedTeam = null;
+        }
+
+        showToast(`Joukkue vaihdettu: ${teams.find(t => t.id === currentTeamId)?.name || ''}`);
+    }
+
+    function duplicateTeamAsLocal(sourceTeamId) {
+        const srcId = sourceTeamId || currentTeamId;
+        const srcTeam = teams.find(t => t.id === srcId) || teams[0];
+        if (!srcTeam) {
+            showToast('Joukkuetta ei löydy.', 'error');
+            return;
+        }
+
+        const baseName = (srcTeam.name || 'Joukkue').replace(/^🤝\s*/, '').replace(/\s*\(Oma luonnos.*?\)/gi, '').replace(/\s*\(Lokaali.*?\)/gi, '').trim();
+        const newTeamName = `${baseName} (Oma luonnos)`;
+        const newTeamId = 'local_' + Date.now();
+
+        const newTeam = {
+            id: newTeamId,
+            name: newTeamName,
+            logo: srcTeam.logo || '🏑',
+            photo: srcTeam.photo || srcTeam.logo || '',
+            primaryColor: srcTeam.primaryColor || '#2563eb',
+            secondaryColor: srcTeam.secondaryColor || '#1e40af',
+            mvColor: srcTeam.mvColor || '#10b981',
+            arena: srcTeam.arena || srcTeam.arenaName || 'Kotiareena',
+            arenaName: srcTeam.arenaName || srcTeam.arena || 'Kotiareena',
+            eventsUrl: srcTeam.eventsUrl || srcTeam.nimenhuutoUrl || '',
+            nimenhuutoUrl: srcTeam.nimenhuutoUrl || srcTeam.eventsUrl || '',
+            isLocalDraft: true,
+            isShared: false,
+            shareId: null,
+            cloudSynced: false
+        };
+
+        // 1. Copy roster
+        const rawRoster = localStorage.getItem('salibandy_roster_' + srcId);
+        const clonedRoster = rawRoster ? JSON.parse(rawRoster) : JSON.parse(JSON.stringify(roster || []));
+        localStorage.setItem(`salibandy_roster_${newTeamId}`, JSON.stringify(clonedRoster));
+
+        // 2. Copy lineups
+        const rawLineups = localStorage.getItem('salibandy_lineups_' + srcId);
+        const clonedLineups = rawLineups ? JSON.parse(rawLineups) : JSON.parse(JSON.stringify(lineups || {}));
+        localStorage.setItem(`salibandy_lineups_${newTeamId}`, JSON.stringify(clonedLineups));
+
+        // 3. Copy other keys
+        const dataKeys = ['reserves', 'events', 'active_event_id'];
+        dataKeys.forEach(k => {
+            try {
+                const val = localStorage.getItem(`salibandy_${k}_${srcId}`);
+                if (val) localStorage.setItem(`salibandy_${k}_${newTeamId}`, val);
+            } catch(e) {}
+        });
+
+        // 4. Add to teams list and persist
+        teams.push(newTeam);
+        localStorage.setItem('salibandy_teams_v1', JSON.stringify(teams));
+
+        // 5. Switch to the newly created local team
+        switchTeam(newTeamId);
+
+        // Close share modal if open
+        shareModal?.classList.remove('active');
+
+        showToast(`✨ Luotu oma lokaali kopio: "${newTeamName}"! Voit tehdä muutoksia vapaasti, ne eivät näy muille.`);
+    }
+
     function deleteActiveTeam() {
         if (teams.length <= 1) {
-            showToast('Et voi poistaa ainoaa joukkuetta.');
+            showToast('Et voi poistaa ainoaa joukkuetta.', 'warning');
             return;
         }
 
         const team = teams.find(t => t.id === currentTeamId);
         if (!team) return;
 
-        if (currentTeamId === 'team_sekta' || currentTeamId === 'default_team' || (team.name && team.name.toLowerCase().includes('sekta'))) {
-            showToast('SekTa-pääjoukkuetta ei voi poistaa.', 'warning');
-            return;
-        }
+        const isLocalDraft = isLocalDraftTeam(team);
+        const canonKey = getTeamCanonicalKey(team);
 
-        if (currentTeamId === 'team_akatemia' || currentTeamId === 'team_fbc_akatemia' || currentTeamId === 'team_1786787084772' || (team.name && team.name.toLowerCase().includes('akatemia'))) {
-            showToast('⚠️ Joukkuetta "FBC Akatemia" ei voi poistaa!', 'warning');
-            return;
-        }
-
-        if (confirm(`Haluatko varmasti poistaa joukkueen '${team.name}' kaikkine pelaajineen ja kentällisineen?`)) {
-            const deleteId = currentTeamId;
-
-            // 1. Stop shared listener
-            if (unsubscribeSharedTeam && (team.shareId || currentSharedTeamId === team.shareId)) {
-                unsubscribeSharedTeam();
-                unsubscribeSharedTeam = null;
+        if (isLocalDraft) {
+            if (!confirm(`Haluatko varmasti poistaa lokaalin luonnosjoukkueen '${team.name}' kaikkine pelaajineen ja kentällisineen?`)) {
+                return;
             }
+        } else if (canonKey === 'sekta') {
+            const otherSekta = teams.filter(t => t.id !== currentTeamId && getTeamCanonicalKey(t) === 'sekta');
+            if (otherSekta.length > 0) {
+                if (!confirm(`Haluatko poistaa tämän ylimääräisen SekTa-joukkueen?`)) {
+                    return;
+                }
+            } else {
+                if (!confirm(`SekTa on pääjoukkue. Haluatko varmasti poistaa sen listalta? (Voit luoda sen tai liittyä siihen myöhemmin uudestaan).`)) {
+                    return;
+                }
+            }
+        } else if (canonKey === 'akatemia') {
+            const otherAkatemia = teams.filter(t => t.id !== currentTeamId && getTeamCanonicalKey(t) === 'akatemia');
+            if (otherAkatemia.length > 0) {
+                if (!confirm(`Haluatko poistaa tämän ylimääräisen Akatemia-joukkueen?`)) {
+                    return;
+                }
+            } else {
+                if (!confirm(`Haluatko varmasti poistaa joukkueen '${team.name}'?`)) {
+                    return;
+                }
+            }
+        } else {
+            if (!confirm(`Haluatko varmasti poistaa joukkueen '${team.name}' kaikkine pelaajineen ja kentällisineen?`)) {
+                return;
+            }
+        }
 
-            // 2. Add to deletedTeamIds
+        const deleteId = currentTeamId;
+
+        // 1. Stop shared listener
+        if (unsubscribeSharedTeam && (team.shareId || currentSharedTeamId === team.shareId)) {
+            unsubscribeSharedTeam();
+            unsubscribeSharedTeam = null;
+        }
+
+        // 2. Add to deletedTeamIds
+        if (!isLocalDraft) {
             if (!deletedTeamIds.includes(deleteId)) {
                 deletedTeamIds.push(deleteId);
             }
@@ -1605,51 +1757,27 @@
                 }
             }
             localStorage.setItem('salibandy_deleted_team_ids', JSON.stringify(deletedTeamIds));
-
-            // 3. Filter teams
-            teams = teams.filter(t => t.id !== deleteId && !deletedTeamIds.includes(t.id));
-            if (teams.length === 0) {
-                teams = JSON.parse(JSON.stringify(DEFAULT_TEAMS));
-            }
-
-            // 4. Remove localStorage items
-            localStorage.removeItem(`salibandy_roster_${deleteId}`);
-            localStorage.removeItem(`salibandy_lineups_${deleteId}`);
-            localStorage.removeItem(`salibandy_reserves_${deleteId}`);
-            localStorage.removeItem(`salibandy_events_${deleteId}`);
-            localStorage.removeItem(`salibandy_active_event_id_${deleteId}`);
-
-            // 5. Select next team
-            const nextTeamId = teams[0].id;
-            currentTeamId = nextTeamId;
-            localStorage.setItem('salibandy_active_team_id', JSON.stringify(currentTeamId));
-            loadState(currentTeamId);
-
-            // 6. Cancel pending debounce
-            if (cloudSyncDebounceTimer) {
-                clearTimeout(cloudSyncDebounceTimer);
-                cloudSyncDebounceTimer = null;
-            }
-
-            // 7. Write to Firestore immediately without merge: true
-            if (currentUser && window.SalibandyFirebase && window.SalibandyFirebase.isReady()) {
-                const db = window.SalibandyFirebase.getDb();
-                const payload = buildFullCloudPayload();
-                lastLoadedCloudPayloadString = JSON.stringify(payload);
-                db.collection('users').doc(currentUser.uid).set(payload)
-                    .then(() => updateCloudButtonUI(true))
-                    .catch(err => console.warn('[Simple] Immediate Firestore delete write error:', err));
-            }
-
-            // 8. Re-render
-            renderAll(true);
-            const activeTeam = teams.find(t => t.id === currentTeamId);
-            if (activeTeam && activeTeam.shareId) {
-                listenToSharedTeamFirestore(activeTeam.shareId);
-            }
-
-            showToast(`Joukkue '${team.name}' poistettu pysyvästi.`);
         }
+
+        // 3. Filter teams
+        teams = teams.filter(t => t.id !== deleteId);
+        if (teams.length === 0) {
+            teams = JSON.parse(JSON.stringify(DEFAULT_TEAMS));
+        }
+        localStorage.setItem('salibandy_teams_v1', JSON.stringify(teams));
+
+        // 4. Remove localStorage items
+        localStorage.removeItem(`salibandy_roster_${deleteId}`);
+        localStorage.removeItem(`salibandy_lineups_${deleteId}`);
+        localStorage.removeItem(`salibandy_reserves_${deleteId}`);
+        localStorage.removeItem(`salibandy_events_${deleteId}`);
+        localStorage.removeItem(`salibandy_active_event_id_${deleteId}`);
+
+        // 5. Select next team
+        const nextTeamId = teams[0].id;
+        switchTeam(nextTeamId);
+
+        showToast(`🗑️ Joukkue '${team.name}' poistettu onnistuneesti.`);
     }
 
     function openTeamCustomizeModal() {
@@ -1843,9 +1971,9 @@
         const seenKeys = new Set();
         teams.forEach(t => {
             if (!t || !t.id || deletedTeamIds.includes(t.id)) return;
-            const normKey = normalizeTeamKey(t.id) || normalizeTeamKey(t.name) || t.id;
-            if (seenKeys.has(normKey)) return;
-            seenKeys.add(normKey);
+            const canonKey = getTeamCanonicalKey(t);
+            if (seenKeys.has(canonKey)) return;
+            seenKeys.add(canonKey);
 
             const opt = document.createElement('option');
             opt.value = t.id;
@@ -1856,7 +1984,9 @@
             const statusTag = isCloud ? '☁️ [Pilvi]' : '💾 [Lokaali]';
             opt.textContent = `${emojiPrefix}${safeName} ${statusTag}`;
 
-            if (t.id === currentTeamId || normKey === normalizeTeamKey(currentTeamId)) opt.selected = true;
+            if (t.id === currentTeamId || canonKey === getTeamCanonicalKey(teams.find(x => x.id === currentTeamId))) {
+                opt.selected = true;
+            }
             teamSelect.appendChild(opt);
         });
 
@@ -4020,6 +4150,7 @@ If no number is visible, provide a number or null. Only return the JSON array.`;
         });
 
         document.getElementById('btn-simple-delete-team')?.addEventListener('click', deleteActiveTeam);
+        document.getElementById('btn-simple-copy-local')?.addEventListener('click', () => duplicateTeamAsLocal());
 
         // Event change
         eventSelect?.addEventListener('change', (e) => {

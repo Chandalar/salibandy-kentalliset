@@ -135,8 +135,24 @@ body {
     padding: 0.2rem 0.5rem;
     outline: none;
     cursor: pointer;
-    max-width: 140px;
+    max-width: 220px;
+    min-width: 120px;
     text-overflow: ellipsis;
+}
+
+.highlight-copy-local {
+    background: rgba(59, 130, 246, 0.12) !important;
+    border-color: rgba(96, 165, 250, 0.45) !important;
+    color: #93c5fd !important;
+    font-weight: 700 !important;
+    transition: all 0.18s ease;
+}
+
+.highlight-copy-local:hover {
+    background: rgba(59, 130, 246, 0.28) !important;
+    border-color: rgba(96, 165, 250, 0.8) !important;
+    color: #ffffff !important;
+    box-shadow: 0 0 10px rgba(59, 130, 246, 0.35);
 }
 
 .header-stats {

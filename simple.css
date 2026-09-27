@@ -90,10 +90,23 @@ body {
     font-size: 0.85rem;
     font-weight: 700;
     font-family: var(--font-heading);
-    max-width: 140px;
+    max-width: 170px;
     min-width: 0;
     outline: none;
     text-overflow: ellipsis;
+}
+
+.highlight-copy-local {
+    background: rgba(59, 130, 246, 0.12) !important;
+    border-color: rgba(96, 165, 250, 0.45) !important;
+    color: #93c5fd !important;
+    font-weight: 700 !important;
+    transition: all 0.15s ease;
+}
+
+.highlight-copy-local:hover, .highlight-copy-local:active {
+    background: rgba(59, 130, 246, 0.28) !important;
+    color: #ffffff !important;
 }
 
 .header-right {

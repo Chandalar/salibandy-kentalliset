@@ -17,7 +17,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 
     <!-- CSS Stylesheet (Cache Busted v70.0) -->
-    <link rel="stylesheet" href="styles.css?v=71.0">
+    <link rel="stylesheet" href="styles.css?v=72.0">
 
     <!-- Smart Mobile/Tablet Auto-Routing to Simple Mode -->
     <script>
@@ -101,6 +101,7 @@
                 <div class="team-selector-wrapper">
                     <select id="team-select" class="team-dropdown"></select>
                     <div id="advanced-team-sync-badge" class="team-sync-badge" title="Joukkueen tila (Pilvi / Lokaali)"></div>
+                    <button class="btn-xs btn-outline highlight-copy-local" id="btn-copy-team-local" title="Kopioi tämä joukkue omaksi lokaaliksi luonnokseksi (muutokset eivät näy muille)">📋 Kopioi lokaaliksi</button>
                     <a href="simple.html" class="btn-xs btn-primary highlight-simple-app" id="btn-mobile-quick-simple" title="Siirry supernopeaan Kevytversioon (Kännykälle suositeltu)">⚡ Kevytversio</a>
                     <button class="btn-xs btn-outline highlight-customize" id="btn-customize-team" title="Muokkaa joukkueen logoa, värejä, areenaa ja asetuksia">🎨 Kustomoi</button>
                     <button class="btn-xs btn-outline" id="btn-new-team" title="Uusi joukkue">+ Uusi</button>
@@ -746,6 +747,20 @@
                 </div>
             </div>
 
+            <!-- Duplicate as Local Team Box -->
+            <div class="share-link-box" style="margin-top: 1rem; border-color: rgba(59, 130, 246, 0.4); background: rgba(59, 130, 246, 0.08); border-radius: 8px; padding: 10px 12px;">
+                <div class="share-link-header" style="margin-bottom: 4px;">
+                    <span class="share-link-badge" style="background: rgba(59, 130, 246, 0.2); color: #93c5fd; border: 1px solid rgba(59, 130, 246, 0.35); font-weight: 700; padding: 2px 8px; border-radius: 4px;">💾 Oma lokaali luonnos</span>
+                    <small style="color: #94a3b8; font-size: 0.72rem;">Yksityinen kokeilu tällä laitteella</small>
+                </div>
+                <p style="font-size: 0.78rem; color: #cbd5e1; margin: 4px 0 8px 0; line-height: 1.35;">
+                    Haluatko kokeilla uusia kentällisiä ilman, että ne näkyvät muille valmentajille tai pelaajille? Monista tämä joukkue omaksi lokaaliksi luonnokseksi!
+                </p>
+                <button type="button" class="btn btn-sm btn-primary" id="btn-share-modal-copy-local" style="width: 100%; font-weight: 700;">
+                    📋 Monista omaksi lokaaliksi luonnokseksi
+                </button>
+            </div>
+
             <div class="modal-actions" style="margin-top: 1.2rem; justify-content: space-between;">
                 <button type="button" class="btn-xs btn-outline danger-text" id="btn-regenerate-share-link" title="Luo uusi tunniste jos vanha linkki halutaan mitätöidä">
                     🔄 Luo uusi jakotunniste
@@ -1304,9 +1319,9 @@ Out:
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
-    <!-- Core Application Logic (Cache Busted v71.0) -->
-    <script src="firebase-config.js?v=71.0"></script>
-    <script src="app.js?v=71.0"></script>
+    <!-- Core Application Logic (Cache Busted v72.0) -->
+    <script src="firebase-config.js?v=72.0"></script>
+    <script src="app.js?v=72.0"></script>
 
 </body>
 </html>
