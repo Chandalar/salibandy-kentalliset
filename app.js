@@ -670,6 +670,37 @@
     let liveRosterSearchQuery = '';
     let selectedPlayerForAttendance = null;
     let draggedLiveSlot = null;
+    let lastLocalMutationAt = 0;
+
+    function getDeletedPlayerIds(teamId) {
+        const tId = teamId || currentTeamId;
+        if (!tId) return [];
+        try {
+            const raw = localStorage.getItem('salibandy_deleted_player_ids_' + tId);
+            return raw ? JSON.parse(raw) : [];
+        } catch(e) {
+            return [];
+        }
+    }
+
+    function addDeletedPlayerId(playerId, teamId) {
+        if (!playerId) return;
+        const tId = teamId || currentTeamId;
+        if (!tId) return;
+        const list = getDeletedPlayerIds(tId);
+        if (!list.includes(playerId)) {
+            list.push(playerId);
+            try {
+                localStorage.setItem('salibandy_deleted_player_ids_' + tId, JSON.stringify(list));
+            } catch(e){}
+        }
+        if (tId === 'team_sekta' || tId === 'default_team') {
+            const alt = (tId === 'team_sekta') ? 'default_team' : 'team_sekta';
+            try {
+                localStorage.setItem('salibandy_deleted_player_ids_' + alt, JSON.stringify(list));
+            } catch(e){}
+        }
+    }
 
     function filterLineupConfigsByGroup(configs, groupFilter) {
         if (!configs || !Array.isArray(configs)) return [];
@@ -1003,7 +1034,8 @@
                 textNotes: lineupTextNotes,
                 gridPaper: lineupGridPaper,
                 pages: lineupPages,
-                events: teamEvents
+                events: teamEvents,
+                deletedPlayerIds: getDeletedPlayerIds(currentTeamId)
             };
             db.collection('shared_teams').doc(shareId).set(payload, { merge: true }).then(() => {
                 console.log(`[Advanced] Shared team '${cleanTeamName}' synced to cloud (${shareId})`);
@@ -1077,6 +1109,12 @@
                 return;
             }
 
+            // Skip snapshot if local mutation occurred AFTER remote doc timestamp
+            if (data._lastModifiedAt && lastLocalMutationAt && data._lastModifiedAt < lastLocalMutationAt) {
+                console.log(`[Advanced][${clientInstanceId}] Ignoring stale remote snapshot prior to local mutation (${data._lastModifiedAt} < ${lastLocalMutationAt})`);
+                return;
+            }
+
             const meta = data.teamMeta || {};
             const sharedTeamName = meta.name || data.teamName || 'Jaettu joukkue';
             const cleanSharedName = sharedTeamName.replace(/^🤝\s*/, '').trim();
@@ -1145,10 +1183,24 @@
             const activeMatch = teams.find(t => t.shareId === shareId || (normKey && normalizeTeamKey(t.id) === normKey));
             if (activeMatch) currentTeamId = activeMatch.id;
 
-            if (data.roster) roster = data.roster;
+            // Merge deletedPlayerIds
+            if (data.deletedPlayerIds && Array.isArray(data.deletedPlayerIds)) {
+                data.deletedPlayerIds.forEach(id => addDeletedPlayerId(id, currentTeamId));
+            }
+            const allDeletedPlayers = getDeletedPlayerIds(currentTeamId);
+
+            if (data.roster && Array.isArray(data.roster)) {
+                roster = data.roster.filter(p => p && !allDeletedPlayers.includes(p.id));
+            }
             if (data.lineupConfigs) lineupConfigs = data.lineupConfigs;
             if (data.lineups) {
                 lineups = data.lineups;
+                // Purge any slots holding deleted players
+                Object.keys(lineups).forEach(k => {
+                    Object.keys(lineups[k] || {}).forEach(pos => {
+                        if (allDeletedPlayers.includes(lineups[k][pos])) lineups[k][pos] = '';
+                    });
+                });
                 // Lineup bridging: if incoming came from Simple mode (yv1/av1/6v5_1) and Advanced keys are empty
                 if (lineups['yv1'] && (!lineups['yv'] || !Object.values(lineups['yv']).some(Boolean))) {
                     lineups['yv'] = { ...lineups['yv1'] };
@@ -1937,8 +1989,9 @@
                         localStorage.removeItem(`salibandy_roster_${tId}`);
                         return;
                     }
-                    let cloudRoster = cloudData.rosters[tId] || [];
-                    let localRoster = loadFromStorage(`salibandy_roster_${tId}`, []);
+                    const delIds = getDeletedPlayerIds(tId);
+                    let cloudRoster = (cloudData.rosters[tId] || []).filter(p => p && !delIds.includes(p.id));
+                    let localRoster = loadFromStorage(`salibandy_roster_${tId}`, []).filter(p => p && !delIds.includes(p.id));
 
                     const mergedRosterMap = {};
                     cloudRoster.forEach(p => { mergedRosterMap[p.id] = p; });
@@ -1949,7 +2002,7 @@
                         }
                     });
 
-                    const finalRoster = Object.values(mergedRosterMap);
+                    const finalRoster = Object.values(mergedRosterMap).filter(p => p && !delIds.includes(p.id));
                     localStorage.setItem(`salibandy_roster_${tId}`, JSON.stringify(finalRoster));
                 });
             }
@@ -2143,9 +2196,10 @@
     }
 
     function loadRosterForTeam(teamId) {
+        const isRosterInit = localStorage.getItem('salibandy_roster_initialized_' + teamId) === 'true';
         let stored = loadFromStorage(`salibandy_roster_${teamId}`, null);
         const isSekta = teamId === 'team_sekta' || teamId === 'default_team' || (teams && teams.some(t => t && t.id === teamId && (t.name || '').toLowerCase().includes('sekta')));
-        if ((!stored || !Array.isArray(stored) || stored.length === 0) && isSekta) {
+        if (!isRosterInit && (!stored || !Array.isArray(stored) || stored.length === 0) && isSekta) {
             const altKey = (teamId === 'team_sekta') ? 'salibandy_roster_default_team' : 'salibandy_roster_team_sekta';
             const alt = loadFromStorage(altKey, null);
             if (alt && Array.isArray(alt) && alt.length > 0) {
@@ -2154,10 +2208,11 @@
                 stored = JSON.parse(JSON.stringify(DEFAULT_ROSTER));
             }
             localStorage.setItem(`salibandy_roster_${teamId}`, JSON.stringify(stored));
+            localStorage.setItem('salibandy_roster_initialized_' + teamId, 'true');
         }
 
         const isAkatemia = teamId === 'team_akatemia' || teamId === 'team_fbc_akatemia' || teamId === 'team_1786787084772' || (teams && teams.some(t => t && t.id === teamId && (t.name || '').toLowerCase().includes('akatemia')));
-        if ((!stored || !Array.isArray(stored) || stored.length === 0) && isAkatemia) {
+        if (!isRosterInit && (!stored || !Array.isArray(stored) || stored.length === 0) && isAkatemia) {
             const altKeys = ['salibandy_roster_team_akatemia', 'salibandy_roster_team_fbc_akatemia', 'salibandy_roster_team_1786787084772'];
             for (const k of altKeys) {
                 if (k === `salibandy_roster_${teamId}`) continue;
@@ -2171,9 +2226,14 @@
                 stored = JSON.parse(JSON.stringify(DEFAULT_AKATEMIA_ROSTER));
             }
             localStorage.setItem(`salibandy_roster_${teamId}`, JSON.stringify(stored));
+            localStorage.setItem('salibandy_roster_initialized_' + teamId, 'true');
         }
 
-        return (stored && Array.isArray(stored)) ? stored : [];
+        const delIds = getDeletedPlayerIds(teamId);
+        if (stored && Array.isArray(stored)) {
+            return stored.filter(p => p && !delIds.includes(p.id));
+        }
+        return [];
     }
 
     function createEmptyLineupSlots() {
@@ -2181,9 +2241,10 @@
     }
 
     function loadLineupsForTeam(teamId, configs) {
+        const isLineupsInit = localStorage.getItem('salibandy_lineups_initialized_' + teamId) === 'true';
         let stored = loadFromStorage(`salibandy_lineups_${teamId}`, null);
         const isSekta = teamId === 'team_sekta' || teamId === 'default_team' || (teams && teams.some(t => t && t.id === teamId && (t.name || '').toLowerCase().includes('sekta')));
-        if ((!stored || typeof stored !== 'object' || Object.keys(stored).length === 0) && isSekta) {
+        if (!isLineupsInit && (!stored || typeof stored !== 'object' || Object.keys(stored).length === 0) && isSekta) {
             const altKey = (teamId === 'team_sekta') ? 'salibandy_lineups_default_team' : 'salibandy_lineups_team_sekta';
             const alt = loadFromStorage(altKey, null);
             if (alt && typeof alt === 'object' && Object.keys(alt).length > 0) {
@@ -2192,10 +2253,11 @@
                 stored = JSON.parse(JSON.stringify(DEFAULT_LINEUPS));
             }
             localStorage.setItem(`salibandy_lineups_${teamId}`, JSON.stringify(stored));
+            localStorage.setItem('salibandy_lineups_initialized_' + teamId, 'true');
         }
 
         const isAkatemia = teamId === 'team_akatemia' || teamId === 'team_fbc_akatemia' || teamId === 'team_1786787084772' || (teams && teams.some(t => t && t.id === teamId && (t.name || '').toLowerCase().includes('akatemia')));
-        if ((!stored || typeof stored !== 'object' || Object.keys(stored).length === 0 || !Object.values(stored['1'] || {}).some(Boolean)) && isAkatemia) {
+        if (!isLineupsInit && (!stored || typeof stored !== 'object' || Object.keys(stored).length === 0 || !Object.values(stored['1'] || {}).some(Boolean)) && isAkatemia) {
             const altKeys = ['salibandy_lineups_team_akatemia', 'salibandy_lineups_team_fbc_akatemia', 'salibandy_lineups_team_1786787084772'];
             for (const k of altKeys) {
                 if (k === `salibandy_lineups_${teamId}`) continue;
@@ -2209,9 +2271,18 @@
                 stored = JSON.parse(JSON.stringify(DEFAULT_AKATEMIA_LINEUPS));
             }
             localStorage.setItem(`salibandy_lineups_${teamId}`, JSON.stringify(stored));
+            localStorage.setItem('salibandy_lineups_initialized_' + teamId, 'true');
         }
 
+        const delIds = getDeletedPlayerIds(teamId);
         if (stored && typeof stored === 'object' && Object.keys(stored).length > 0) {
+            if (delIds.length > 0) {
+                Object.keys(stored).forEach(lk => {
+                    Object.keys(stored[lk] || {}).forEach(pos => {
+                        if (delIds.includes(stored[lk][pos])) stored[lk][pos] = '';
+                    });
+                });
+            }
             if (configs && Array.isArray(configs)) {
                 configs.forEach(c => {
                     if (!stored[c.id]) {
@@ -2255,6 +2326,8 @@
             localStorage.setItem(`salibandy_roster_${currentTeamId}`, JSON.stringify(roster));
             localStorage.setItem(`salibandy_lineup_configs_${currentTeamId}`, JSON.stringify(lineupConfigs));
             localStorage.setItem(`salibandy_lineups_${currentTeamId}`, JSON.stringify(lineups));
+            localStorage.setItem('salibandy_roster_initialized_' + currentTeamId, 'true');
+            localStorage.setItem('salibandy_lineups_initialized_' + currentTeamId, 'true');
             localStorage.setItem(`salibandy_reserves_${currentTeamId}`, JSON.stringify(lineupReserves));
             localStorage.setItem(`salibandy_drawings_${currentTeamId}`, JSON.stringify(lineupDrawings));
             localStorage.setItem(`salibandy_positions_${currentTeamId}`, JSON.stringify(lineupCourtPositions));
@@ -2272,6 +2345,11 @@
             if (currentTeamId === 'team_sekta' || currentTeamId === 'default_team') {
                 const altKey = currentTeamId === 'team_sekta' ? 'default_team' : 'team_sekta';
                 localStorage.setItem(`salibandy_events_${altKey}`, JSON.stringify(teamEvents));
+                localStorage.setItem(`salibandy_roster_${altKey}`, JSON.stringify(roster));
+                localStorage.setItem(`salibandy_lineups_${altKey}`, JSON.stringify(lineups));
+                localStorage.setItem(`salibandy_reserves_${altKey}`, JSON.stringify(lineupReserves));
+                localStorage.setItem('salibandy_roster_initialized_' + altKey, 'true');
+                localStorage.setItem('salibandy_lineups_initialized_' + altKey, 'true');
                 if (activeEventId) {
                     localStorage.setItem(`salibandy_active_event_id_${altKey}`, JSON.stringify(activeEventId));
                 }
@@ -2280,6 +2358,11 @@
                 altKeys.forEach(ak => {
                     if (ak !== currentTeamId) {
                         localStorage.setItem(`salibandy_events_${ak}`, JSON.stringify(teamEvents));
+                        localStorage.setItem(`salibandy_roster_${ak}`, JSON.stringify(roster));
+                        localStorage.setItem(`salibandy_lineups_${ak}`, JSON.stringify(lineups));
+                        localStorage.setItem(`salibandy_reserves_${ak}`, JSON.stringify(lineupReserves));
+                        localStorage.setItem('salibandy_roster_initialized_' + ak, 'true');
+                        localStorage.setItem('salibandy_lineups_initialized_' + ak, 'true');
                         if (activeEventId) {
                             localStorage.setItem(`salibandy_active_event_id_${ak}`, JSON.stringify(activeEventId));
                         }
@@ -2344,13 +2427,14 @@
     let cloudSyncDebounceTimer = null;
     let sharedTeamSyncDebounceTimer = null;
 
-    function saveState() {
+    function saveState(immediateSync = false) {
+        lastLocalMutationAt = Date.now();
         saveStateLocalOnly();
 
         // 1. Synchronize to user's personal Firestore document if logged in
         if (currentUser && typeof window !== 'undefined' && window.SalibandyFirebase && window.SalibandyFirebase.isReady()) {
             if (cloudSyncDebounceTimer) clearTimeout(cloudSyncDebounceTimer);
-            cloudSyncDebounceTimer = setTimeout(() => {
+            const syncPersonal = () => {
                 if (isCloudLoading) return;
                 const db = window.SalibandyFirebase.getDb();
                 const payload = buildFullCloudPayload();
@@ -2362,7 +2446,12 @@
                     .catch(err => {
                         console.warn('Cloud Firestore save error:', err);
                     });
-            }, 1000);
+            };
+            if (immediateSync) {
+                syncPersonal();
+            } else {
+                cloudSyncDebounceTimer = setTimeout(syncPersonal, 1000);
+            }
         }
 
         // 2. Synchronize to shared team document if current team is shared or has shareId
@@ -2370,9 +2459,13 @@
         const activeShareId = (curTeam && curTeam.shareId) ? curTeam.shareId : currentSharedTeamId;
         if (activeShareId && !isViewerMode && window.SalibandyFirebase && window.SalibandyFirebase.isReady()) {
             if (sharedTeamSyncDebounceTimer) clearTimeout(sharedTeamSyncDebounceTimer);
-            sharedTeamSyncDebounceTimer = setTimeout(() => {
+            if (immediateSync) {
                 pushSharedTeamToCloud(activeShareId, curTeam);
-            }, 800);
+            } else {
+                sharedTeamSyncDebounceTimer = setTimeout(() => {
+                    pushSharedTeamToCloud(activeShareId, curTeam);
+                }, 800);
+            }
         }
     }
 
@@ -6676,7 +6769,7 @@
                     const lk = e.target.dataset.lineup;
                     const pos = e.target.dataset.pos;
                     if (lineups[lk]) lineups[lk][pos] = '';
-                    saveState();
+                    saveState(true);
                     renderLiveView();
                     return;
                 }
@@ -6689,7 +6782,7 @@
                     } else {
                         removePosReserve(lk, pos, rId);
                     }
-                    saveState();
+                    saveState(true);
                     renderLiveView();
                     return;
                 }
@@ -6780,7 +6873,7 @@
                 }
             }
 
-            saveState();
+            saveState(true);
             renderLiveView();
             showToast(`Poistettu kentällisestä: ${pName} ✕`);
         }
@@ -7909,15 +8002,41 @@
 
     function deletePlayer(id) {
         if (!confirm('Haluatko varmasti poistaa pelaajan ringistä?')) return;
+        lastLocalMutationAt = Date.now();
+        addDeletedPlayerId(id, currentTeamId);
         roster = roster.filter(p => p.id !== id);
         
         Object.keys(lineups).forEach(lk => {
-            Object.keys(lineups[lk]).forEach(pos => {
+            Object.keys(lineups[lk] || {}).forEach(pos => {
                 if (lineups[lk][pos] === id) lineups[lk][pos] = '';
             });
         });
 
-        saveState();
+        // Remove from reserves as well
+        if (lineupReserves) {
+            Object.keys(lineupReserves).forEach(k => {
+                if (Array.isArray(lineupReserves[k])) {
+                    lineupReserves[k] = lineupReserves[k].filter(pid => pid !== id);
+                } else if (lineupReserves[k] && typeof lineupReserves[k] === 'object') {
+                    Object.keys(lineupReserves[k]).forEach(subPos => {
+                        if (Array.isArray(lineupReserves[k][subPos])) {
+                            lineupReserves[k][subPos] = lineupReserves[k][subPos].filter(pid => pid !== id);
+                        }
+                    });
+                }
+            });
+        }
+
+        // Remove from event attendees
+        if (teamEvents && Array.isArray(teamEvents)) {
+            teamEvents.forEach(evt => {
+                if (evt && evt.attendees && evt.attendees[id]) {
+                    delete evt.attendees[id];
+                }
+            });
+        }
+
+        saveState(true);
         updateRosterCounters();
         renderRoster();
         if (activeLineupKey === 'summary') {
@@ -9430,7 +9549,7 @@ If number is not visible, provide a number or null. Only return the JSON array.`
                 const pos = removePlayerBtn.dataset.pos;
                 const courtId = removePlayerBtn.dataset.courtId;
                 if (lineups[activeLineupKey]) lineups[activeLineupKey][pos] = '';
-                saveState();
+                saveState(true);
                 renderActiveLineupSlots();
                 if (courtId) {
                     refreshCourtInstanceInPlace(courtId);
@@ -9735,7 +9854,7 @@ If number is not visible, provide a number or null. Only return the JSON array.`
             if (selectedSlotTarget.lineupKey && selectedSlotTarget.pos) {
                 if (lineups[selectedSlotTarget.lineupKey]) {
                     lineups[selectedSlotTarget.lineupKey][selectedSlotTarget.pos] = '';
-                    saveState();
+                    saveState(true);
                     renderRoster();
                     if (activeLineupKey === 'summary') {
                         renderSummaryView();
@@ -10348,7 +10467,7 @@ If number is not visible, provide a number or null. Only return the JSON array.`
                 e.stopPropagation();
                 const pos = removeBtn.dataset.pos;
                 lineups[activeLineupKey][pos] = '';
-                saveState();
+                saveState(true);
                 renderActiveLineupSlots();
                 renderCourtBoards();
                 return;

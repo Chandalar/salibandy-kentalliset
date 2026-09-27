@@ -29,6 +29,41 @@
     let simpleViewMode = localStorage.getItem('salibandy_simple_view_mode') || 'cards'; // 'cards' | 'rink'
     let simpleRinkActiveLine = '1';
 
+    // Drag & Drop & Local Mutation State
+    let draggedSlotData = null; // { type: 'simple-slot', sourceLineup, sourcePos, playerId }
+    let draggedRosterPlayerId = null;
+    let lastLocalMutationAt = 0;
+
+    function getDeletedPlayerIds(teamId) {
+        const tId = teamId || currentTeamId;
+        if (!tId) return [];
+        try {
+            const raw = localStorage.getItem('salibandy_deleted_player_ids_' + tId);
+            return raw ? JSON.parse(raw) : [];
+        } catch(e) {
+            return [];
+        }
+    }
+
+    function addDeletedPlayerId(playerId, teamId) {
+        if (!playerId) return;
+        const tId = teamId || currentTeamId;
+        if (!tId) return;
+        const list = getDeletedPlayerIds(tId);
+        if (!list.includes(playerId)) {
+            list.push(playerId);
+            try {
+                localStorage.setItem('salibandy_deleted_player_ids_' + tId, JSON.stringify(list));
+            } catch(e){}
+        }
+        if (tId === 'team_sekta' || tId === 'default_team') {
+            const alt = (tId === 'team_sekta') ? 'default_team' : 'team_sekta';
+            try {
+                localStorage.setItem('salibandy_deleted_player_ids_' + alt, JSON.stringify(list));
+            } catch(e){}
+        }
+    }
+
     function isPlayerIn1to4(playerId) {
         if (!playerId) return false;
         const lines1to4 = ['1', '2', '3', '4'];
@@ -638,9 +673,16 @@
 
             const rawRoster = localStorage.getItem('salibandy_roster_' + currentTeamId);
             roster = rawRoster ? JSON.parse(rawRoster) : [];
+            const isRosterInit = localStorage.getItem('salibandy_roster_initialized_' + currentTeamId);
 
-            // ONLY provide default SekTa/Akatemia roster if current team matches and roster is empty!
-            if (!roster || roster.length === 0) {
+            // Filter out any players that have been deleted
+            const deleted = getDeletedPlayerIds(currentTeamId);
+            if (Array.isArray(roster) && deleted.length > 0) {
+                roster = roster.filter(p => p && !deleted.includes(p.id));
+            }
+
+            // ONLY provide default SekTa/Akatemia roster if current team has NEVER been initialized
+            if (!isRosterInit && (!roster || roster.length === 0)) {
                 if (isSektaTeam) {
                     const altRoster1 = localStorage.getItem('salibandy_roster_default_team');
                     const altRoster2 = localStorage.getItem('salibandy_roster_team_sekta');
@@ -675,7 +717,11 @@
                             { id: 'p_66', name: 'Miika', number: 66, position: 'H' }
                         ];
                     }
+                    if (deleted.length > 0) {
+                        roster = roster.filter(p => p && !deleted.includes(p.id));
+                    }
                     localStorage.setItem('salibandy_roster_' + currentTeamId, JSON.stringify(roster));
+                    localStorage.setItem('salibandy_roster_initialized_' + currentTeamId, '1');
                 } else if (isAkatemiaTeam) {
                     const altKeys = ['salibandy_roster_team_akatemia', 'salibandy_roster_team_fbc_akatemia', 'salibandy_roster_team_1786787084772'];
                     for (const k of altKeys) {
@@ -694,10 +740,16 @@
                     if (!roster || roster.length === 0) {
                         roster = JSON.parse(JSON.stringify(DEFAULT_AKATEMIA_ROSTER));
                     }
+                    if (deleted.length > 0) {
+                        roster = roster.filter(p => p && !deleted.includes(p.id));
+                    }
                     localStorage.setItem('salibandy_roster_' + currentTeamId, JSON.stringify(roster));
+                    localStorage.setItem('salibandy_roster_initialized_' + currentTeamId, '1');
                 } else {
                     roster = [];
                 }
+            } else if (roster && roster.length > 0) {
+                localStorage.setItem('salibandy_roster_initialized_' + currentTeamId, '1');
             }
 
             const rawLineups = localStorage.getItem('salibandy_lineups_' + currentTeamId);
@@ -705,6 +757,24 @@
             
             const rawReserves = localStorage.getItem('salibandy_reserves_' + currentTeamId);
             lineupReserves = rawReserves ? JSON.parse(rawReserves) : {};
+
+            // Purge any deleted players from lineups and reserves
+            if (deleted.length > 0 && lineups) {
+                Object.keys(lineups).forEach(k => {
+                    Object.keys(lineups[k] || {}).forEach(pos => {
+                        if (deleted.includes(lineups[k][pos])) lineups[k][pos] = '';
+                    });
+                });
+            }
+            if (deleted.length > 0 && lineupReserves) {
+                Object.keys(lineupReserves).forEach(k => {
+                    if (Array.isArray(lineupReserves[k])) {
+                        lineupReserves[k] = lineupReserves[k].filter(id => !deleted.includes(id));
+                    } else if (lineupReserves[k] && Array.isArray(lineupReserves[k].general)) {
+                        lineupReserves[k].general = lineupReserves[k].general.filter(id => !deleted.includes(id));
+                    }
+                });
+            }
 
             // Ensure all canonical lineups exist
             SIMPLE_LINEUP_CONFIGS.forEach(cfg => {
@@ -738,14 +808,16 @@
             if (lineupReserves['av'] && !lineupReserves['av1']) lineupReserves['av1'] = [...lineupReserves['av']];
             if (lineupReserves['6v5'] && !lineupReserves['6v5_1']) lineupReserves['6v5_1'] = [...lineupReserves['6v5']];
 
-            // If completely empty lineups, seed with initial realistic starters & bench
+            // Only seed initial starters if team lineups have NEVER been initialized by the user!
+            const isLineupsInit = localStorage.getItem('salibandy_lineups_initialized_' + currentTeamId);
             const isAnyAssigned = Object.values(lineups).some(l => Object.values(l).some(Boolean));
-            if (!isAnyAssigned && roster.length >= 12 && isSektaTeam) {
+            if (!isLineupsInit && !isAnyAssigned && roster.length >= 12 && isSektaTeam) {
                 lineups['1'] = { MV: 'p_mv23', VP: 'p_19', OP: 'p_20', VH: 'p_11', KH: 'p_42', OH: 'p_64' };
                 lineups['2'] = { MV: 'p_mv45', VP: 'p_71', OP: 'p_4', VH: 'p_21', KH: 'p_55', OH: 'p_2' };
                 if (!lineupReserves['1']) lineupReserves['1'] = ['p_88'];
                 localStorage.setItem('salibandy_lineups_' + currentTeamId, JSON.stringify(lineups));
-            } else if (!isAnyAssigned && isAkatemiaTeam) {
+                localStorage.setItem('salibandy_lineups_initialized_' + currentTeamId, '1');
+            } else if (!isLineupsInit && !isAnyAssigned && isAkatemiaTeam) {
                 const altKeys = ['salibandy_lineups_team_akatemia', 'salibandy_lineups_team_fbc_akatemia', 'salibandy_lineups_team_1786787084772'];
                 for (const k of altKeys) {
                     if (k === 'salibandy_lineups_' + currentTeamId) continue;
@@ -788,6 +860,9 @@
                     if (!lineupReserves['1']) lineupReserves['1'] = ['p_1789731527753'];
                 }
                 localStorage.setItem('salibandy_lineups_' + currentTeamId, JSON.stringify(lineups));
+                localStorage.setItem('salibandy_lineups_initialized_' + currentTeamId, '1');
+            } else if (isAnyAssigned) {
+                localStorage.setItem('salibandy_lineups_initialized_' + currentTeamId, '1');
             }
 
             // In Simple mode: ONLY canonical lineups exist (1-4, 2x YV, 2x AV, 2x 6vs5).
@@ -915,12 +990,19 @@
             localStorage.setItem('salibandy_lineups_' + currentTeamId, JSON.stringify(lineups));
             localStorage.setItem('salibandy_reserves_' + currentTeamId, JSON.stringify(lineupReserves));
             localStorage.setItem('salibandy_events_' + currentTeamId, JSON.stringify(teamEvents));
+            localStorage.setItem('salibandy_roster_initialized_' + currentTeamId, '1');
+            localStorage.setItem('salibandy_lineups_initialized_' + currentTeamId, '1');
             if (activeEventId) {
                 localStorage.setItem('salibandy_active_event_id_' + currentTeamId, JSON.stringify(activeEventId));
             }
             if (currentTeamId === 'default_team' || currentTeamId === 'team_sekta') {
                 const altKey = currentTeamId === 'default_team' ? 'team_sekta' : 'default_team';
+                localStorage.setItem('salibandy_roster_' + altKey, JSON.stringify(roster));
+                localStorage.setItem('salibandy_lineups_' + altKey, JSON.stringify(lineups));
+                localStorage.setItem('salibandy_reserves_' + altKey, JSON.stringify(lineupReserves));
                 localStorage.setItem('salibandy_events_' + altKey, JSON.stringify(teamEvents));
+                localStorage.setItem('salibandy_roster_initialized_' + altKey, '1');
+                localStorage.setItem('salibandy_lineups_initialized_' + altKey, '1');
                 if (activeEventId) {
                     localStorage.setItem('salibandy_active_event_id_' + altKey, JSON.stringify(activeEventId));
                 }
@@ -1027,6 +1109,7 @@
                 _lastModifiedBy: clientInstanceId,
                 _lastModifiedAt: Date.now(),
                 updatedAt: serverTs,
+                deletedPlayerIds: getDeletedPlayerIds(currentTeamId),
                 roster: roster,
                 lineups: lineups,
                 reserves: lineupReserves,
@@ -1073,6 +1156,12 @@
             // Skip snapshot from this exact client instance to prevent stutter
             if (data._lastModifiedBy === clientInstanceId) {
                 console.log(`[Simple][${clientInstanceId}] Ignoring snapshot from self.`);
+                return;
+            }
+
+            // Skip snapshot if local mutation occurred AFTER remote doc timestamp
+            if (data._lastModifiedAt && lastLocalMutationAt && data._lastModifiedAt < lastLocalMutationAt) {
+                console.log(`[Simple][${clientInstanceId}] Ignoring stale remote snapshot prior to local mutation (${data._lastModifiedAt} < ${lastLocalMutationAt})`);
                 return;
             }
             console.log(`[Simple][${clientInstanceId}] Applying remote update from ${data._lastModifiedBy}!`);
@@ -1144,9 +1233,23 @@
             const activeMatch = teams.find(t => t.shareId === shareId || (normKey && normalizeTeamKey(t.id) === normKey));
             if (activeMatch) currentTeamId = activeMatch.id;
 
-            if (data.roster) roster = data.roster;
+            // Merge deletedPlayerIds
+            if (data.deletedPlayerIds && Array.isArray(data.deletedPlayerIds)) {
+                data.deletedPlayerIds.forEach(id => addDeletedPlayerId(id, currentTeamId));
+            }
+            const allDeletedPlayers = getDeletedPlayerIds(currentTeamId);
+
+            if (data.roster && Array.isArray(data.roster)) {
+                roster = data.roster.filter(p => p && !allDeletedPlayers.includes(p.id));
+            }
             if (data.lineups) {
                 lineups = data.lineups;
+                // Purge any slots holding deleted players
+                Object.keys(lineups).forEach(k => {
+                    Object.keys(lineups[k] || {}).forEach(pos => {
+                        if (allDeletedPlayers.includes(lineups[k][pos])) lineups[k][pos] = '';
+                    });
+                });
                 // Lineup bridging: if incoming came from Advanced mode (yv/av/6v5) and Simple keys are empty
                 if (lineups['yv'] && (!lineups['yv1'] || !Object.values(lineups['yv1']).some(Boolean))) {
                     lineups['yv1'] = { ...lineups['yv'] };
@@ -1232,6 +1335,12 @@
                 return;
             }
 
+            if (cloudData._lastModifiedAt && lastLocalMutationAt && cloudData._lastModifiedAt < lastLocalMutationAt) {
+                console.log('[Simple] Ignoring stale personal cloud snapshot prior to local mutation');
+                updateCloudButtonUI(true);
+                return;
+            }
+
             const incomingStr = JSON.stringify(cloudData);
             if (incomingStr === lastLoadedCloudPayloadString) return;
             lastLoadedCloudPayloadString = incomingStr;
@@ -1265,7 +1374,11 @@
                         localStorage.removeItem(`salibandy_roster_${tId}`);
                         return;
                     }
-                    localStorage.setItem(`salibandy_roster_${tId}`, JSON.stringify(cloudData.rosters[tId]));
+                    const delPlayers = getDeletedPlayerIds(tId);
+                    const cleanRoster = Array.isArray(cloudData.rosters[tId])
+                        ? cloudData.rosters[tId].filter(p => p && !delPlayers.includes(p.id))
+                        : cloudData.rosters[tId];
+                    localStorage.setItem(`salibandy_roster_${tId}`, JSON.stringify(cleanRoster));
                 });
             }
             if (cloudData.lineups) {
@@ -1579,25 +1692,32 @@
         });
     }
 
-    function saveState() {
+    function saveState(immediateSync = false) {
+        lastLocalMutationAt = Date.now();
         saveToStorageLocalOnly();
+
+        const doPersonalSync = () => {
+            if (isCloudLoading) return;
+            const db = window.SalibandyFirebase.getDb();
+            const payload = buildFullCloudPayload();
+            lastLoadedCloudPayloadString = JSON.stringify(payload);
+            db.collection('users').doc(currentUser.uid).set(payload, { merge: true })
+                .then(() => {
+                    updateCloudButtonUI(true);
+                })
+                .catch(err => {
+                    console.warn('[Simple] Cloud save error:', err);
+                });
+        };
 
         // 1. Sync to User's Personal Cloud if logged in
         if (currentUser && window.SalibandyFirebase && window.SalibandyFirebase.isReady()) {
             if (cloudSyncDebounceTimer) clearTimeout(cloudSyncDebounceTimer);
-            cloudSyncDebounceTimer = setTimeout(() => {
-                if (isCloudLoading) return;
-                const db = window.SalibandyFirebase.getDb();
-                const payload = buildFullCloudPayload();
-                lastLoadedCloudPayloadString = JSON.stringify(payload);
-                db.collection('users').doc(currentUser.uid).set(payload, { merge: true })
-                    .then(() => {
-                        updateCloudButtonUI(true);
-                    })
-                    .catch(err => {
-                        console.warn('[Simple] Cloud save error:', err);
-                    });
-            }, 1000);
+            if (immediateSync) {
+                doPersonalSync();
+            } else {
+                cloudSyncDebounceTimer = setTimeout(doPersonalSync, 1000);
+            }
         }
 
         // 2. Sync to Shared Team Cloud if team is shared
@@ -1605,9 +1725,13 @@
         const activeShareId = (curTeam && curTeam.shareId) ? curTeam.shareId : currentSharedTeamId;
         if (activeShareId && window.SalibandyFirebase && window.SalibandyFirebase.isReady()) {
             if (sharedTeamSyncDebounceTimer) clearTimeout(sharedTeamSyncDebounceTimer);
-            sharedTeamSyncDebounceTimer = setTimeout(() => {
+            if (immediateSync) {
                 pushSharedTeamToCloud(activeShareId, curTeam);
-            }, 800);
+            } else {
+                sharedTeamSyncDebounceTimer = setTimeout(() => {
+                    pushSharedTeamToCloud(activeShareId, curTeam);
+                }, 800);
+            }
         }
     }
 
@@ -2282,7 +2406,7 @@
                         : '';
 
                     slotsHtml += `
-                        <div class="slot-item" data-lineup="${cfg.id}" data-pos="${pos}">
+                        <div class="slot-item has-player" data-lineup="${cfg.id}" data-pos="${pos}" data-player-id="${player.id}" draggable="true" title="Klikkaa vaihtaaksesi tai raahaa siirtääksesi">
                             <div class="slot-left">
                                 <span class="pos-tag ${posClass}">${posLabel}</span>
                                 ${photoHtml}
@@ -2296,7 +2420,7 @@
                     `;
                 } else {
                     slotsHtml += `
-                        <div class="slot-item is-empty" data-lineup="${cfg.id}" data-pos="${pos}">
+                        <div class="slot-item is-empty" data-lineup="${cfg.id}" data-pos="${pos}" title="Klikkaa tai raahaa pelaaja tähän paikkaan">
                             <div class="slot-left">
                                 <span class="pos-tag ${posClass}">${posLabel}</span>
                                 <div class="slot-player-empty-label">+ ${posLabel}</div>
@@ -2343,7 +2467,6 @@
             }
 
             card.innerHTML = `
-                <div class="card-shine"></div>
                 <div class="lineup-card-header">
                     <div class="lineup-title">${cfg.icon || '🏒'} ${escapeHtml(cfg.name)}</div>
                     <div class="lineup-actions">
@@ -2357,25 +2480,163 @@
                 ${reservesSectionHtml}
             `;
 
-            // Bind slot clicks
+            // Bind slot drag and click
             card.querySelectorAll('.slot-item').forEach(slot => {
+                const lk = slot.dataset.lineup;
+                const pos = slot.dataset.pos;
+                const hasPlayer = !slot.classList.contains('is-empty');
+                const pid = slot.dataset.playerId;
+
+                // Drag source (if slot has a player)
+                if (hasPlayer && pid) {
+                    slot.addEventListener('dragstart', (e) => {
+                        if (e.target.closest('[data-action="clear-slot"]')) {
+                            e.preventDefault();
+                            return;
+                        }
+                        draggedSlotData = {
+                            type: 'simple-slot',
+                            sourceLineup: lk,
+                            sourcePos: pos,
+                            playerId: pid
+                        };
+                        draggedRosterPlayerId = null;
+                        e.dataTransfer.effectAllowed = 'move';
+                        e.dataTransfer.setData('text/plain', pid);
+                        e.dataTransfer.setData('application/json', JSON.stringify(draggedSlotData));
+                        slot.classList.add('is-dragging');
+                    });
+
+                    slot.addEventListener('dragend', () => {
+                        slot.classList.remove('is-dragging');
+                        document.querySelectorAll('.slot-item.drag-target-hover, .slot-item.drag-swap-hover').forEach(el => {
+                            el.classList.remove('drag-target-hover', 'drag-swap-hover');
+                        });
+                        document.querySelectorAll('.rink-player-token.drag-token-hover, .rink-player-token.drag-swap-hover').forEach(el => {
+                            el.classList.remove('drag-token-hover', 'drag-swap-hover');
+                        });
+                        draggedSlotData = null;
+                    });
+                }
+
+                // Drag receiver (all slots: empty or occupied)
+                slot.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
+
+                    if (draggedSlotData && draggedSlotData.sourceLineup === lk && draggedSlotData.sourcePos === pos) {
+                        slot.classList.remove('drag-target-hover', 'drag-swap-hover');
+                        return;
+                    }
+                    if (slot.classList.contains('is-empty')) {
+                        slot.classList.add('drag-target-hover');
+                        slot.classList.remove('drag-swap-hover');
+                    } else {
+                        slot.classList.add('drag-swap-hover');
+                        slot.classList.remove('drag-target-hover');
+                    }
+                });
+
+                slot.addEventListener('dragleave', (e) => {
+                    if (slot.contains(e.relatedTarget)) return;
+                    slot.classList.remove('drag-target-hover', 'drag-swap-hover');
+                });
+
+                slot.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    slot.classList.remove('drag-target-hover', 'drag-swap-hover');
+
+                    let dragSource = draggedSlotData;
+                    if (!dragSource) {
+                        try {
+                            const raw = e.dataTransfer.getData('application/json');
+                            if (raw) dragSource = JSON.parse(raw);
+                        } catch(err){}
+                    }
+                    const plainPlayerId = draggedRosterPlayerId || (e.dataTransfer ? e.dataTransfer.getData('text/plain') : null);
+
+                    if (dragSource && dragSource.type === 'simple-slot') {
+                        const { sourceLineup, sourcePos, playerId } = dragSource;
+                        if (sourceLineup === lk && sourcePos === pos) return;
+
+                        const targetPid = (lineups[lk] ? (lineups[lk][pos] || (pos === '6P' ? lineups[lk]['VM'] : '')) : '') || '';
+
+                        if (targetPid) {
+                            // Swap players
+                            if (!lineups[lk]) lineups[lk] = {};
+                            if (!lineups[sourceLineup]) lineups[sourceLineup] = {};
+
+                            lineups[lk][pos] = playerId;
+                            if (pos === '6P') lineups[lk]['VM'] = playerId;
+
+                            lineups[sourceLineup][sourcePos] = targetPid;
+                            if (sourcePos === '6P') lineups[sourceLineup]['VM'] = targetPid;
+
+                            const p1 = roster.find(r => r.id === playerId);
+                            const p2 = roster.find(r => r.id === targetPid);
+                            showToast(`Vaihdettiin: #${p1 ? p1.number : ''} ↔ #${p2 ? p2.number : ''} 🔄`);
+                        } else {
+                            // Move player to empty slot
+                            if (!lineups[lk]) lineups[lk] = {};
+                            if (!lineups[sourceLineup]) lineups[sourceLineup] = {};
+
+                            lineups[lk][pos] = playerId;
+                            if (pos === '6P') lineups[lk]['VM'] = playerId;
+
+                            lineups[sourceLineup][sourcePos] = '';
+                            if (sourcePos === '6P' && lineups[sourceLineup]['VM']) lineups[sourceLineup]['VM'] = '';
+
+                            const p1 = roster.find(r => r.id === playerId);
+                            const posDisplay = (pos === 'KH') ? 'C' : pos;
+                            showToast(`Siirretty: #${p1 ? p1.number : ''} ${p1 ? p1.name : ''} ➡️ ${posDisplay}`);
+                        }
+
+                        slot._justDropped = true;
+                        setTimeout(() => { slot._justDropped = false; }, 350);
+                        saveState(true);
+                        scheduleRender({ cards: true, roster: true });
+                        draggedSlotData = null;
+                        return;
+                    } else if (dragSource && dragSource.type === 'simple-roster' || plainPlayerId) {
+                        const pidToAssign = (dragSource && dragSource.playerId) ? dragSource.playerId : plainPlayerId;
+                        if (pidToAssign) {
+                            if (!lineups[lk]) lineups[lk] = {};
+                            lineups[lk][pos] = pidToAssign;
+                            if (pos === '6P') lineups[lk]['VM'] = pidToAssign;
+
+                            const p = roster.find(r => r.id === pidToAssign);
+                            const posDisplay = (pos === 'KH') ? 'C' : pos;
+                            showToast(`#${p ? p.number : ''} ${p ? p.name : ''} asetettu paikkaan ${posDisplay} 👍`);
+
+                            slot._justDropped = true;
+                            setTimeout(() => { slot._justDropped = false; }, 350);
+                            saveState(true);
+                            scheduleRender({ cards: true, roster: true });
+                            draggedSlotData = null;
+                            draggedRosterPlayerId = null;
+                            return;
+                        }
+                    }
+                });
+
+                // Click handler (clear or open picker)
                 slot.addEventListener('click', (e) => {
+                    if (slot._justDropped) return;
                     const clearBtn = e.target.closest('[data-action="clear-slot"]');
                     if (clearBtn) {
-                        const lk = clearBtn.dataset.lineup;
-                        const p = clearBtn.dataset.pos;
-                        if (lineups[lk]) {
-                            lineups[lk][p] = '';
-                            if (p === '6P' && lineups[lk]['VM']) lineups[lk]['VM'] = '';
+                        const lkClear = clearBtn.dataset.lineup;
+                        const pClear = clearBtn.dataset.pos;
+                        if (lineups[lkClear]) {
+                            lineups[lkClear][pClear] = '';
+                            if (pClear === '6P' && lineups[lkClear]['VM']) lineups[lkClear]['VM'] = '';
                         }
-                        saveState();
+                        saveState(true);
                         scheduleRender({ cards: true, roster: true });
-                        showToast('Pelaaja poistettu kentällisestä');
+                        showToast('Pelaaja poistettu kentällisestä 🗑️');
                         return;
                     }
 
-                    const lk = slot.dataset.lineup;
-                    const pos = slot.dataset.pos;
                     openSlotPicker(lk, pos);
                 });
             });
@@ -2385,9 +2646,9 @@
                 const lk = e.target.dataset.lineup;
                 gridPositions.forEach(p => { if (lineups[lk]) lineups[lk][p] = ''; });
                 if (lineups[lk] && lineups[lk]['VM']) lineups[lk]['VM'] = '';
-                saveState();
+                saveState(true);
                 scheduleRender({ cards: true, roster: true });
-                showToast(`${cfg.name} tyhjennetty`);
+                showToast(`${cfg.name} tyhjennetty 🗑️`);
             });
 
             // Bind add reserve (both header 🪑+ button and reserves section button)
@@ -2469,7 +2730,7 @@
             if (player) {
                 const photoStyle = player.photo ? `background-image: url('${player.photo}');` : '';
                 tokensHtml += `
-                    <div class="rink-player-token" style="left: ${coords.x}%; top: ${coords.y}%;" data-lineup="${activeCfg.id}" data-pos="${pos}" title="${escapeHtml(player.name)} (#${player.number})">
+                    <div class="rink-player-token has-player" draggable="true" style="left: ${coords.x}%; top: ${coords.y}%;" data-lineup="${activeCfg.id}" data-pos="${pos}" data-player-id="${player.id}" title="${escapeHtml(player.name)} (#${player.number}) — Klikkaa tai raahaa">
                         <div class="rink-token-disc" style="${photoStyle}">
                             ${!player.photo ? `<span class="rink-token-num">#${player.number}</span>` : ''}
                             <span class="rink-token-pos ${posClass}">${coords.label}</span>
@@ -2480,7 +2741,7 @@
                 `;
             } else {
                 tokensHtml += `
-                    <div class="rink-player-token is-empty" style="left: ${coords.x}%; top: ${coords.y}%;" data-lineup="${activeCfg.id}" data-pos="${pos}" title="Klikkaa asettaaksesi pelaaja paikalle ${coords.label}">
+                    <div class="rink-player-token is-empty" style="left: ${coords.x}%; top: ${coords.y}%;" data-lineup="${activeCfg.id}" data-pos="${pos}" title="Klikkaa tai raahaa pelaaja paikalle ${coords.label}">
                         <div class="rink-token-disc" style="border-style: dashed; background: rgba(15,23,42,0.6); border-color: rgba(255,255,255,0.4);">
                             <span class="rink-token-pos ${posClass}">${coords.label}</span>
                             <span style="font-size: 1.1rem; color: rgba(255,255,255,0.7); font-weight: 700;">+</span>
@@ -2595,11 +2856,139 @@
             renderLineupCards();
         });
 
-        // Bind token clicks to slot picker
+        // Bind token drag & drop and clicks
         container.querySelectorAll('.rink-player-token').forEach(token => {
+            const lk = token.dataset.lineup;
+            const p = token.dataset.pos;
+            const hasPlayer = !token.classList.contains('is-empty');
+            const pid = token.dataset.playerId;
+
+            if (hasPlayer && pid) {
+                token.addEventListener('dragstart', (e) => {
+                    draggedSlotData = {
+                        type: 'simple-slot',
+                        sourceLineup: lk,
+                        sourcePos: p,
+                        playerId: pid
+                    };
+                    draggedRosterPlayerId = null;
+                    e.dataTransfer.effectAllowed = 'move';
+                    e.dataTransfer.setData('text/plain', pid);
+                    e.dataTransfer.setData('application/json', JSON.stringify(draggedSlotData));
+                    token.classList.add('is-dragging');
+                });
+
+                token.addEventListener('dragend', () => {
+                    token.classList.remove('is-dragging');
+                    container.querySelectorAll('.rink-player-token.drag-token-hover, .rink-player-token.drag-swap-hover').forEach(el => {
+                        el.classList.remove('drag-token-hover', 'drag-swap-hover');
+                    });
+                    draggedSlotData = null;
+                });
+            }
+
+            token.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+
+                if (draggedSlotData && draggedSlotData.sourceLineup === lk && draggedSlotData.sourcePos === p) {
+                    token.classList.remove('drag-token-hover', 'drag-swap-hover');
+                    return;
+                }
+                if (token.classList.contains('is-empty')) {
+                    token.classList.add('drag-token-hover');
+                    token.classList.remove('drag-swap-hover');
+                } else {
+                    token.classList.add('drag-swap-hover');
+                    token.classList.remove('drag-token-hover');
+                }
+            });
+
+            token.addEventListener('dragleave', (e) => {
+                if (token.contains(e.relatedTarget)) return;
+                token.classList.remove('drag-token-hover', 'drag-swap-hover');
+            });
+
+            token.addEventListener('drop', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                token.classList.remove('drag-token-hover', 'drag-swap-hover');
+
+                let dragSource = draggedSlotData;
+                if (!dragSource) {
+                    try {
+                        const raw = e.dataTransfer.getData('application/json');
+                        if (raw) dragSource = JSON.parse(raw);
+                    } catch(err){}
+                }
+                const plainPlayerId = draggedRosterPlayerId || (e.dataTransfer ? e.dataTransfer.getData('text/plain') : null);
+
+                if (dragSource && dragSource.type === 'simple-slot') {
+                    const { sourceLineup, sourcePos, playerId } = dragSource;
+                    if (sourceLineup === lk && sourcePos === p) return;
+
+                    const targetPid = (lineups[lk] ? (lineups[lk][p] || (p === '6P' ? lineups[lk]['VM'] : '')) : '') || '';
+
+                    if (targetPid) {
+                        if (!lineups[lk]) lineups[lk] = {};
+                        if (!lineups[sourceLineup]) lineups[sourceLineup] = {};
+
+                        lineups[lk][p] = playerId;
+                        if (p === '6P') lineups[lk]['VM'] = playerId;
+
+                        lineups[sourceLineup][sourcePos] = targetPid;
+                        if (sourcePos === '6P') lineups[sourceLineup]['VM'] = targetPid;
+
+                        const p1 = roster.find(r => r.id === playerId);
+                        const p2 = roster.find(r => r.id === targetPid);
+                        showToast(`Vaihdettiin: #${p1 ? p1.number : ''} ↔ #${p2 ? p2.number : ''} 🔄`);
+                    } else {
+                        if (!lineups[lk]) lineups[lk] = {};
+                        if (!lineups[sourceLineup]) lineups[sourceLineup] = {};
+
+                        lineups[lk][p] = playerId;
+                        if (p === '6P') lineups[lk]['VM'] = playerId;
+
+                        lineups[sourceLineup][sourcePos] = '';
+                        if (sourcePos === '6P' && lineups[sourceLineup]['VM']) lineups[sourceLineup]['VM'] = '';
+
+                        const p1 = roster.find(r => r.id === playerId);
+                        const posDisplay = (p === 'KH') ? 'C' : p;
+                        showToast(`Siirretty: #${p1 ? p1.number : ''} ${p1 ? p1.name : ''} ➡️ ${posDisplay}`);
+                    }
+
+                    token._justDropped = true;
+                    setTimeout(() => { token._justDropped = false; }, 350);
+                    saveState(true);
+                    renderSimpleVisualRink();
+                    scheduleRender({ cards: true, roster: true });
+                    draggedSlotData = null;
+                    return;
+                } else if ((dragSource && dragSource.type === 'simple-roster') || plainPlayerId) {
+                    const pidToAssign = (dragSource && dragSource.playerId) ? dragSource.playerId : plainPlayerId;
+                    if (pidToAssign) {
+                        if (!lineups[lk]) lineups[lk] = {};
+                        lineups[lk][p] = pidToAssign;
+                        if (p === '6P') lineups[lk]['VM'] = pidToAssign;
+
+                        const playerObj = roster.find(r => r.id === pidToAssign);
+                        const posDisplay = (p === 'KH') ? 'C' : p;
+                        showToast(`#${playerObj ? playerObj.number : ''} ${playerObj ? playerObj.name : ''} asetettu paikkaan ${posDisplay} 👍`);
+
+                        token._justDropped = true;
+                        setTimeout(() => { token._justDropped = false; }, 350);
+                        saveState(true);
+                        renderSimpleVisualRink();
+                        scheduleRender({ cards: true, roster: true });
+                        draggedSlotData = null;
+                        draggedRosterPlayerId = null;
+                        return;
+                    }
+                }
+            });
+
             token.addEventListener('click', () => {
-                const lk = token.dataset.lineup;
-                const p = token.dataset.pos;
+                if (token._justDropped) return;
                 openSlotPicker(lk, p);
             });
         });
@@ -2721,16 +3110,31 @@
 
         document.getElementById('btn-cust-player-delete')?.addEventListener('click', () => {
             if (confirm(`Poistetaanko pelaaja ${pData.name} ringistä?`)) {
+                addDeletedPlayerId(pData.id, currentTeamId);
                 roster = roster.filter(p => p.id !== pData.id);
                 Object.keys(lineups).forEach(k => {
                     Object.keys(lineups[k] || {}).forEach(pos => {
                         if (lineups[k][pos] === pData.id) lineups[k][pos] = '';
                     });
                 });
-                saveState();
-                renderAll();
+                // Purge from all reserves
+                Object.keys(lineupReserves).forEach(k => {
+                    if (Array.isArray(lineupReserves[k])) {
+                        lineupReserves[k] = lineupReserves[k].filter(id => id !== pData.id);
+                    } else if (lineupReserves[k] && Array.isArray(lineupReserves[k].general)) {
+                        lineupReserves[k].general = lineupReserves[k].general.filter(id => id !== pData.id);
+                    }
+                });
+                // Purge from event attendees
+                teamEvents.forEach(ev => {
+                    if (ev && ev.attendees && ev.attendees[pData.id]) {
+                        delete ev.attendees[pData.id];
+                    }
+                });
+                saveState(true);
+                renderAll(true);
                 modalEl.classList.remove('active');
-                showToast(`Pelaaja ${pData.name} poistettu!`);
+                showToast(`Pelaaja ${pData.name} poistettu pysyvästi! 🗑️`);
             }
         });
 
@@ -2901,6 +3305,8 @@
 
             const row = document.createElement('div');
             row.className = `player-row ${isPlaced ? 'is-placed' : ''} ${isFreeIn ? 'is-unassigned-in' : ''}`;
+            row.draggable = true;
+            row.dataset.playerId = player.id;
 
             let attBtnClass = att.status;
             let attBtnText = att.status === 'in' ? '🟢 IN' : att.status === 'out' ? '🔴 OUT' : att.status === 'maybe' ? '🟡 EHKÄ' : '⚪ AVOIN';
@@ -2924,7 +3330,7 @@
 
             row.innerHTML = `
                 <div class="player-row-header">
-                    <div class="player-header-left" data-action="edit-player" data-player-id="${player.id}" title="Klikkaa muokataksesi pelaajaa">
+                    <div class="player-header-left" data-action="edit-player" data-player-id="${player.id}" title="Klikkaa muokataksesi tai raahaa kentälliseen">
                         ${photoHtml}
                         <span class="player-num">#${player.number}</span>
                         <span class="player-name-text" title="${escapeHtml(player.name)}">${escapeHtml(player.name)}</span>
@@ -2939,6 +3345,31 @@
                     <button class="btn-assign-quick ${isAssigned ? 'is-assigned' : ''}" data-action="assign-player" data-player-id="${player.id}">${isAssigned ? 'Muuta' : '+ Sijoita'}</button>
                 </div>
             `;
+
+            // Drag player to slot
+            row.addEventListener('dragstart', (e) => {
+                if (e.target.closest('button')) {
+                    e.preventDefault();
+                    return;
+                }
+                draggedSlotData = null;
+                draggedRosterPlayerId = player.id;
+                e.dataTransfer.effectAllowed = 'copyMove';
+                e.dataTransfer.setData('text/plain', player.id);
+                e.dataTransfer.setData('application/json', JSON.stringify({ type: 'simple-roster', playerId: player.id }));
+                row.classList.add('is-dragging');
+            });
+
+            row.addEventListener('dragend', () => {
+                row.classList.remove('is-dragging');
+                document.querySelectorAll('.slot-item.drag-target-hover, .slot-item.drag-swap-hover').forEach(el => {
+                    el.classList.remove('drag-target-hover', 'drag-swap-hover');
+                });
+                document.querySelectorAll('.rink-player-token.drag-token-hover, .rink-player-token.drag-swap-hover').forEach(el => {
+                    el.classList.remove('drag-token-hover', 'drag-swap-hover');
+                });
+                draggedRosterPlayerId = null;
+            });
 
             // Click left side to edit player
             row.querySelector('.player-header-left')?.addEventListener('click', () => {
@@ -2957,6 +3388,37 @@
 
             rosterListContainer.appendChild(row);
         });
+
+        // Drop receiver on roster panel to remove a player dragged from a slot
+        rosterListContainer.ondragover = (e) => {
+            if (draggedSlotData) {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                rosterListContainer.classList.add('drag-drop-zone-active');
+            }
+        };
+
+        rosterListContainer.ondragleave = (e) => {
+            if (rosterListContainer.contains(e.relatedTarget)) return;
+            rosterListContainer.classList.remove('drag-drop-zone-active');
+        };
+
+        rosterListContainer.ondrop = (e) => {
+            rosterListContainer.classList.remove('drag-drop-zone-active');
+            if (!draggedSlotData) return;
+            e.preventDefault();
+            const { sourceLineup, sourcePos, playerId } = draggedSlotData;
+            if (lineups[sourceLineup]) {
+                lineups[sourceLineup][sourcePos] = '';
+                if (sourcePos === '6P' && lineups[sourceLineup]['VM']) lineups[sourceLineup]['VM'] = '';
+            }
+            const p = roster.find(r => r.id === playerId);
+            showToast(`Pelaaja #${p ? p.number : ''} ${p ? p.name : ''} poistettu kentällisestä 🗑️`);
+            saveState(true);
+            scheduleRender({ cards: true, roster: true });
+            if (simpleViewMode === 'rink') renderSimpleVisualRink();
+            draggedSlotData = null;
+        };
     }
 
     function togglePlayerStatus(playerId) {
@@ -2989,6 +3451,27 @@
 
         modalTitle.textContent = `Valitse ${posLabel} (${lineName})`;
         modalBody.innerHTML = '';
+
+        // Clear slot option if slot currently has a player
+        const currentSlotPlayerId = lineups[lineupKey] ? (lineups[lineupKey][pos] || (pos === '6P' ? lineups[lineupKey]['VM'] : '')) : '';
+        if (currentSlotPlayerId) {
+            const clearBtn = document.createElement('button');
+            clearBtn.type = 'button';
+            clearBtn.className = 'picker-clear-slot-btn';
+            clearBtn.innerHTML = `<span>🗑️</span><span>Tyhjennä tämä paikka (${posLabel})</span>`;
+            clearBtn.addEventListener('click', () => {
+                if (lineups[lineupKey]) {
+                    lineups[lineupKey][pos] = '';
+                    if (pos === '6P' && lineups[lineupKey]['VM']) lineups[lineupKey]['VM'] = '';
+                }
+                saveState(true);
+                scheduleRender({ cards: true, roster: true });
+                if (simpleViewMode === 'rink') renderSimpleVisualRink();
+                modalEl.classList.remove('active');
+                showToast(`Paikka ${lineName} - ${posLabel} tyhjennetty 👍`);
+            });
+            modalBody.appendChild(clearBtn);
+        }
 
         const curEvent = teamEvents.find(e => e.id === activeEventId);
         const attendeesMap = curEvent ? (curEvent.attendees || {}) : {};
@@ -3041,8 +3524,9 @@
                 if (!lineups[lineupKey]) lineups[lineupKey] = {};
                 lineups[lineupKey][pos] = p.id;
                 if (pos === '6P') lineups[lineupKey]['VM'] = p.id;
-                saveState();
+                saveState(true);
                 scheduleRender({ cards: true, roster: true });
+                if (simpleViewMode === 'rink') renderSimpleVisualRink();
                 modalEl.classList.remove('active');
                 const toastPos = (pos === 'KH') ? 'C' : pos;
                 showToast(`#${p.number} ${p.name} asetettu paikkaan ${lineName} - ${toastPos} 👍`);

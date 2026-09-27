@@ -1473,29 +1473,9 @@ body {
     box-shadow: 0 8px 26px rgba(0, 0, 0, 0.5), 0 0 16px rgba(59, 130, 246, 0.15);
 }
 
-/* Holographic card shine */
+/* Card shine removed to prevent hover flash */
 .card-shine {
-    position: absolute;
-    top: 0;
-    left: -100%;
-    width: 60%;
-    height: 100%;
-    background: linear-gradient(
-        90deg,
-        transparent,
-        rgba(255, 255, 255, 0.08),
-        rgba(255, 255, 255, 0.16),
-        rgba(255, 255, 255, 0.08),
-        transparent
-    );
-    transform: skewX(-25deg);
-    pointer-events: none;
-    transition: none;
-}
-
-.lineup-card:hover .card-shine {
-    left: 200%;
-    transition: left 0.8s ease-in-out;
+    display: none !important;
 }
 
 /* Polished Pro Slot Items */
@@ -1506,6 +1486,8 @@ body {
     transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
     position: relative;
     overflow: hidden;
+    cursor: grab;
+    user-select: none;
 }
 
 .slot-item:hover {
@@ -1522,11 +1504,93 @@ body {
 .slot-item.is-empty {
     border: 1.5px dashed rgba(255, 255, 255, 0.12);
     background: rgba(255, 255, 255, 0.015);
+    cursor: pointer;
 }
 
 .slot-item.is-empty:hover {
     border-color: rgba(96, 165, 250, 0.4);
     background: rgba(59, 130, 246, 0.05);
+}
+
+/* Drag and Drop States */
+.slot-item.is-dragging {
+    opacity: 0.35;
+    border-style: dashed;
+    border-color: #60a5fa !important;
+    transform: scale(0.96);
+}
+
+.slot-item.drag-target-hover {
+    border-color: #3b82f6 !important;
+    background: rgba(59, 130, 246, 0.28) !important;
+    box-shadow: 0 0 16px rgba(59, 130, 246, 0.6) !important;
+    transform: scale(1.02);
+}
+
+.slot-item.drag-swap-hover {
+    border-color: #f59e0b !important;
+    background: rgba(245, 158, 11, 0.26) !important;
+    box-shadow: 0 0 16px rgba(245, 158, 11, 0.6) !important;
+    transform: scale(1.02);
+}
+
+.player-row {
+    cursor: grab;
+}
+
+.player-row.is-dragging {
+    opacity: 0.35;
+    outline: 2px dashed #60a5fa;
+}
+
+.roster-list-container.drag-drop-zone-active {
+    outline: 2px dashed #ef4444;
+    background: rgba(239, 68, 68, 0.06);
+    border-radius: 8px;
+}
+
+.rink-player-token {
+    cursor: grab;
+    user-select: none;
+}
+
+.rink-player-token.is-dragging {
+    opacity: 0.35;
+}
+
+.rink-player-token.drag-token-hover {
+    transform: translate(-50%, -50%) scale(1.25) !important;
+    filter: drop-shadow(0 0 14px #3b82f6) !important;
+}
+
+.rink-player-token.drag-swap-hover {
+    transform: translate(-50%, -50%) scale(1.25) !important;
+    filter: drop-shadow(0 0 14px #f59e0b) !important;
+}
+
+.picker-clear-slot-btn {
+    width: 100%;
+    padding: 10px 14px;
+    margin-bottom: 10px;
+    background: rgba(239, 68, 68, 0.14);
+    border: 1px solid rgba(239, 68, 68, 0.4);
+    border-radius: 8px;
+    color: #fca5a5;
+    font-weight: 700;
+    font-size: 0.88rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.picker-clear-slot-btn:hover {
+    background: rgba(239, 68, 68, 0.28);
+    border-color: #ef4444;
+    color: #ffffff;
+    box-shadow: 0 0 12px rgba(239, 68, 68, 0.4);
 }
 
 /* Metallic & Glowing Position Pill Badges */
