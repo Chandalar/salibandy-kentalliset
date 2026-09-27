@@ -26,6 +26,8 @@
     let simpleDensity = localStorage.getItem('salibandy_simple_density') || '2col';
     let rosterDensity = localStorage.getItem('salibandy_roster_density') || '2col';
     let rosterSearchQuery = '';
+    let simpleViewMode = localStorage.getItem('salibandy_simple_view_mode') || 'cards'; // 'cards' | 'rink'
+    let simpleRinkActiveLine = '1';
 
     function isPlayerIn1to4(playerId) {
         if (!playerId) return false;
@@ -265,11 +267,59 @@
         return result;
     }
 
+    const CANONICAL_CLOUD_SHARE_IDS = ['st_team_sekta', 'st_team_akatemia', 'st_team_edustus', 'st_team_junnut'];
+    const CANONICAL_CLOUD_TEAM_IDS = ['team_sekta', 'team_akatemia', 'team_edustus', 'team_junnut', 'default_team'];
+
+    function isCloudTeam(team) {
+        if (!team) return false;
+        if (CANONICAL_CLOUD_TEAM_IDS.includes(team.id)) return true;
+        if (team.shareId && CANONICAL_CLOUD_SHARE_IDS.includes(team.shareId)) return true;
+        if (currentSharedTeamId && (team.shareId === currentSharedTeamId || team.id === 'shared_' + currentSharedTeamId)) return true;
+        if (String(team.id).startsWith('shared_')) return true;
+        const nameLow = (team.name || '').toLowerCase();
+        if (nameLow.includes('sekta') || nameLow.includes('akatemia') || nameLow.includes('edustus')) return true;
+        if (team.isShared === true || team.cloudSynced === true) return true;
+        return false;
+    }
+
+    function renderTeamSyncBadge(curTeam, targetId) {
+        const el = document.getElementById(targetId);
+        if (!el) return;
+        const isCloud = isCloudTeam(curTeam);
+        if (isCloud) {
+            el.className = 'team-sync-badge badge-cloud';
+            el.title = '☁️ Tämä joukkue on jaettu pilvessä (Firestore). Kaikki kokoonpanomuutokset synkronoituvat reaaliajassa!';
+            el.innerHTML = `
+                <span class="badge-dot dot-pulse-green"></span>
+                <span class="badge-icon">☁️</span>
+                <span class="badge-title">Pilvijoukkue</span>
+                <span class="badge-sub">(Jaettu)</span>
+            `;
+            el.onclick = () => {
+                openShareModal();
+            };
+        } else {
+            el.className = 'team-sync-badge badge-local';
+            el.title = '💾 Tämä joukkue on tallennettu vain tälle laitteelle (Lokaali). Klikkaa "Jaa pilveen" jakaaksesi sen reaaliajassa muille!';
+            el.innerHTML = `
+                <span class="badge-dot dot-amber"></span>
+                <span class="badge-icon">💾</span>
+                <span class="badge-title">Lokaali</span>
+                <span class="badge-sub">(Vain tämä laite)</span>
+                <button class="btn-badge-share" type="button" title="Jaa tämä joukkue pilveen">Jaa ↗</button>
+            `;
+            el.onclick = (e) => {
+                e.stopPropagation();
+                openShareModal();
+            };
+        }
+    }
+
     const DEFAULT_TEAMS = [
-        { id: 'team_sekta', name: 'SekTa', shareId: 'st_team_sekta', logo: 'sekta-logo.png', photo: 'sekta-logo.png', primaryColor: '#6b5bd7', secondaryColor: '#f2a24a', mvColor: '#10b981', eventsUrl: 'https://sekta.nimenhuuto.com/events', nimenhuutoUrl: 'https://sekta.nimenhuuto.com/events' },
-        { id: 'team_akatemia', name: 'FBC Akatemia', shareId: 'st_team_akatemia', logo: '🦅', primaryColor: '#dc2626', secondaryColor: '#991b1b', mvColor: '#10b981' },
-        { id: 'team_edustus', name: 'Edustusjoukkue', shareId: 'st_team_edustus', logo: '🦁', primaryColor: '#2563eb', secondaryColor: '#1e40af', mvColor: '#10b981' },
-        { id: 'team_junnut', name: 'A-Juniorit', shareId: 'st_team_junnut', logo: '⚡', primaryColor: '#dc2626', secondaryColor: '#991b1b', mvColor: '#eab308' }
+        { id: 'team_sekta', name: 'SekTa', shareId: 'st_team_sekta', isShared: true, cloudSynced: true, logo: 'sekta-logo.png', photo: 'sekta-logo.png', primaryColor: '#6b5bd7', secondaryColor: '#f2a24a', mvColor: '#10b981', eventsUrl: 'https://sekta.nimenhuuto.com/events', nimenhuutoUrl: 'https://sekta.nimenhuuto.com/events' },
+        { id: 'team_akatemia', name: 'FBC Akatemia', shareId: 'st_team_akatemia', isShared: true, cloudSynced: true, logo: '🦅', primaryColor: '#dc2626', secondaryColor: '#991b1b', mvColor: '#10b981' },
+        { id: 'team_edustus', name: 'Edustusjoukkue', shareId: 'st_team_edustus', isShared: true, cloudSynced: true, logo: '🦁', primaryColor: '#2563eb', secondaryColor: '#1e40af', mvColor: '#10b981' },
+        { id: 'team_junnut', name: 'A-Juniorit', shareId: 'st_team_junnut', isShared: true, cloudSynced: true, logo: '⚡', primaryColor: '#dc2626', secondaryColor: '#991b1b', mvColor: '#eab308' }
     ];
 
     const DEFAULT_AKATEMIA_ROSTER = [
@@ -1285,6 +1335,10 @@
     function openShareModal() {
         if (!shareModal || !shareModalBody) return;
         const curTeam = teams.find(t => t.id === currentTeamId) || { name: 'Joukkue' };
+        curTeam.isShared = true;
+        curTeam.cloudSynced = true;
+        saveState();
+        renderTeamHeader();
         const teamName = (curTeam.name || 'Joukkue').replace(/^🤝\s*/, '');
         const shareId = getShareIdForCurrentTeam();
         pushSharedTeamToCloud(shareId, curTeam);
@@ -1798,7 +1852,9 @@
             
             let safeName = (t.name || 'Joukkue').replace(/^🤝\s*/, '').trim();
             const emojiPrefix = (!isImageLogo(t.logo) && t.logo) ? (t.logo + ' ') : '';
-            opt.textContent = emojiPrefix + safeName;
+            const isCloud = isCloudTeam(t);
+            const statusTag = isCloud ? '☁️ [Pilvi]' : '💾 [Lokaali]';
+            opt.textContent = `${emojiPrefix}${safeName} ${statusTag}`;
 
             if (t.id === currentTeamId || normKey === normalizeTeamKey(currentTeamId)) opt.selected = true;
             teamSelect.appendChild(opt);
@@ -1818,6 +1874,8 @@
             if (curTeam.mvColor) {
                 document.documentElement.style.setProperty('--team-mv-color', curTeam.mvColor);
             }
+            // Update prominent Cloud vs Local indicator badge in header
+            renderTeamSyncBadge(curTeam, 'simple-team-sync-badge');
         }
         if (teamLogoBadge) {
             teamLogoBadge.style.cursor = 'pointer';
@@ -1967,6 +2025,30 @@
             showToast(simpleDensity === '2col' ? '2 sarakkeen tiivis näkymä (kaikki kentät kerralla)' : '1 sarakkeen näkymä');
         });
         lineupNavBar.appendChild(densityBtn);
+
+        // View mode toggle button (Kortit vs Kaukalo)
+        const viewModeBtn = document.createElement('button');
+        viewModeBtn.className = 'view-mode-toggle-btn';
+        viewModeBtn.title = 'Vaihda korttinäkymän ja visuaalisen salibandykaukalon välillä';
+        viewModeBtn.innerHTML = (simpleViewMode === 'rink') 
+            ? '<span>📋 Kortit</span>' 
+            : '<span>🏟️ Kaukalo</span>';
+        viewModeBtn.addEventListener('click', () => {
+            simpleViewMode = (simpleViewMode === 'rink') ? 'cards' : 'rink';
+            try { localStorage.setItem('salibandy_simple_view_mode', simpleViewMode); } catch(e){}
+            const cardCont = document.getElementById('lineup-card-container');
+            if (cardCont) cardCont.style.display = (simpleViewMode === 'rink') ? 'none' : '';
+            renderLineupTabs();
+            if (simpleViewMode === 'rink') {
+                renderSimpleVisualRink();
+                showToast('Visuaalinen salibandykaukalo 🏟️');
+            } else {
+                renderSimpleVisualRink();
+                renderLineupCards();
+                showToast('Korttinäkymä 📋');
+            }
+        });
+        lineupNavBar.appendChild(viewModeBtn);
     }
 
     function getLineupReserves(lineupKey) {
@@ -2008,6 +2090,15 @@
 
     function renderLineupCards() {
         if (!lineupCardContainer) return;
+        if (simpleViewMode === 'rink') {
+            lineupCardContainer.style.display = 'none';
+            renderSimpleVisualRink();
+            return;
+        } else {
+            lineupCardContainer.style.display = '';
+            const rinkCont = document.getElementById('simple-rink-container');
+            if (rinkCont) rinkCont.style.display = 'none';
+        }
         updateLineupContainerDensity();
         lineupCardContainer.innerHTML = '';
 
@@ -2122,6 +2213,7 @@
             }
 
             card.innerHTML = `
+                <div class="card-shine"></div>
                 <div class="lineup-card-header">
                     <div class="lineup-title">${cfg.icon || '🏒'} ${escapeHtml(cfg.name)}</div>
                     <div class="lineup-actions">
@@ -2189,6 +2281,197 @@
             });
 
             lineupCardContainer.appendChild(card);
+        });
+    }
+
+    /* ── VISUAL FLOORBALL RINK IN SIMPLE MODE (v70.0) ── */
+    function renderSimpleVisualRink() {
+        const container = document.getElementById('simple-rink-container');
+        if (!container) return;
+        if (simpleViewMode !== 'rink') {
+            container.style.display = 'none';
+            return;
+        }
+        container.style.display = 'block';
+
+        const curTeam = teams.find(t => t.id === currentTeamId) || { name: 'SekTa', logo: 'sekta-logo.png' };
+        const curEvent = teamEvents.find(e => e.id === activeEventId);
+        const attendeesMap = curEvent ? (curEvent.attendees || {}) : {};
+
+        const linesList = [
+            { id: '1', name: '1. Kenttä', icon: '🥇' },
+            { id: '2', name: '2. Kenttä', icon: '🥈' },
+            { id: '3', name: '3. Kenttä', icon: '🥉' },
+            { id: '4', name: '4. Kenttä', icon: '4️⃣' },
+            { id: 'yv1', name: '1. YV', icon: '⚡' },
+            { id: 'av1', name: '1. AV', icon: '🛡️' },
+            { id: '6v5_1', name: '6 vs 5', icon: '🔥' }
+        ];
+
+        const activeCfg = linesList.find(l => l.id === simpleRinkActiveLine) || linesList[0];
+        const lineSlots = lineups[activeCfg.id] || {};
+
+        const posCoords = {
+            'MV': { x: 12, y: 50, label: 'MV', role: 'mv' },
+            'VP': { x: 30, y: 26, label: 'VP', role: 'p' },
+            'OP': { x: 30, y: 74, label: 'OP', role: 'p' },
+            'KH': { x: 55, y: 50, label: 'C', role: 'c' },
+            'VH': { x: 74, y: 24, label: 'VH', role: 'h' },
+            'OH': { x: 74, y: 76, label: 'OH', role: 'h' },
+            '6P': { x: 52, y: 25, label: '6P', role: 'p' }
+        };
+
+        const is6v5 = (activeCfg.id === '6v5_1' || activeCfg.id === '6v5');
+        const positions = is6v5 
+            ? ['VH', 'VP', 'KH', 'OP', 'OH', '6P'] 
+            : ['VH', 'VP', 'KH', 'OP', 'OH', 'MV'];
+
+        let tokensHtml = '';
+        positions.forEach(pos => {
+            const pId = lineSlots[pos] || (pos === '6P' ? lineSlots['VM'] : '');
+            const player = roster.find(p => p.id === pId);
+            const att = player ? (attendeesMap[player.id] || { status: 'unanswered' }) : null;
+            const coords = posCoords[pos] || { x: 50, y: 50, label: pos, role: 'h' };
+
+            const attDot = att ? (att.status === 'in' ? '🟢' : att.status === 'out' ? '🔴' : att.status === 'maybe' ? '🟡' : '⚪') : '';
+            const posClass = `pos-${coords.role}`;
+
+            if (player) {
+                const photoStyle = player.photo ? `background-image: url('${player.photo}');` : '';
+                tokensHtml += `
+                    <div class="rink-player-token" style="left: ${coords.x}%; top: ${coords.y}%;" data-lineup="${activeCfg.id}" data-pos="${pos}" title="${escapeHtml(player.name)} (#${player.number})">
+                        <div class="rink-token-disc" style="${photoStyle}">
+                            ${!player.photo ? `<span class="rink-token-num">#${player.number}</span>` : ''}
+                            <span class="rink-token-pos ${posClass}">${coords.label}</span>
+                            <span class="rink-token-status">${attDot}</span>
+                        </div>
+                        <div class="rink-token-name">#${player.number} ${escapeHtml(player.name.split(' ')[0])}</div>
+                    </div>
+                `;
+            } else {
+                tokensHtml += `
+                    <div class="rink-player-token is-empty" style="left: ${coords.x}%; top: ${coords.y}%;" data-lineup="${activeCfg.id}" data-pos="${pos}" title="Klikkaa asettaaksesi pelaaja paikalle ${coords.label}">
+                        <div class="rink-token-disc" style="border-style: dashed; background: rgba(15,23,42,0.6); border-color: rgba(255,255,255,0.4);">
+                            <span class="rink-token-pos ${posClass}">${coords.label}</span>
+                            <span style="font-size: 1.1rem; color: rgba(255,255,255,0.7); font-weight: 700;">+</span>
+                        </div>
+                        <div class="rink-token-name" style="color: #94a3b8;">${coords.label}</div>
+                    </div>
+                `;
+            }
+        });
+
+        const linesChipsHtml = linesList.map(l => `
+            <button class="stat-chip ${l.id === simpleRinkActiveLine ? 'in' : 'unanswered'}" data-rink-line="${l.id}" style="font-size: 0.76rem; font-weight: 700;">
+                ${l.icon} ${escapeHtml(l.name)}
+            </button>
+        `).join('');
+
+        let watermarkSvg = '';
+        if (curTeam.logo && isImageLogo(curTeam.logo)) {
+            watermarkSvg = `<image href="${curTeam.logo}" x="340" y="165" width="120" height="120" opacity="0.22" />`;
+        } else {
+            const logoText = curTeam.logo || 'SEKTA';
+            watermarkSvg = `
+                <text x="400" y="235" text-anchor="middle" font-size="44" font-weight="900" fill="#ffffff" opacity="0.20" letter-spacing="4">
+                    ${escapeHtml(logoText)}
+                </text>
+            `;
+        }
+
+        container.innerHTML = `
+            <div class="simple-rink-card">
+                <div class="simple-rink-header">
+                    <div class="simple-rink-title">
+                        <span>🏟️</span>
+                        <span>Visuaalinen Salibandykaukalo</span>
+                        <span style="font-size: 0.75rem; color: #94a3b8; font-weight: normal;">(${escapeHtml(activeCfg.name)})</span>
+                    </div>
+                    <div style="display: flex; gap: 6px;">
+                        <button class="btn-header" data-action="toggle-rink-cards" style="font-size: 0.75rem; padding: 4px 8px;">📋 Korttinäkymään</button>
+                    </div>
+                </div>
+
+                <!-- Line switcher chips -->
+                <div style="display: flex; gap: 6px; overflow-x: auto; padding-bottom: 8px; margin-bottom: 8px; scrollbar-width: none;">
+                    ${linesChipsHtml}
+                </div>
+
+                <!-- Rink Board & Court -->
+                <div class="simple-rink-board">
+                    <svg viewBox="0 0 800 450" preserveAspectRatio="none">
+                        <defs>
+                            <linearGradient id="rinkGlow" x1="0%" y1="0%" x2="0%" y2="100%">
+                                <stop offset="0%" stop-color="#ffffff" stop-opacity="0.12" />
+                                <stop offset="50%" stop-color="#000000" stop-opacity="0" />
+                                <stop offset="100%" stop-color="#000000" stop-opacity="0.30" />
+                            </linearGradient>
+                        </defs>
+                        <rect width="800" height="450" fill="url(#rinkGlow)" />
+
+                        <!-- Center Line -->
+                        <line x1="400" y1="0" x2="400" y2="450" stroke="rgba(255,255,255,0.75)" stroke-width="3" />
+
+                        <!-- Center Circle & Center Spot -->
+                        <circle cx="400" cy="225" r="55" fill="none" stroke="rgba(255,255,255,0.75)" stroke-width="2.5" />
+                        <circle cx="400" cy="225" r="4.5" fill="#f2a24a" />
+
+                        <!-- 6 Floorball Faceoff Crosses -->
+                        <g stroke="rgba(255,255,255,0.8)" stroke-width="2.5">
+                            <line x1="120" y1="80" x2="140" y2="80" /><line x1="130" y1="70" x2="130" y2="90" />
+                            <line x1="120" y1="370" x2="140" y2="370" /><line x1="130" y1="360" x2="130" y2="380" />
+                            <line x1="390" y1="80" x2="410" y2="80" /><line x1="400" y1="70" x2="400" y2="90" />
+                            <line x1="390" y1="370" x2="410" y2="370" /><line x1="400" y1="360" x2="400" y2="380" />
+                            <line x1="660" y1="80" x2="680" y2="80" /><line x1="670" y1="70" x2="670" y2="90" />
+                            <line x1="660" y1="370" x2="680" y2="370" /><line x1="670" y1="360" x2="670" y2="380" />
+                        </g>
+
+                        <!-- Left Goal Crease (Maalialue 4m x 5m) -->
+                        <rect x="30" y="160" width="85" height="130" fill="rgba(242,162,74,0.14)" stroke="rgba(255,255,255,0.85)" stroke-width="2.5" rx="3" />
+                        <rect x="52" y="192" width="42" height="66" fill="rgba(107,91,215,0.25)" stroke="#f2a24a" stroke-width="2" rx="2" />
+                        <rect x="15" y="196" width="20" height="58" fill="rgba(255,255,255,0.25)" stroke="#ffffff" stroke-width="2.5" stroke-dasharray="2,2" rx="2" />
+
+                        <!-- Right Goal Crease -->
+                        <rect x="685" y="160" width="85" height="130" fill="rgba(242,162,74,0.14)" stroke="rgba(255,255,255,0.85)" stroke-width="2.5" rx="3" />
+                        <rect x="706" y="192" width="42" height="66" fill="rgba(107,91,215,0.25)" stroke="#f2a24a" stroke-width="2" rx="2" />
+                        <rect x="765" y="196" width="20" height="58" fill="rgba(255,255,255,0.25)" stroke="#ffffff" stroke-width="2.5" stroke-dasharray="2,2" rx="2" />
+
+                        <!-- Center Watermark -->
+                        ${watermarkSvg}
+                    </svg>
+
+                    <!-- Tokens layer -->
+                    ${tokensHtml}
+                </div>
+            </div>
+        `;
+
+        // Bind line switcher chips
+        container.querySelectorAll('[data-rink-line]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                simpleRinkActiveLine = btn.dataset.rinkLine;
+                renderSimpleVisualRink();
+            });
+        });
+
+        // Bind toggle back to cards
+        container.querySelector('[data-action="toggle-rink-cards"]')?.addEventListener('click', () => {
+            simpleViewMode = 'cards';
+            try { localStorage.setItem('salibandy_simple_view_mode', 'cards'); } catch(e){}
+            const cardCont = document.getElementById('lineup-card-container');
+            if (cardCont) cardCont.style.display = '';
+            renderSimpleVisualRink();
+            renderLineupTabs();
+            renderLineupCards();
+        });
+
+        // Bind token clicks to slot picker
+        container.querySelectorAll('.rink-player-token').forEach(token => {
+            token.addEventListener('click', () => {
+                const lk = token.dataset.lineup;
+                const p = token.dataset.pos;
+                openSlotPicker(lk, p);
+            });
         });
     }
 

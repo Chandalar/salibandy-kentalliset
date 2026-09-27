@@ -18,7 +18,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
 
     <!-- Stylesheet -->
-    <link rel="stylesheet" href="simple.css?v=64.0">
+    <link rel="stylesheet" href="simple.css?v=70.0">
 
     <script>
     (function() {
@@ -38,6 +38,7 @@
         <div class="header-left">
             <div class="team-logo-badge" id="team-logo-badge">🏑</div>
             <select class="team-select" id="simple-team-select"></select>
+            <div id="simple-team-sync-badge" class="team-sync-badge" title="Joukkueen tila (Pilvi / Lokaali)"></div>
             <button class="btn-header danger-text" id="btn-simple-delete-team" title="Poista nykyinen joukkue" style="padding: 4px 7px; font-size: 0.85rem; background: transparent; border: 1px solid rgba(239, 68, 68, 0.4); color: #f87171; border-radius: 6px; cursor: pointer;">🗑️</button>
         </div>
         <div class="header-right">
@@ -70,6 +71,11 @@
         <!-- LINEUP CARDS (Responsive multi-column grid on wide screens) -->
         <div id="lineup-card-container">
             <!-- Dynamic Lineup Card with Slots -->
+        </div>
+
+        <!-- VISUAL TACTICAL RINK CONTAINER (Optional visual floorball rink view) -->
+        <div id="simple-rink-container" class="simple-rink-container" style="display: none;">
+            <!-- Dynamic SVG Floorball Rink with placed player cards -->
         </div>
 
         <!-- QUICK ACTIONS ROW -->
@@ -250,9 +256,42 @@
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
-    <!-- Firebase Config & Simple Engine (v68.0) -->
-    <script src="firebase-config.js?v=68.0"></script>
-    <script src="simple.js?v=68.0"></script>
+    <!-- Firebase Config & Simple Engine (v70.0) -->
+    <script src="firebase-config.js?v=70.0"></script>
+    <script src="simple.js?v=70.0"></script>
 
+    <!-- Service Worker Registration for Instant Updates -->
+    <script>
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('./sw.js')
+                .then(reg => {
+                    reg.update();
+                    document.addEventListener('visibilitychange', () => {
+                        if (document.visibilityState === 'visible') reg.update();
+                    });
+                    reg.onupdatefound = () => {
+                        const newWorker = reg.installing;
+                        if (newWorker) {
+                            newWorker.onstatechange = () => {
+                                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                    newWorker.postMessage({ type: 'SKIP_WAITING' });
+                                }
+                            };
+                        }
+                    };
+                })
+                .catch(err => console.warn('[SW] Registration failed:', err));
+
+            let refreshing = false;
+            navigator.serviceWorker.addEventListener('controllerchange', () => {
+                if (!refreshing) {
+                    refreshing = true;
+                    window.location.reload();
+                }
+            });
+        });
+    }
+    </script>
 </body>
 </html>

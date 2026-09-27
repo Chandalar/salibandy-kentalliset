@@ -5827,3 +5827,123 @@ body.mobile-ui {
 .ocr-row-del-btn:hover {
     background: rgba(239, 68, 68, 0.15);
 }
+
+/* ============================================================
+   TEAM SYNC STATUS BADGE (PILVI VS LOKAALI) – v70.0
+   ============================================================ */
+.team-sync-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 9px;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    line-height: 1.2;
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.team-sync-badge.badge-cloud {
+    background: rgba(16, 185, 129, 0.15);
+    border: 1px solid rgba(16, 185, 129, 0.45);
+    color: #34d399;
+    box-shadow: 0 0 10px rgba(16, 185, 129, 0.15);
+}
+
+.team-sync-badge.badge-cloud:hover {
+    background: rgba(16, 185, 129, 0.25);
+    border-color: #10b981;
+    transform: translateY(-1px);
+}
+
+.team-sync-badge.badge-local {
+    background: rgba(245, 158, 11, 0.14);
+    border: 1px solid rgba(245, 158, 11, 0.45);
+    color: #fbbf24;
+}
+
+.team-sync-badge.badge-local:hover {
+    background: rgba(245, 158, 11, 0.24);
+    border-color: #f59e0b;
+    transform: translateY(-1px);
+}
+
+.team-sync-badge .badge-icon {
+    font-size: 0.85rem;
+    line-height: 1;
+}
+
+.team-sync-badge .badge-title {
+    font-weight: 800;
+    letter-spacing: 0.02em;
+}
+
+.team-sync-badge .badge-sub {
+    font-size: 0.65rem;
+    opacity: 0.85;
+    font-weight: 600;
+}
+
+.team-sync-badge .btn-badge-share {
+    background: #f59e0b;
+    color: #0b1120;
+    border: none;
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-size: 0.62rem;
+    font-weight: 800;
+    cursor: pointer;
+    margin-left: 3px;
+    transition: background 0.15s ease, transform 0.1s ease;
+}
+
+.team-sync-badge .btn-badge-share:hover {
+    background: #fbbf24;
+    transform: scale(1.05);
+}
+
+.badge-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    display: inline-block;
+    flex-shrink: 0;
+}
+
+.dot-pulse-green {
+    background: #10b981;
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+    animation: badge-pulse-green 2s infinite cubic-bezier(0.66, 0, 0, 1);
+}
+
+@keyframes badge-pulse-green {
+    0% {
+        box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+    }
+    70% {
+        box-shadow: 0 0 0 6px rgba(16, 185, 129, 0);
+    }
+    100% {
+        box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+    }
+}
+
+.dot-amber {
+    background: #f59e0b;
+    box-shadow: 0 0 4px rgba(245, 158, 11, 0.5);
+}
+
+@media (max-width: 600px) {
+    .team-sync-badge {
+        padding: 2px 6px;
+        font-size: 0.68rem;
+    }
+    .team-sync-badge .badge-sub {
+        display: none;
+    }
+}
+

@@ -14,6 +14,8 @@
             id: 'team_sekta', 
             name: 'SekTa',
             shareId: 'st_team_sekta',
+            isShared: true,
+            cloudSynced: true,
             logo: 'sekta-logo.png',
             photo: 'sekta-logo.png',
             primaryColor: '#6b5bd7',
@@ -31,6 +33,8 @@
             id: 'team_akatemia', 
             name: 'FBC Akatemia',
             shareId: 'st_team_akatemia',
+            isShared: true,
+            cloudSynced: true,
             logo: '🦅',
             primaryColor: '#dc2626',
             secondaryColor: '#991b1b',
@@ -45,6 +49,8 @@
             id: 'team_edustus', 
             name: 'Edustusjoukkue',
             shareId: 'st_team_edustus',
+            isShared: true,
+            cloudSynced: true,
             logo: '🦁',
             primaryColor: '#2563eb',
             secondaryColor: '#1e40af',
@@ -59,6 +65,8 @@
             id: 'team_junnut', 
             name: 'A-Juniorit',
             shareId: 'st_team_junnut',
+            isShared: true,
+            cloudSynced: true,
             logo: '⚡',
             primaryColor: '#dc2626',
             secondaryColor: '#991b1b',
@@ -481,6 +489,56 @@
         return result;
     }
 
+    const CANONICAL_CLOUD_SHARE_IDS = ['st_team_sekta', 'st_team_akatemia', 'st_team_edustus', 'st_team_junnut'];
+    const CANONICAL_CLOUD_TEAM_IDS = ['team_sekta', 'team_akatemia', 'team_edustus', 'team_junnut', 'default_team'];
+
+    function isCloudTeam(team) {
+        if (!team) return false;
+        if (CANONICAL_CLOUD_TEAM_IDS.includes(team.id)) return true;
+        if (team.shareId && CANONICAL_CLOUD_SHARE_IDS.includes(team.shareId)) return true;
+        if (currentSharedTeamId && (team.shareId === currentSharedTeamId || team.id === 'shared_' + currentSharedTeamId)) return true;
+        if (String(team.id).startsWith('shared_')) return true;
+        const nameLow = (team.name || '').toLowerCase();
+        if (nameLow.includes('sekta') || nameLow.includes('akatemia') || nameLow.includes('edustus')) return true;
+        if (team.isShared === true || team.cloudSynced === true) return true;
+        return false;
+    }
+
+    function renderTeamSyncBadge(curTeam, targetId) {
+        const el = document.getElementById(targetId);
+        if (!el) return;
+        const isCloud = isCloudTeam(curTeam);
+        if (isCloud) {
+            el.className = 'team-sync-badge badge-cloud';
+            el.title = '☁️ Tämä joukkue on jaettu pilvessä (Firestore). Kaikki kokoonpanomuutokset synkronoituvat reaaliajassa!';
+            el.innerHTML = `
+                <span class="badge-dot dot-pulse-green"></span>
+                <span class="badge-icon">☁️</span>
+                <span class="badge-title">Pilvijoukkue</span>
+                <span class="badge-sub">(Jaettu)</span>
+            `;
+            el.onclick = () => {
+                const btn = document.getElementById('btn-open-share-modal');
+                if (btn) btn.click();
+            };
+        } else {
+            el.className = 'team-sync-badge badge-local';
+            el.title = '💾 Tämä joukkue on tallennettu vain tälle laitteelle (Lokaali). Klikkaa "Jaa pilveen" jakaaksesi sen reaaliajassa muille!';
+            el.innerHTML = `
+                <span class="badge-dot dot-amber"></span>
+                <span class="badge-icon">💾</span>
+                <span class="badge-title">Lokaali</span>
+                <span class="badge-sub">(Vain tämä laite)</span>
+                <button class="btn-badge-share" type="button" title="Jaa tämä joukkue pilveen">Jaa ↗</button>
+            `;
+            el.onclick = (e) => {
+                e.stopPropagation();
+                const btn = document.getElementById('btn-open-share-modal');
+                if (btn) btn.click();
+            };
+        }
+    }
+
     // Global State
     let deletedTeamIds = loadFromStorage('salibandy_deleted_team_ids', []);
     if (Array.isArray(deletedTeamIds)) {
@@ -648,6 +706,9 @@
         document.documentElement.style.setProperty('--team-primary-color', curTeam.primaryColor || '#2563eb');
         document.documentElement.style.setProperty('--team-mv-color', curTeam.mvColor || '#10b981');
 
+        // Render prominent Cloud vs Local indicator badge in Advanced header
+        renderTeamSyncBadge(curTeam, 'advanced-team-sync-badge');
+
         // Header Team Logo
         const logoWrapper = document.getElementById('header-team-logo-wrapper');
         if (logoWrapper) {
@@ -811,6 +872,13 @@
 
     function openShareModal() {
         const curTeam = teams.find(t => t.id === currentTeamId);
+        if (curTeam) {
+            curTeam.isShared = true;
+            curTeam.cloudSynced = true;
+            saveTeamsToStorage();
+            renderTeamDropdown();
+            renderTeamSyncBadge(curTeam, 'advanced-team-sync-badge');
+        }
         const teamName = curTeam ? curTeam.name.replace(/^🤝\s*/, '') : 'Joukkue';
         const shareId = getShareIdForCurrentTeam();
 
@@ -2298,10 +2366,16 @@
 
             const opt = document.createElement('option');
             opt.value = t.id;
-            opt.textContent = (t.name || 'Joukkue').replace(/^🤝\s*/, '');
+            const safeName = (t.name || 'Joukkue').replace(/^🤝\s*/, '');
+            const isCloud = isCloudTeam(t);
+            const statusTag = isCloud ? '☁️ [Pilvi]' : '💾 [Lokaali]';
+            opt.textContent = `${safeName} ${statusTag}`;
             if (t.id === currentTeamId || normKey === normalizeTeamKey(currentTeamId)) opt.selected = true;
             teamSelect.appendChild(opt);
         });
+
+        const curTeam = teams.find(t => t.id === currentTeamId) || teams[0];
+        renderTeamSyncBadge(curTeam, 'advanced-team-sync-badge');
     }
 
     function switchTeam(teamId) {
