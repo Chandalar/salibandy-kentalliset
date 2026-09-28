@@ -994,6 +994,20 @@
         document.getElementById('share-modal')?.classList.add('active');
     }
 
+    function extractReservesArray(res) {
+        if (!res) return [];
+        if (Array.isArray(res)) return [...res];
+        if (typeof res === 'object') {
+            const arr = [];
+            if (Array.isArray(res.general)) arr.push(...res.general);
+            Object.keys(res).forEach(k => {
+                if (k !== 'general' && Array.isArray(res[k])) arr.push(...res[k]);
+            });
+            return arr;
+        }
+        return [];
+    }
+
     function pushSharedTeamToCloud(shareId, teamObj) {
         if (!shareId) return;
         if (typeof window === 'undefined' || !window.SalibandyFirebase) return;
@@ -1034,9 +1048,9 @@
                     '6P': lineups['6v5']['VM'] || lineups['6v5']['6P'] || ''
                 };
             }
-            if (lineupReserves['yv']) lineupReserves['yv1'] = [...lineupReserves['yv']];
-            if (lineupReserves['av']) lineupReserves['av1'] = [...lineupReserves['av']];
-            if (lineupReserves['6v5']) lineupReserves['6v5_1'] = [...lineupReserves['6v5']];
+            if (lineupReserves['yv']) lineupReserves['yv1'] = extractReservesArray(lineupReserves['yv']);
+            if (lineupReserves['av']) lineupReserves['av1'] = extractReservesArray(lineupReserves['av']);
+            if (lineupReserves['6v5']) lineupReserves['6v5_1'] = extractReservesArray(lineupReserves['6v5']);
 
             const payload = {
                 shareId: shareId,
@@ -1265,14 +1279,14 @@
             if (data.reserves) {
                 const fromSimple = data._lastModifiedBy && data._lastModifiedBy.includes('simple');
                 lineupReserves = data.reserves;
-                if (lineupReserves['yv1'] && (fromSimple || !lineupReserves['yv'])) lineupReserves['yv'] = [...lineupReserves['yv1']];
-                else if (lineupReserves['yv'] && !lineupReserves['yv1']) lineupReserves['yv1'] = [...lineupReserves['yv']];
+                if (lineupReserves['yv1'] && (fromSimple || !lineupReserves['yv'])) lineupReserves['yv'] = extractReservesArray(lineupReserves['yv1']);
+                else if (lineupReserves['yv'] && !lineupReserves['yv1']) lineupReserves['yv1'] = extractReservesArray(lineupReserves['yv']);
 
-                if (lineupReserves['av1'] && (fromSimple || !lineupReserves['av'])) lineupReserves['av'] = [...lineupReserves['av1']];
-                else if (lineupReserves['av'] && !lineupReserves['av1']) lineupReserves['av1'] = [...lineupReserves['av']];
+                if (lineupReserves['av1'] && (fromSimple || !lineupReserves['av'])) lineupReserves['av'] = extractReservesArray(lineupReserves['av1']);
+                else if (lineupReserves['av'] && !lineupReserves['av1']) lineupReserves['av1'] = extractReservesArray(lineupReserves['av']);
 
-                if (lineupReserves['6v5_1'] && (fromSimple || !lineupReserves['6v5'])) lineupReserves['6v5'] = [...lineupReserves['6v5_1']];
-                else if (lineupReserves['6v5'] && !lineupReserves['6v5_1']) lineupReserves['6v5_1'] = [...lineupReserves['6v5']];
+                if (lineupReserves['6v5_1'] && (fromSimple || !lineupReserves['6v5'])) lineupReserves['6v5'] = extractReservesArray(lineupReserves['6v5_1']);
+                else if (lineupReserves['6v5'] && !lineupReserves['6v5_1']) lineupReserves['6v5_1'] = extractReservesArray(lineupReserves['6v5']);
             }
             if (data.drawings) lineupDrawings = sanitizeDrawings(data.drawings);
             if (data.positions) lineupCourtPositions = data.positions;
@@ -5765,13 +5779,18 @@
             card.setAttribute('draggable', 'true');
 
             card.addEventListener('dragstart', (e) => {
+                if (e.target.closest('button')) {
+                    e.preventDefault();
+                    return;
+                }
                 draggedLineupSlot = null;
                 draggedLiveSlot = null;
                 draggedRosterPlayerId = player.id;
+                isAnyDraggingActive = true;
                 if (e.dataTransfer) {
+                    e.dataTransfer.effectAllowed = 'copyMove';
                     e.dataTransfer.setData('text/plain', player.id);
                     e.dataTransfer.setData('application/json', JSON.stringify({ type: 'roster-player', playerId: player.id, player }));
-                    e.dataTransfer.effectAllowed = 'copy';
                 }
                 card.classList.add('is-dragging-from-roster');
             });
@@ -5779,6 +5798,7 @@
             card.addEventListener('dragend', () => {
                 card.classList.remove('is-dragging-from-roster');
                 draggedRosterPlayerId = null;
+                isAnyDraggingActive = false;
             });
 
             let assignedInfo = '';
@@ -6032,6 +6052,10 @@
                 `;
 
                 slot.addEventListener('dragstart', (e) => {
+                    if (e.target.closest('button')) {
+                        e.preventDefault();
+                        return;
+                    }
                     draggedLineupSlot = {
                         type: 'slot-player',
                         sourceLineup: activeLineupKey,
@@ -6415,11 +6439,22 @@
             `;
 
             card.addEventListener('dragstart', (e) => {
+                draggedLineupSlot = null;
+                draggedLiveSlot = null;
+                draggedRosterPlayerId = p.id;
+                isAnyDraggingActive = true;
+                e.dataTransfer.effectAllowed = 'copyMove';
                 e.dataTransfer.setData('text/plain', p.id);
+                e.dataTransfer.setData('application/json', JSON.stringify({ type: 'roster-player', playerId: p.id }));
                 card.classList.add('is-dragging');
             });
             card.addEventListener('dragend', () => {
                 card.classList.remove('is-dragging');
+                draggedRosterPlayerId = null;
+                isAnyDraggingActive = false;
+                document.querySelectorAll('.drag-target-hover, .drag-swap-hover, .is-dragging, .drag-bank-hover').forEach(el => {
+                    el.classList.remove('drag-target-hover', 'drag-swap-hover', 'is-dragging', 'drag-bank-hover');
+                });
             });
 
             card.addEventListener('click', () => {
@@ -7320,6 +7355,10 @@
                 // Drag source (if slot has a player)
                 if (row.classList.contains('has-player') && pid) {
                     row.ondragstart = (e) => {
+                        if (e.target.closest('button')) {
+                            e.preventDefault();
+                            return;
+                        }
                         draggedLiveSlot = {
                             type: 'slot-player',
                             sourceLineup: lk,
@@ -8311,7 +8350,6 @@
 
         if (assignOptionsGrid) {
             assignOptionsGrid.innerHTML = '';
-            const posKeys = ['MV', 'VP', 'OP', 'VH', 'KH', 'OH'];
             const displayConfigs = lineupConfigs.filter(c => c.id !== 'custom' && c.id !== 'freeform' && c.type !== 'drawing_only');
 
             displayConfigs.forEach(cConfig => {
@@ -8319,6 +8357,8 @@
                 const lName = cConfig.name;
                 const curLineup = lineups[lKey] || {};
                 const isGeneralReserve = getGeneralReserves(lKey).includes(player.id);
+                const is6v5 = (lKey === '6v5' || lKey.startsWith('6v5') || (cConfig.name && cConfig.name.includes('6v5')));
+                const posKeys = is6v5 ? ['6P', 'VP', 'OP', 'VH', 'KH', 'OH'] : ['MV', 'VP', 'OP', 'VH', 'KH', 'OH'];
 
                 const section = document.createElement('div');
                 section.className = 'assign-lineup-section';
@@ -8362,6 +8402,7 @@
                     btn.addEventListener('click', () => {
                         if (isOccupiedByThis) {
                             lineups[lKey][pos] = '';
+                            if (pos === '6P' && lineups[lKey]['VM']) lineups[lKey]['VM'] = '';
                             showToast(`Poistettu paikalta: ${lName} - ${pos} ✕`);
                         } else {
                             assignPlayerToLineupSlot(lKey, pos, player.id);
@@ -8422,6 +8463,7 @@
     function assignPlayerToLineupSlot(lineupKey, pos, playerId) {
         if (!lineups[lineupKey]) lineups[lineupKey] = createEmptyLineupSlots();
         lineups[lineupKey][pos] = playerId;
+        if (pos === '6P') lineups[lineupKey]['VM'] = playerId;
 
         saveState(true);
         renderRoster();

@@ -34,6 +34,20 @@
     let draggedRosterPlayerId = null;
     let lastLocalMutationAt = 0;
 
+    function extractReservesArray(res) {
+        if (!res) return [];
+        if (Array.isArray(res)) return [...res];
+        if (typeof res === 'object') {
+            const arr = [];
+            if (Array.isArray(res.general)) arr.push(...res.general);
+            Object.keys(res).forEach(k => {
+                if (k !== 'general' && Array.isArray(res[k])) arr.push(...res[k]);
+            });
+            return arr;
+        }
+        return [];
+    }
+
     function getDeletedPlayerIds(teamId) {
         const tId = teamId || currentTeamId;
         if (!tId) return [];
@@ -815,9 +829,9 @@
                 };
             }
 
-            if (lineupReserves['yv'] && !lineupReserves['yv1']) lineupReserves['yv1'] = [...lineupReserves['yv']];
-            if (lineupReserves['av'] && !lineupReserves['av1']) lineupReserves['av1'] = [...lineupReserves['av']];
-            if (lineupReserves['6v5'] && !lineupReserves['6v5_1']) lineupReserves['6v5_1'] = [...lineupReserves['6v5']];
+            if (lineupReserves['yv'] && !lineupReserves['yv1']) lineupReserves['yv1'] = extractReservesArray(lineupReserves['yv']);
+            if (lineupReserves['av'] && !lineupReserves['av1']) lineupReserves['av1'] = extractReservesArray(lineupReserves['av']);
+            if (lineupReserves['6v5'] && !lineupReserves['6v5_1']) lineupReserves['6v5_1'] = extractReservesArray(lineupReserves['6v5']);
 
             // Only seed initial starters if team lineups have NEVER been initialized by the user!
             const isLineupsInit = localStorage.getItem('salibandy_lineups_initialized_' + currentTeamId);
@@ -1108,9 +1122,9 @@
                     VM: lineups['6v5_1']['6P'] || lineups['6v5_1']['VM'] || ''
                 };
             }
-            if (lineupReserves['yv1']) lineupReserves['yv'] = [...lineupReserves['yv1']];
-            if (lineupReserves['av1']) lineupReserves['av'] = [...lineupReserves['av1']];
-            if (lineupReserves['6v5_1']) lineupReserves['6v5'] = [...lineupReserves['6v5_1']];
+            if (lineupReserves['yv1']) lineupReserves['yv'] = extractReservesArray(lineupReserves['yv1']);
+            if (lineupReserves['av1']) lineupReserves['av'] = extractReservesArray(lineupReserves['av1']);
+            if (lineupReserves['6v5_1']) lineupReserves['6v5'] = extractReservesArray(lineupReserves['6v5_1']);
 
             const payload = {
                 shareId: shareId,
@@ -1308,9 +1322,9 @@
             }
             if (data.reserves) {
                 lineupReserves = data.reserves;
-                if (lineupReserves['yv'] && !lineupReserves['yv1']) lineupReserves['yv1'] = [...lineupReserves['yv']];
-                if (lineupReserves['av'] && !lineupReserves['av1']) lineupReserves['av1'] = [...lineupReserves['av']];
-                if (lineupReserves['6v5'] && !lineupReserves['6v5_1']) lineupReserves['6v5_1'] = [...lineupReserves['6v5']];
+                if (lineupReserves['yv'] && !lineupReserves['yv1']) lineupReserves['yv1'] = extractReservesArray(lineupReserves['yv']);
+                if (lineupReserves['av'] && !lineupReserves['av1']) lineupReserves['av1'] = extractReservesArray(lineupReserves['av']);
+                if (lineupReserves['6v5'] && !lineupReserves['6v5_1']) lineupReserves['6v5_1'] = extractReservesArray(lineupReserves['6v5']);
             }
             if (data.events) teamEvents = data.events;
 
