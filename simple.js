@@ -233,6 +233,17 @@
         return String(t.id || t.name || '').replace(/[^a-z0-9_]/gi, '');
     }
 
+    function getCanonicalShareId(teamId, teamObj) {
+        if (teamObj && isLocalDraftTeam(teamObj)) return null;
+        if (teamObj && teamObj.shareId) return teamObj.shareId;
+        const norm = normalizeTeamKey(teamId, teamObj);
+        if (norm === 'sekta') return 'st_team_sekta';
+        if (norm === 'akatemia') return 'st_team_akatemia';
+        if (norm === 'edustus') return 'st_team_edustus';
+        if (norm === 'junnut') return 'st_team_junnut';
+        return null;
+    }
+
     function deduplicateTeams(rawTeams) {
         if (!Array.isArray(rawTeams) || rawTeams.length === 0) {
             return JSON.parse(JSON.stringify(DEFAULT_TEAMS));
@@ -1162,18 +1173,8 @@
                 return;
             }
 
-            // Remote timestamp parsing: support both _lastModifiedAt and updatedAt Timestamp
-            const remoteTs = Number(data._lastModifiedAt) || (data.updatedAt && typeof data.updatedAt.toMillis === 'function' ? data.updatedAt.toMillis() : (data.updatedAt && data.updatedAt.seconds ? data.updatedAt.seconds * 1000 : 0));
-
-            // Skip snapshot if local mutation occurred AFTER remote doc timestamp
-            if (remoteTs && lastLocalMutationAt && remoteTs < lastLocalMutationAt) {
-                console.log(`[Simple][${clientInstanceId}] Ignoring stale remote snapshot prior to local mutation (${remoteTs} < ${lastLocalMutationAt})`);
-                return;
-            }
-
-            // Also ignore if a local mutation just happened in the last 2.5 seconds
-            if (lastLocalMutationAt && (Date.now() - lastLocalMutationAt < 2500)) {
-                console.log(`[Simple][${clientInstanceId}] Ignoring remote snapshot due to recent local mutation within 2.5s`);
+            // If user is actively dragging an element, skip tearing down the DOM mid-gesture
+            if (draggedSlotData || draggedRosterPlayerId || document.querySelector('.is-dragging')) {
                 return;
             }
 
@@ -1263,14 +1264,21 @@
                         if (allDeletedPlayers.includes(lineups[k][pos])) lineups[k][pos] = '';
                     });
                 });
-                // Lineup bridging: if incoming came from Advanced mode (yv/av/6v5) and Simple keys are empty
-                if (lineups['yv'] && (!lineups['yv1'] || !Object.values(lineups['yv1']).some(Boolean))) {
+                // Lineup bridging: sync Advanced mode (yv/av/6v5) with Simple mode (yv1/av1/6v5_1)
+                const fromAdv = data._lastModifiedBy && data._lastModifiedBy.includes('adv');
+                if (lineups['yv'] && (fromAdv || !lineups['yv1'])) {
                     lineups['yv1'] = { ...lineups['yv'] };
+                } else if (lineups['yv1'] && !lineups['yv']) {
+                    lineups['yv'] = { ...lineups['yv1'] };
                 }
-                if (lineups['av'] && (!lineups['av1'] || !Object.values(lineups['av1']).some(Boolean))) {
+
+                if (lineups['av'] && (fromAdv || !lineups['av1'])) {
                     lineups['av1'] = { ...lineups['av'] };
+                } else if (lineups['av1'] && !lineups['av']) {
+                    lineups['av'] = { ...lineups['av1'] };
                 }
-                if (lineups['6v5'] && (!lineups['6v5_1'] || !Object.values(lineups['6v5_1']).some(Boolean))) {
+
+                if (lineups['6v5'] && (fromAdv || !lineups['6v5_1'])) {
                     lineups['6v5_1'] = {
                         VP: lineups['6v5'].VP || '',
                         OP: lineups['6v5'].OP || '',
@@ -1278,6 +1286,15 @@
                         KH: lineups['6v5'].KH || '',
                         OH: lineups['6v5'].OH || '',
                         '6P': lineups['6v5']['6P'] || lineups['6v5']['VM'] || ''
+                    };
+                } else if (lineups['6v5_1'] && !lineups['6v5']) {
+                    lineups['6v5'] = {
+                        VP: lineups['6v5'].VP || '',
+                        OP: lineups['6v5'].OP || '',
+                        VH: lineups['6v5'].VH || '',
+                        KH: lineups['6v5'].KH || '',
+                        OH: lineups['6v5'].OH || '',
+                        VM: lineups['6v5_1']['6P'] || lineups['6v5_1']['VM'] || ''
                     };
                 }
                 // Ensure all 10 canonical Simple lineups exist
@@ -1671,9 +1688,10 @@
             listenToSharedTeamFirestore(teamShareId);
         } else {
             const curTeam = teams.find(t => t.id === currentTeamId);
-            if (curTeam && curTeam.shareId) {
-                currentSharedTeamId = curTeam.shareId;
-                listenToSharedTeamFirestore(curTeam.shareId);
+            const shareIdToListen = getCanonicalShareId(currentTeamId, curTeam);
+            if (shareIdToListen) {
+                currentSharedTeamId = shareIdToListen;
+                listenToSharedTeamFirestore(shareIdToListen);
             }
         }
     }
@@ -1741,7 +1759,7 @@
 
         // 2. Sync to Shared Team Cloud if team is shared
         const curTeam = teams.find(t => t.id === currentTeamId);
-        const activeShareId = (curTeam && curTeam.shareId) ? curTeam.shareId : currentSharedTeamId;
+        const activeShareId = getCanonicalShareId(currentTeamId, curTeam) || currentSharedTeamId;
         if (activeShareId && window.SalibandyFirebase && window.SalibandyFirebase.isReady()) {
             if (sharedTeamSyncDebounceTimer) clearTimeout(sharedTeamSyncDebounceTimer);
             if (immediateSync) {
@@ -1762,8 +1780,10 @@
         renderAll(true);
 
         const selectedTeam = teams.find(t => t.id === currentTeamId);
-        if (selectedTeam && selectedTeam.shareId) {
-            listenToSharedTeamFirestore(selectedTeam.shareId);
+        const shareIdToListen = getCanonicalShareId(currentTeamId, selectedTeam);
+        if (shareIdToListen) {
+            currentSharedTeamId = shareIdToListen;
+            listenToSharedTeamFirestore(shareIdToListen);
         } else if (unsubscribeSharedTeam) {
             unsubscribeSharedTeam();
             unsubscribeSharedTeam = null;
@@ -4634,22 +4654,7 @@ If no number is visible, provide a number or null. Only return the JSON array.`;
                 return;
             }
 
-            // Save previous team state first
-            saveToStorageLocalOnly();
-
-            currentTeamId = val;
-            localStorage.setItem('salibandy_active_team_id', JSON.stringify(currentTeamId));
-            loadState(currentTeamId);
-            renderAll();
-
-            const selectedTeam = teams.find(t => t.id === currentTeamId);
-            if (selectedTeam && selectedTeam.shareId) {
-                listenToSharedTeamFirestore(selectedTeam.shareId);
-            } else if (unsubscribeSharedTeam) {
-                unsubscribeSharedTeam();
-                unsubscribeSharedTeam = null;
-            }
-            showToast('Joukkue vaihdettu: ' + (selectedTeam?.name || ''));
+            switchTeam(val);
         });
 
         document.getElementById('btn-simple-delete-team')?.addEventListener('click', deleteActiveTeam);
