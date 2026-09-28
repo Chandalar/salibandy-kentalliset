@@ -2458,13 +2458,16 @@ body[data-court-color="grid"] .faceoff-dot {
     color: #60a5fa;
 }
 
-.summary-slot-row.is-dragging {
+.summary-slot-row.is-dragging,
+.lineup-slot.is-dragging,
+.pos-reserve-row.is-dragging {
     opacity: 0.35 !important;
     outline: 2px dashed #60a5fa !important;
     outline-offset: -2px;
 }
 
-.summary-slot-row.drag-target-hover {
+.summary-slot-row.drag-target-hover,
+.lineup-slot.drag-target-hover {
     background: rgba(16, 185, 129, 0.45) !important;
     outline: 2px solid #10b981 !important;
     outline-offset: -2px;
@@ -2472,7 +2475,8 @@ body[data-court-color="grid"] .faceoff-dot {
     transform: scale(1.02);
 }
 
-.summary-slot-row.drag-swap-hover {
+.summary-slot-row.drag-swap-hover,
+.lineup-slot.drag-swap-hover {
     background: rgba(245, 158, 11, 0.45) !important;
     outline: 2px solid #f59e0b !important;
     outline-offset: -2px;
@@ -2480,7 +2484,19 @@ body[data-court-color="grid"] .faceoff-dot {
     transform: scale(1.02);
 }
 
-.live-roster-section.drag-bank-hover {
+.court-player-node.drag-target-hover {
+    box-shadow: 0 0 18px #10b981, 0 0 25px rgba(16, 185, 129, 0.7) !important;
+    transform: scale(1.22) !important;
+}
+
+.court-player-node.drag-swap-hover {
+    box-shadow: 0 0 18px #f59e0b, 0 0 25px rgba(245, 158, 11, 0.7) !important;
+    transform: scale(1.22) !important;
+}
+
+.live-roster-section.drag-bank-hover,
+.roster-panel.drag-bank-hover,
+.roster-list.drag-bank-hover {
     background: rgba(239, 68, 68, 0.12) !important;
     border-color: #ef4444 !important;
     box-shadow: 0 0 16px rgba(239, 68, 68, 0.3) !important;
