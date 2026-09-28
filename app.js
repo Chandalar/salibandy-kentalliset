@@ -676,6 +676,15 @@
     let draggedRosterPlayerId = null;
     let isAnyDraggingActive = false;
     let lastLocalMutationAt = 0;
+    let justDroppedGlobal = false;
+    let justDroppedTimer = null;
+    function setJustDropped() {
+        justDroppedGlobal = true;
+        if (justDroppedTimer) clearTimeout(justDroppedTimer);
+        justDroppedTimer = setTimeout(() => {
+            justDroppedGlobal = false;
+        }, 400);
+    }
 
     function getCanonicalShareId(teamId, teamObj) {
         if (teamObj && isLocalDraftTeam(teamObj)) return null;
@@ -2530,7 +2539,7 @@
         // 2. Synchronize to shared team document if current team is shared or has shareId
         const curTeam = teams.find(t => t.id === currentTeamId);
         let activeShareId = getCanonicalShareId(currentTeamId, curTeam) || currentSharedTeamId;
-        if (activeShareId && !isViewerMode && window.SalibandyFirebase && window.SalibandyFirebase.isReady()) {
+        if (activeShareId && !isViewerMode && window.SalibandyFirebase) {
             if (sharedTeamSyncDebounceTimer) clearTimeout(sharedTeamSyncDebounceTimer);
             if (immediateSync) {
                 pushSharedTeamToCloud(activeShareId, curTeam);
@@ -2806,12 +2815,40 @@
             lineupConfigs = loadLineupConfigs(currentTeamId);
         }
 
-        // 1. FIRST TAB (leftmost): Live-osallistujat (Nimenhuuto / myClub)
+        // 1. FIRST TAB (leftmost): Kaikki kentät (Live-osallistujat & kentälliset)
         const liveBtn = document.createElement('button');
         liveBtn.className = `tab-btn highlight-live ${activeLineupKey === 'live' ? 'active' : ''}`;
         liveBtn.dataset.lineup = 'live';
-        liveBtn.innerHTML = '<span>🟢 Live-osallistujat</span>';
+        liveBtn.innerHTML = '<span>👥 Kaikki kentät (Live)</span>';
         liveBtn.addEventListener('click', () => switchTab('live'));
+
+        let liveHoverTimer = null;
+        liveBtn.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            liveBtn.classList.add('tab-drag-hover');
+            if (!liveHoverTimer && activeLineupKey !== 'live') {
+                liveHoverTimer = setTimeout(() => {
+                    switchTab('live');
+                    liveHoverTimer = null;
+                }, 350);
+            }
+        });
+        liveBtn.addEventListener('dragleave', () => {
+            liveBtn.classList.remove('tab-drag-hover');
+            if (liveHoverTimer) {
+                clearTimeout(liveHoverTimer);
+                liveHoverTimer = null;
+            }
+        });
+        liveBtn.addEventListener('drop', (e) => {
+            liveBtn.classList.remove('tab-drag-hover');
+            if (liveHoverTimer) {
+                clearTimeout(liveHoverTimer);
+                liveHoverTimer = null;
+            }
+            switchTab('live');
+        });
         tabsScrollContainer.appendChild(liveBtn);
 
         // 2. Custom Lineups (1. Kenttä, 2. Kenttä, etc.)
@@ -2827,6 +2864,65 @@
             btn.innerHTML = `<span>${escapeHtml(config.name)}</span>`;
 
             btn.addEventListener('click', () => switchTab(config.id));
+
+            // Tab Drag-and-Drop: Hovering switches tab, dropping assigns/moves player!
+            let tabHoverTimer = null;
+            btn.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                btn.classList.add('tab-drag-hover');
+                if (!tabHoverTimer && activeLineupKey !== config.id) {
+                    tabHoverTimer = setTimeout(() => {
+                        switchTab(config.id);
+                        tabHoverTimer = null;
+                    }, 350);
+                }
+            });
+            btn.addEventListener('dragleave', (e) => {
+                btn.classList.remove('tab-drag-hover');
+                if (tabHoverTimer) {
+                    clearTimeout(tabHoverTimer);
+                    tabHoverTimer = null;
+                }
+            });
+            btn.addEventListener('drop', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                btn.classList.remove('tab-drag-hover');
+                if (tabHoverTimer) {
+                    clearTimeout(tabHoverTimer);
+                    tabHoverTimer = null;
+                }
+                setJustDropped();
+
+                let dragData = null;
+                try {
+                    const raw = e.dataTransfer ? e.dataTransfer.getData('application/json') : null;
+                    if (raw) dragData = JSON.parse(raw);
+                } catch(err) {}
+
+                const source = draggedLineupSlot || draggedLiveSlot || dragData;
+                const plainPlayerId = draggedRosterPlayerId || (e.dataTransfer ? e.dataTransfer.getData('text/plain') : null) || (source && source.playerId);
+                const targetLk = config.id;
+                if (targetLk === 'custom' || targetLk === 'freeform') return;
+
+                if (source && source.sourceLineup && source.sourcePos) {
+                    const targetPos = source.sourcePos;
+                    executeLineupSlotMoveOrSwap(source, { targetLineup: targetLk, targetPos: targetPos });
+                    switchTab(targetLk);
+                } else if (plainPlayerId) {
+                    const curLineup = lineups[targetLk] || {};
+                    const p = roster.find(x => x.id === plainPlayerId);
+                    const preferredPos = (p && p.position) ? p.position : 'VH';
+                    const targetPos = (!curLineup[preferredPos]) ? preferredPos : (['MV', 'VP', 'OP', 'VH', 'KH', 'OH'].find(pos => !curLineup[pos]) || preferredPos);
+                    assignPlayerToLineupSlot(targetLk, targetPos, plainPlayerId);
+                    switchTab(targetLk);
+                }
+                draggedLineupSlot = null;
+                draggedLiveSlot = null;
+                draggedRosterPlayerId = null;
+            });
+
             tabsScrollContainer.appendChild(btn);
         });
 
@@ -3055,7 +3151,7 @@
             }
         });
 
-        showToast(`Uusi kuvio lisätty alapuolelle! 🏒`);
+        showToast(`Uusi kuvio lisätty alapuolelle! 📋`);
     }
 
     function duplicateLastCourtToActivePage() {
@@ -3236,7 +3332,7 @@
             card.innerHTML = `
                 <div class="court-board-header">
                     <div class="court-board-title">
-                        <span>🏒 ${courts.length > 1 ? '#' + (idx + 1) + ' ' : ''}${escapeHtml(court.title || ('Kuvio ' + (idx + 1)))}</span>
+                        <span>${courts.length > 1 ? '#' + (idx + 1) + ' ' : ''}${escapeHtml(court.title || ('Kuvio ' + (idx + 1)))}</span>
                         <button class="btn-xs btn-outline" data-action="rename-court" data-court-id="${courtId}">✏️ Nimeä</button>
                     </div>
                     <div class="court-header-actions">
@@ -4171,7 +4267,7 @@
                     const layersEl = document.getElementById(`court-players-layer-${courtId}`);
                     if (layersEl) renderCourtNodesForInstance(courtId, layersEl);
                     setCourtDrawingTool(courtId, tool);
-                    showToast(`${tool === 'pass' ? 'Syöttö' : (tool === 'shot' ? 'Veto' : 'Liike')} #${nextStepNum} piirretty! Työkalu pysyy aktiivisena 🏒`);
+                    showToast(`${tool === 'pass' ? 'Syöttö' : (tool === 'shot' ? 'Veto' : 'Liike')} #${nextStepNum} piirretty! Työkalu pysyy aktiivisena 👍`);
                 }
             }
             courtPathPctMap[courtId] = [];
@@ -6011,6 +6107,7 @@
                 e.preventDefault();
                 e.stopPropagation();
                 slot.classList.remove('drag-target-hover', 'drag-swap-hover');
+                setJustDropped();
 
                 let dragData = null;
                 try {
@@ -6341,7 +6438,7 @@
         if (!modal || !bodyEl) return;
 
         if (titleEl) {
-            titleEl.innerHTML = `🏒 Sijoita: <strong>#${player.number} ${escapeHtml(player.name)}</strong> <span class="pos-badge">${player.position}</span>`;
+            titleEl.innerHTML = `Sijoita: <strong>#${player.number} ${escapeHtml(player.name)}</strong> <span class="pos-badge">${player.position}</span>`;
         }
 
         const posKeys = ['MV', 'VP', 'OP', 'VH', 'KH', 'OH'];
@@ -6414,7 +6511,7 @@
                     } else {
                         if (!lineups[lk]) lineups[lk] = createEmptyLineupSlots();
                         lineups[lk][pos] = player.id;
-                        showToast(`Pelaaja #${player.number} ${player.name} asetettu paikkaan ${getLineupName(lk)} - ${pos}! 🏒`);
+                        showToast(`Pelaaja #${player.number} ${player.name} asetettu paikkaan ${getLineupName(lk)} - ${pos}! 👍`);
                     }
                 }
 
@@ -7050,13 +7147,7 @@
             return;
         }
 
-        // Empty state when really no events and no url
-        if (!teamEvents || teamEvents.length === 0) {
-            renderEmptyLiveState(liveGridContainer, teamName, teamUrl);
-            return;
-        }
-
-        // If events exist, check if we should trigger a silent background refresh if stale (> 2 minutes)
+        // Check background events refresh
         if (teamUrl && !isFetchingLiveEvents) {
             const lastFetch = parseInt(loadFromStorage(`salibandy_events_last_fetch_${currentTeamId}`, '0'), 10) || 0;
             if (Date.now() - lastFetch > 2 * 60 * 1000) {
@@ -7067,35 +7158,35 @@
             }
         }
 
-        const curEvent = teamEvents.find(e => e.id === activeEventId) || teamEvents[0];
-        if (!curEvent) return;
+        const hasEvents = teamEvents && teamEvents.length > 0;
+        const curEvent = hasEvents ? (teamEvents.find(e => e.id === activeEventId) || teamEvents[0]) : null;
 
-        // Render event select dropdown
-        renderLiveEventSelect();
+        if (hasEvents && curEvent) {
+            renderLiveEventSelect();
+            const attendeesMap = curEvent.attendees || {};
+            let inCount = 0, outCount = 0, maybeCount = 0, unansweredCount = 0;
+            roster.forEach(p => {
+                const att = attendeesMap[p.id] || { status: 'unanswered' };
+                if (att.status === 'in') inCount++;
+                else if (att.status === 'out') outCount++;
+                else if (att.status === 'maybe') maybeCount++;
+                else unansweredCount++;
+            });
 
-        // Render event attendance counters
-        const attendeesMap = curEvent.attendees || {};
-        let inCount = 0, outCount = 0, maybeCount = 0, unansweredCount = 0;
-        roster.forEach(p => {
-            const att = attendeesMap[p.id] || { status: 'unanswered' };
-            if (att.status === 'in') inCount++;
-            else if (att.status === 'out') outCount++;
-            else if (att.status === 'maybe') maybeCount++;
-            else unansweredCount++;
-        });
+            const statIn = document.getElementById('stat-count-in');
+            const statOut = document.getElementById('stat-count-out');
+            const statMaybe = document.getElementById('stat-count-maybe');
+            const statUnanswered = document.getElementById('stat-count-unanswered');
 
-        const statIn = document.getElementById('stat-count-in');
-        const statOut = document.getElementById('stat-count-out');
-        const statMaybe = document.getElementById('stat-count-maybe');
-        const statUnanswered = document.getElementById('stat-count-unanswered');
+            if (statIn) statIn.textContent = `🟢 Mukana (IN): ${inCount}`;
+            if (statOut) statOut.textContent = `🔴 Poissa (OUT): ${outCount}`;
+            if (statMaybe) statMaybe.textContent = `🟡 Ehkä: ${maybeCount}`;
+            if (statUnanswered) statUnanswered.textContent = `⚪ Ei vastannut: ${unansweredCount}`;
+        }
 
-        if (statIn) statIn.textContent = `🟢 Mukana (IN): ${inCount}`;
-        if (statOut) statOut.textContent = `🔴 Poissa (OUT): ${outCount}`;
-        if (statMaybe) statMaybe.textContent = `🟡 Ehkä: ${maybeCount}`;
-        if (statUnanswered) statUnanswered.textContent = `⚪ Ei vastannut: ${unansweredCount}`;
+        const attendeesMap = (curEvent && curEvent.attendees) ? curEvent.attendees : {};
 
         // Render Lineup Cards with Attendance Badges
-        const posKeys = ['MV', 'VP', 'OP', 'VH', 'KH', 'OH'];
         const nonDrawingConfigs = lineupConfigs.filter(c => c.id !== 'custom' && c.id !== 'freeform' && c.type !== 'drawing_only');
         const displayConfigs = filterLineupConfigsByGroup(nonDrawingConfigs, liveGroupFilter);
 
@@ -7117,17 +7208,20 @@
             const lName = cConfig.name;
             const curLineup = lineups[lKey] || {};
 
+            const is6v5 = (lKey === '6v5' || lKey.startsWith('6v5') || (cConfig.name && cConfig.name.includes('6v5')));
+            const curPosKeys = is6v5 ? ['6P', 'VP', 'OP', 'VH', 'KH', 'OH'] : ['MV', 'VP', 'OP', 'VH', 'KH', 'OH'];
+
             const col = document.createElement('div');
             col.className = 'summary-lineup-card';
 
             let slotsHtml = '';
-            posKeys.forEach(pos => {
-                const pid = curLineup[pos];
+            curPosKeys.forEach(pos => {
+                const pid = (pos === '6P') ? (curLineup['6P'] || curLineup['VM']) : curLineup[pos];
                 const player = roster.find(p => p.id === pid);
                 const isMv = pos === 'MV';
                 const rowClass = isMv ? 'is-mv' : 'is-field';
 
-                const displayPos = (pos === 'KH') ? 'C' : pos;
+                const displayPos = (pos === 'KH') ? 'C' : (pos === '6P' ? '6P' : pos);
 
                 if (player) {
                     const att = attendeesMap[player.id] || { status: 'unanswered' };
@@ -7135,10 +7229,10 @@
                     if (att.status === 'in') attBadge = '<span class="live-status-pill status-in">🟢 IN</span>';
                     else if (att.status === 'out') attBadge = `<span class="live-status-pill status-out" title="${escapeHtml(att.reason || 'Poissa')}">🔴 OUT</span>`;
                     else if (att.status === 'maybe') attBadge = '<span class="live-status-pill status-maybe">🟡 EHKÄ</span>';
-                    else attBadge = '<span class="live-status-pill status-unanswered">⚪ ?</span>';
+                    else if (hasEvents) attBadge = '<span class="live-status-pill status-unanswered">⚪ ?</span>';
 
                     slotsHtml += `
-                        <div class="summary-slot-row ${rowClass} has-player" draggable="true" data-lineup="${lKey}" data-pos="${pos}" data-player-id="${player.id}" title="Vedä toiselle paikalle vaihtaaksesi/siirtääksesi. Status: ${att.status.toUpperCase()} ${att.reason ? '(' + att.reason + ')' : ''}">
+                        <div class="summary-slot-row ${rowClass} has-player" draggable="true" data-lineup="${lKey}" data-pos="${pos}" data-player-id="${player.id}" title="Vedä toiselle paikalle vaihtaaksesi/siirtääksesi.">
                             <span class="drag-handle-hint" title="Vedä siirtääksesi tai vaihtaaksesi">⠿</span>
                             <span class="summary-pos-tag">${displayPos}</span>
                             <span class="summary-p-num">#${player.number}</span>
@@ -7166,7 +7260,7 @@
                         const attBadge = att.status === 'in' ? '<span class="live-status-pill status-in">🟢 IN</span>' :
                                          att.status === 'out' ? `<span class="live-status-pill status-out">🔴 OUT</span>` :
                                          att.status === 'maybe' ? '<span class="live-status-pill status-maybe">🟡 EHKÄ</span>' :
-                                         '<span class="live-status-pill status-unanswered">⚪ ?</span>';
+                                         hasEvents ? '<span class="live-status-pill status-unanswered">⚪ ?</span>' : '';
                         slotsHtml += `
                             <div class="summary-slot-row summary-reserve-row has-player" draggable="true" data-lineup="${lKey}" data-pos="${pos}" data-is-reserve="true" data-reserve-id="${rPlayer.id}" data-player-id="${rPlayer.id}" title="Vedä siirtääksesi kentälliseen">
                                 <span class="drag-handle-hint" title="Vedä siirtääksesi">⠿</span>
@@ -7191,7 +7285,7 @@
                     const attBadge = att.status === 'in' ? '<span class="live-status-pill status-in">🟢 IN</span>' :
                                      att.status === 'out' ? `<span class="live-status-pill status-out">🔴 OUT</span>` :
                                      att.status === 'maybe' ? '<span class="live-status-pill status-maybe">🟡 EHKÄ</span>' :
-                                     '<span class="live-status-pill status-unanswered">⚪ ?</span>';
+                                     hasEvents ? '<span class="live-status-pill status-unanswered">⚪ ?</span>' : '';
                     slotsHtml += `
                         <div class="summary-slot-row summary-reserve-row has-player" draggable="true" data-lineup="${lKey}" data-pos="general" data-is-reserve="true" data-reserve-id="${rPlayer.id}" data-player-id="${rPlayer.id}" title="Vedä siirtääksesi kentälliseen">
                             <span class="drag-handle-hint" title="Vedä siirtääksesi">⠿</span>
@@ -7208,7 +7302,7 @@
             col.innerHTML = `
                 <div class="summary-card-header">
                     <div class="summary-card-title">${escapeHtml(lName)}</div>
-                    <button class="btn-xs btn-outline" data-action="switch-to-lineup" data-lineup="${lKey}">Avaa 🏒</button>
+                    <button class="btn-xs btn-outline" data-action="switch-to-lineup" data-lineup="${lKey}">Avaa</button>
                 </div>
                 <div class="summary-card-body">
                     ${slotsHtml}
@@ -7227,22 +7321,19 @@
                 if (row.classList.contains('has-player') && pid) {
                     row.ondragstart = (e) => {
                         draggedLiveSlot = {
-                            sourceLineup: lk,
-                            sourcePos: pos,
-                            playerId: pid,
-                            isReserve: isReserve,
-                            reserveId: reserveId
-                        };
-                        e.dataTransfer.effectAllowed = 'move';
-                        e.dataTransfer.setData('text/plain', pid);
-                        e.dataTransfer.setData('application/json', JSON.stringify({
                             type: 'slot-player',
                             sourceLineup: lk,
                             sourcePos: pos,
                             playerId: pid,
                             isReserve: isReserve,
                             reserveId: reserveId
-                        }));
+                        };
+                        draggedLineupSlot = draggedLiveSlot;
+                        draggedRosterPlayerId = null;
+                        isAnyDraggingActive = true;
+                        e.dataTransfer.effectAllowed = 'move';
+                        e.dataTransfer.setData('text/plain', pid);
+                        e.dataTransfer.setData('application/json', JSON.stringify(draggedLiveSlot));
                         row.classList.add('is-dragging');
                     };
 
@@ -7250,8 +7341,11 @@
                         row.classList.remove('is-dragging');
                         clearAllLiveDragStates();
                         row._justDragged = true;
-                        setTimeout(() => { row._justDragged = false; }, 300);
+                        setTimeout(() => { row._justDragged = false; }, 350);
                         draggedLiveSlot = null;
+                        draggedLineupSlot = null;
+                        draggedRosterPlayerId = null;
+                        isAnyDraggingActive = false;
                     };
                 }
 
@@ -7271,7 +7365,7 @@
                         }
 
                         // Check if target slot is occupied -> Swap hover (orange) vs Target hover (green)
-                        const targetPlayerId = (lineups[lk] || {})[pos];
+                        const targetPlayerId = (pos === '6P') ? ((lineups[lk] || {})['6P'] || (lineups[lk] || {})['VM']) : (lineups[lk] || {})[pos];
                         if (targetPlayerId) {
                             row.classList.add('drag-swap-hover');
                             row.classList.remove('drag-target-hover');
@@ -7281,13 +7375,16 @@
                         }
                     };
 
-                    row.ondragleave = () => {
+                    row.ondragleave = (e) => {
+                        if (row.contains(e.relatedTarget)) return;
                         row.classList.remove('drag-target-hover', 'drag-swap-hover');
                     };
 
                     row.ondrop = (e) => {
                         e.preventDefault();
+                        e.stopPropagation();
                         row.classList.remove('drag-target-hover', 'drag-swap-hover');
+                        setJustDropped();
 
                         let dragData = null;
                         try {
@@ -7295,17 +7392,18 @@
                             if (raw) dragData = JSON.parse(raw);
                         } catch(err) {}
 
-                        const source = draggedLiveSlot || dragData;
-                        const plainPlayerId = e.dataTransfer ? e.dataTransfer.getData('text/plain') : null;
+                        const source = draggedLiveSlot || draggedLineupSlot || dragData;
+                        const plainPlayerId = draggedRosterPlayerId || (e.dataTransfer ? e.dataTransfer.getData('text/plain') : null) || (source && source.playerId);
 
                         if (source && source.sourceLineup && source.sourcePos) {
                             executeSlotMoveOrSwap(source, { targetLineup: lk, targetPos: pos });
-                        } else if (source && source.playerId) {
-                            executeBankDrop(source.playerId, lk, pos);
                         } else if (plainPlayerId) {
                             executeBankDrop(plainPlayerId, lk, pos);
                         }
                         draggedLiveSlot = null;
+                        draggedLineupSlot = null;
+                        draggedRosterPlayerId = null;
+                        isAnyDraggingActive = false;
                     };
                 }
             });
@@ -7317,19 +7415,6 @@
         const bankSection = document.getElementById('live-roster-section');
         if (bankSection) {
             bankSection.ondragover = (e) => {
-                if (draggedLiveSlot) {
-                    e.preventDefault();
-                    e.dataTransfer.dropEffect = 'move';
-                    bankSection.classList.add('drag-bank-hover');
-                }
-            };
-            bankSection.ondragleave = (e) => {
-                if (!bankSection.contains(e.relatedTarget)) {
-                    bankSection.classList.remove('drag-bank-hover');
-                }
-            };
-            bankSection.ondrop = (e) => {
-                bankSection.classList.remove('drag-bank-hover');
                 let dragData = null;
                 try {
                     const raw = e.dataTransfer ? e.dataTransfer.getData('application/json') : null;
@@ -7338,9 +7423,31 @@
                 const source = draggedLiveSlot || draggedLineupSlot || dragData;
                 if (source && (source.sourceLineup || source.type === 'slot-player')) {
                     e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
+                    bankSection.classList.add('drag-bank-hover');
+                }
+            };
+            bankSection.ondragleave = (e) => {
+                if (bankSection.contains(e.relatedTarget)) return;
+                bankSection.classList.remove('drag-bank-hover');
+            };
+            bankSection.ondrop = (e) => {
+                bankSection.classList.remove('drag-bank-hover');
+                setJustDropped();
+                let dragData = null;
+                try {
+                    const raw = e.dataTransfer ? e.dataTransfer.getData('application/json') : null;
+                    if (raw) dragData = JSON.parse(raw);
+                } catch(err) {}
+                const source = draggedLiveSlot || draggedLineupSlot || dragData;
+                if (source && (source.sourceLineup || source.type === 'slot-player')) {
+                    e.preventDefault();
+                    e.stopPropagation();
                     executeRemoveFromSlot(source);
                     draggedLiveSlot = null;
                     draggedLineupSlot = null;
+                    draggedRosterPlayerId = null;
+                    isAnyDraggingActive = false;
                 }
             };
         }
@@ -7355,7 +7462,7 @@
 
         liveGridContainer.querySelectorAll('.summary-slot-row').forEach(row => {
             row.addEventListener('click', (e) => {
-                if (row._justDragged) {
+                if (justDroppedGlobal || row._justDragged) {
                     row._justDragged = false;
                     return;
                 }
@@ -7364,7 +7471,10 @@
                     e.stopPropagation();
                     const lk = removeSlotBtn.dataset.lineup;
                     const pos = removeSlotBtn.dataset.pos;
-                    if (lineups[lk]) lineups[lk][pos] = '';
+                    if (lineups[lk]) {
+                        lineups[lk][pos] = '';
+                        if (pos === '6P' && lineups[lk]['VM']) lineups[lk]['VM'] = '';
+                    }
                     saveState(true);
                     renderLiveView();
                     return;
@@ -7571,12 +7681,18 @@
 
             card.addEventListener('dragstart', (e) => {
                 draggedLiveSlot = null;
+                draggedLineupSlot = null;
+                draggedRosterPlayerId = p.id;
+                isAnyDraggingActive = true;
+                e.dataTransfer.effectAllowed = 'move';
                 e.dataTransfer.setData('text/plain', p.id);
                 e.dataTransfer.setData('application/json', JSON.stringify({ type: 'roster-player', playerId: p.id }));
                 card.classList.add('is-dragging');
             });
             card.addEventListener('dragend', () => {
                 card.classList.remove('is-dragging');
+                draggedRosterPlayerId = null;
+                isAnyDraggingActive = false;
                 document.querySelectorAll('.drag-target-hover, .drag-swap-hover, .is-dragging, .drag-bank-hover').forEach(el => {
                     el.classList.remove('drag-target-hover', 'drag-swap-hover', 'is-dragging', 'drag-bank-hover');
                 });
@@ -7810,7 +7926,7 @@
             roster.forEach(p => { ev.attendees[p.id] = { status: 'in', reason: '' }; });
             teamEvents.unshift(ev);
             activeEventId = id;
-            showToast(`Uusi tapahtuma '${title}' luotu! 🏒`);
+            showToast(`Uusi tapahtuma '${title}' luotu! 📅`);
         }
 
         saveState();
@@ -8850,7 +8966,7 @@
         saveState();
         renderCourtBoards();
         document.getElementById('tactical-presets-modal')?.classList.remove('active');
-        showToast(`Kuvio asetettu: ${court.title}! 🏒✨`);
+        showToast(`Kuvio asetettu: ${court.title}! ✨`);
     }
 
     // ==========================================
@@ -10956,7 +11072,7 @@ If number is not visible, provide a number or null. Only return the JSON array.`
 
             const slotEl = e.target.closest('.lineup-slot');
             if (slotEl) {
-                if (slotEl._justDragged || slotEl._justDropped) {
+                if (justDroppedGlobal || slotEl._justDragged || slotEl._justDropped) {
                     slotEl._justDragged = false;
                     slotEl._justDropped = false;
                     return;
@@ -10970,6 +11086,16 @@ If number is not visible, provide a number or null. Only return the JSON array.`
             if (!e.target.closest('.court-player-node, .court-extra-player-node, .court-ball-node, .court-cone-node, .court-opponent-node, .court-rect-node, .court-line-node, .line-endpoint-handle, button')) {
                 selectCourtElement(null);
             }
+        });
+
+        window.addEventListener('dragend', () => {
+            draggedLineupSlot = null;
+            draggedLiveSlot = null;
+            draggedRosterPlayerId = null;
+            isAnyDraggingActive = false;
+            document.querySelectorAll('.is-dragging, .drag-target-hover, .drag-swap-hover, .drag-bank-hover, .tab-drag-hover').forEach(el => {
+                el.classList.remove('is-dragging', 'drag-target-hover', 'drag-swap-hover', 'drag-bank-hover', 'tab-drag-hover');
+            });
         });
 
         document.getElementById('btn-clear-pitch')?.addEventListener('click', () => {

@@ -161,10 +161,10 @@
     // Canonical lineup configurations for Simple mode:
     // Only 1-4 standard lines, 2x YV & 2x AV, and 2x 6vs5 lines!
     const SIMPLE_LINEUP_CONFIGS = [
-        { id: '1', name: '1. Kenttä', shortName: '1. K.', group: 'standard', icon: '🏒' },
-        { id: '2', name: '2. Kenttä', shortName: '2. K.', group: 'standard', icon: '🏒' },
-        { id: '3', name: '3. Kenttä', shortName: '3. K.', group: 'standard', icon: '🏒' },
-        { id: '4', name: '4. Kenttä', shortName: '4. K.', group: 'standard', icon: '🏒' },
+        { id: '1', name: '1. Kenttä', shortName: '1. K.', group: 'standard', icon: '' },
+        { id: '2', name: '2. Kenttä', shortName: '2. K.', group: 'standard', icon: '' },
+        { id: '3', name: '3. Kenttä', shortName: '3. K.', group: 'standard', icon: '' },
+        { id: '4', name: '4. Kenttä', shortName: '4. K.', group: 'standard', icon: '' },
         { id: 'yv1', name: '1. Ylivoima (YV)', shortName: '1. YV', group: 'yv_av', icon: '⚡' },
         { id: 'yv2', name: '2. Ylivoima (YV)', shortName: '2. YV', group: 'yv_av', icon: '⚡' },
         { id: 'av1', name: '1. Alivoima (AV)', shortName: '1. AV', group: 'yv_av', icon: '🛡️' },
@@ -1760,7 +1760,7 @@
         // 2. Sync to Shared Team Cloud if team is shared
         const curTeam = teams.find(t => t.id === currentTeamId);
         const activeShareId = getCanonicalShareId(currentTeamId, curTeam) || currentSharedTeamId;
-        if (activeShareId && window.SalibandyFirebase && window.SalibandyFirebase.isReady()) {
+        if (activeShareId && window.SalibandyFirebase) {
             if (sharedTeamSyncDebounceTimer) clearTimeout(sharedTeamSyncDebounceTimer);
             if (immediateSync) {
                 pushSharedTeamToCloud(activeShareId, curTeam);
@@ -2507,7 +2507,7 @@
 
             card.innerHTML = `
                 <div class="lineup-card-header">
-                    <div class="lineup-title">${cfg.icon || '🏒'} ${escapeHtml(cfg.name)}</div>
+                    <div class="lineup-title">${cfg.icon ? cfg.icon + ' ' : ''}${escapeHtml(cfg.name)}</div>
                     <div class="lineup-actions">
                         <button class="btn-lineup-action btn-add-reserve" data-lineup="${cfg.id}" title="Lisää varapelaaja kentälliseen">🪑+</button>
                         <button class="btn-lineup-action" data-action="clear-lineup" data-lineup="${cfg.id}">Tyhjennä</button>
@@ -3646,7 +3646,7 @@
         modalBody.innerHTML = '';
 
         const groups = [
-            { title: '🏒 1.–4. Kentät', configs: SIMPLE_LINEUP_CONFIGS.filter(c => c.group === 'standard') },
+            { title: '1.–4. Kentät', configs: SIMPLE_LINEUP_CONFIGS.filter(c => c.group === 'standard') },
             { title: '⚡ Ylivoima & Alivoima (YV / AV)', configs: SIMPLE_LINEUP_CONFIGS.filter(c => c.group === 'yv_av') },
             { title: '🔥 6 vs 5 (Ilman MV)', configs: SIMPLE_LINEUP_CONFIGS.filter(c => c.group === '6v5') }
         ];
@@ -3663,7 +3663,7 @@
 
                 const title = document.createElement('div');
                 title.style.cssText = 'font-weight: 700; font-size: 0.85rem; color: #fff; margin-bottom: 6px;';
-                title.textContent = (cfg.icon || '🏒') + ' ' + cfg.name;
+                title.textContent = (cfg.icon ? cfg.icon + ' ' : '') + cfg.name;
                 lineBox.appendChild(title);
 
                 const btnGrid = document.createElement('div');
@@ -4135,7 +4135,7 @@
             const hasPlayers = POS_ORDER.some(p => Boolean(line[p])) || reserves.length > 0;
             if (!hasPlayers && (id === '3' || id === '4')) return;
 
-            text += `*🏒 ${cfg.name}:*\n`;
+            text += `*${cfg.name}:*\n`;
             POS_ORDER.forEach(pos => {
                 const pId = line[pos];
                 const p = roster.find(r => r.id === pId);
