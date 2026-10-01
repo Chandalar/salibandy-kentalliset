@@ -380,6 +380,20 @@
         return img;
     }
 
+    function findPlayerInRoster(pId) {
+        if (!pId || !Array.isArray(roster)) return null;
+        const strId = String(pId).trim();
+        const unPrefixed = strId.replace(/^p_/, '');
+        return roster.find(p => {
+            if (!p) return false;
+            if (p.id === pId) return true;
+            const pStr = String(p.id).trim();
+            if (pStr === strId) return true;
+            if (pStr.replace(/^p_/, '') === unPrefixed) return true;
+            return false;
+        }) || null;
+    }
+
     // Normalize team name/ID to canonical key to prevent duplicates
     function isLocalDraftTeam(team) {
         if (!team) return false;
@@ -972,7 +986,7 @@
         if (!curTeam.shareId) {
             const cleanId = (curTeam.id || 'team').replace(/[^a-zA-Z0-9_]/g, '');
             curTeam.shareId = 'st_' + cleanId;
-            saveState();
+            saveStateLocalOnly();
         }
         return curTeam.shareId;
     }
@@ -1123,6 +1137,9 @@
                 console.log(`[Advanced] Shared team '${cleanTeamName}' synced to cloud (${shareId})`);
             }).catch(err => {
                 console.warn('Share Firestore write warning:', err);
+                if (err && (err.code === 'resource-exhausted' || (err.message && err.message.includes('Quota exceeded')))) {
+                    showToast('⚠️ Firestore-päiväkiintiö täynnä (Quota exceeded)! Vaihda Firebase Blaze-sopimukseen tai odota nollaantumista.');
+                }
             });
         };
 
@@ -1278,24 +1295,14 @@
             const activeMatch = teams.find(t => t.shareId === shareId || (normKey && normalizeTeamKey(t.id) === normKey));
             if (activeMatch) currentTeamId = activeMatch.id;
 
-            // Merge deletedPlayerIds
-            if (data.deletedPlayerIds && Array.isArray(data.deletedPlayerIds)) {
-                data.deletedPlayerIds.forEach(id => addDeletedPlayerId(id, currentTeamId));
-            }
-            const allDeletedPlayers = getDeletedPlayerIds(currentTeamId);
-
+            // For shared teams, incoming data.roster is authoritative.
+            // Do NOT filter out incoming players with local deleted IDs.
             if (data.roster && Array.isArray(data.roster)) {
-                roster = data.roster.filter(p => p && !allDeletedPlayers.includes(p.id));
+                roster = data.roster.filter(Boolean);
             }
             if (data.lineupConfigs) lineupConfigs = data.lineupConfigs;
             if (data.lineups) {
                 lineups = data.lineups;
-                // Purge any slots holding deleted players
-                Object.keys(lineups).forEach(k => {
-                    Object.keys(lineups[k] || {}).forEach(pos => {
-                        if (allDeletedPlayers.includes(lineups[k][pos])) lineups[k][pos] = '';
-                    });
-                });
                 // Lineup bridging: sync Simple mode (yv1/av1/6v5_1) with Advanced mode (yv/av/6v5)
                 const fromSimple = data._lastModifiedBy && data._lastModifiedBy.includes('simple');
                 if (lineups['yv1'] && (fromSimple || !lineups['yv'])) {
@@ -1353,24 +1360,24 @@
             if (data.pages) lineupPages = data.pages;
             if (data.events) teamEvents = data.events;
 
-            // Cache incoming payload so local client doesn't immediately bounce it back
+            // Cache normalized incoming payload so local client doesn't bounce it back
             const incomingComp = {
                 teamName: cleanSharedName,
                 teamMeta: meta,
-                roster: data.roster || [],
-                lineupConfigs: data.lineupConfigs || [],
-                lineups: data.lineups || {},
-                reserves: data.reserves || {},
-                drawings: data.drawings || {},
-                positions: data.positions || {},
-                balls: data.balls || {},
-                cones: data.cones || {},
-                opponents: data.opponents || {},
-                extraPlayers: data.extraPlayers || {},
-                textNotes: data.textNotes || {},
-                gridPaper: data.gridPaper || {},
-                pages: data.pages || {},
-                events: data.events || [],
+                roster: roster,
+                lineupConfigs: lineupConfigs,
+                lineups: lineups,
+                reserves: lineupReserves,
+                drawings: lineupDrawings,
+                positions: lineupCourtPositions,
+                balls: lineupBalls,
+                cones: lineupCones,
+                opponents: lineupOpponents,
+                extraPlayers: lineupExtraPlayers,
+                textNotes: lineupTextNotes,
+                gridPaper: lineupGridPaper,
+                pages: lineupPages,
+                events: teamEvents,
                 deletedPlayerIds: data.deletedPlayerIds || []
             };
             lastPushedSharedPayloadMap.set(shareId, JSON.stringify(incomingComp));
@@ -2621,6 +2628,9 @@
                     })
                     .catch(err => {
                         console.warn('Cloud Firestore save error:', err);
+                        if (err && (err.code === 'resource-exhausted' || (err.message && err.message.includes('Quota exceeded')))) {
+                            showToast('⚠️ Firestore-päiväkiintiö täynnä (Quota exceeded)! Vaihda Firebase Blaze-sopimukseen tai odota nollaantumista.');
+                        }
                     });
             };
             if (immediateSync) {
@@ -3726,7 +3736,7 @@
             const playerId = currentLineup[pos];
             if (!playerId) return;
 
-            const player = roster.find(p => p.id === playerId);
+            const player = findPlayerInRoster(playerId);
             if (!player) return;
 
             let defaultCoords = DEFAULT_POS_COORDS[orientationMode][pos] || { x: 50, y: 50 };
@@ -6103,7 +6113,7 @@
 
         posKeys.forEach(pos => {
             const playerId = currentLineup[pos];
-            const player = roster.find(p => p.id === playerId);
+            const player = findPlayerInRoster(playerId);
             const isMv = pos === 'MV';
             const posClass = isMv ? 'slot-mv' : 'slot-field';
 
@@ -7091,7 +7101,11 @@
             localStorage.setItem('salibandy_teams_v1', JSON.stringify(teams));
         } catch(e) {}
 
-        saveState();
+        if (isSilent) {
+            saveStateLocalOnly();
+        } else {
+            saveState();
+        }
         if (activeLineupKey === 'live') {
             renderLiveView();
         }

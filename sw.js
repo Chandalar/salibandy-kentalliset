@@ -1,9 +1,9 @@
 /* ============================================================
-   SERVICE WORKER – Kentälliset PWA v79.0
+   SERVICE WORKER – Kentälliset PWA v80.0
    Fast, ultra-lightweight, 100% offline-ready & local-first
    ============================================================ */
 
-const CACHE_NAME = 'kentalliset-v79.0';
+const CACHE_NAME = 'kentalliset-v80.0';
 const APP_SHELL = [
     './',
     './index.html',
