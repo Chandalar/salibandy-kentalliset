@@ -118,10 +118,12 @@
     let lastLoadedCloudPayloadString = '';
     let cloudSyncDebounceTimer = null;
     let sharedTeamSyncDebounceTimer = null;
+    const lastPushedSharedPayloadMap = new Map();
 
     // Test & diagnostic helper
     if (typeof window !== 'undefined') {
         window.__getSimpleState = () => ({ lineups, roster, teams, currentTeamId, clientInstanceId, currentSharedTeamId });
+        window.__simpleSaveState = (imm) => saveState(imm);
     }
 
     // DOM Elements
@@ -1140,6 +1142,22 @@
                 reserves: lineupReserves,
                 events: teamEvents
             };
+
+            const comparable = {
+                teamName: cleanTeamName,
+                teamMeta: teamMeta,
+                deletedPlayerIds: payload.deletedPlayerIds,
+                roster: roster,
+                lineups: lineups,
+                reserves: lineupReserves,
+                events: payload.events
+            };
+            const compStr = JSON.stringify(comparable);
+            if (lastPushedSharedPayloadMap.get(shareId) === compStr) {
+                return; // Nothing changed, skip writing to Firestore to preserve quota!
+            }
+            lastPushedSharedPayloadMap.set(shareId, compStr);
+
             const safePayload = JSON.parse(JSON.stringify(payload, (k, v) => (v === undefined ? null : v)));
             safePayload.updatedAt = serverTs;
 
@@ -1337,10 +1355,22 @@
                 document.documentElement.style.setProperty('--team-mv-color', foundTeam.mvColor);
             }
 
+            // Cache incoming payload so local client doesn't immediately bounce it back
+            const incomingComp = {
+                teamName: cleanSharedName,
+                teamMeta: meta,
+                deletedPlayerIds: data.deletedPlayerIds || [],
+                roster: data.roster || [],
+                lineups: data.lineups || {},
+                reserves: data.reserves || {},
+                events: data.events || []
+            };
+            lastPushedSharedPayloadMap.set(shareId, JSON.stringify(incomingComp));
+
             saveToStorageLocalOnly();
             renderAll(true);
             updateCloudButtonUI(true);
-            showToast(`Joukkue '${sharedTeamName}' synkronoitu reaaliajassa! ⚡`);
+            showToast(`Valmentajan tekemät muutokset päivitetty! 🔄`);
         }, err => {
             console.warn('[Simple] Shared team listener error:', err);
         });
@@ -1411,17 +1441,31 @@
                 const cleanCloudTeams = cloudData.teams.filter(t => t && t.id && !deletedTeamIds.includes(t.id));
                 teams = deduplicateTeams(cleanCloudTeams.concat(teams));
 
-                if (cloudData.currentTeamId && teams.some(t => t.id === cloudData.currentTeamId)) {
-                    currentTeamId = cloudData.currentTeamId;
-                } else if (!teams.some(t => t.id === currentTeamId)) {
-                    currentTeamId = teams[0].id;
+                // Protect active shared team: don't switch away if currently viewing a shared team
+                const params = (typeof window !== 'undefined' && window.location && window.location.search) ? new URLSearchParams(window.location.search) : null;
+                const urlTeamShare = params ? params.get('teamShare') : null;
+                const curTeamObj = teams.find(t => t.id === currentTeamId);
+                const isViewingShared = !!(urlTeamShare || currentSharedTeamId || (curTeamObj && (curTeamObj.shareId || curTeamObj.isShared)));
+
+                if (!isViewingShared) {
+                    if (cloudData.currentTeamId && teams.some(t => t.id === cloudData.currentTeamId)) {
+                        currentTeamId = cloudData.currentTeamId;
+                    } else if (!teams.some(t => t.id === currentTeamId)) {
+                        currentTeamId = teams[0].id;
+                    }
                 }
             }
+
+            const curTeam = teams.find(t => t.id === currentTeamId);
+            const isCurShared = (curTeam && (curTeam.isShared || curTeam.shareId || curTeam.cloudSynced)) || (currentTeamId === 'team_sekta' || currentTeamId === 'default_team' || (curTeam && (curTeam.name || '').toLowerCase().includes('sekta')));
 
             if (cloudData.rosters) {
                 Object.keys(cloudData.rosters).forEach(tId => {
                     if (deletedTeamIds.includes(tId)) {
                         localStorage.removeItem(`salibandy_roster_${tId}`);
+                        return;
+                    }
+                    if (tId === currentTeamId && isCurShared) {
                         return;
                     }
                     const delPlayers = getDeletedPlayerIds(tId);
@@ -1437,6 +1481,9 @@
                         localStorage.removeItem(`salibandy_lineups_${tId}`);
                         return;
                     }
+                    if (tId === currentTeamId && isCurShared) {
+                        return;
+                    }
                     localStorage.setItem(`salibandy_lineups_${tId}`, JSON.stringify(cloudData.lineups[tId]));
                 });
             }
@@ -1444,6 +1491,9 @@
                 Object.keys(cloudData.reserves).forEach(tId => {
                     if (deletedTeamIds.includes(tId)) {
                         localStorage.removeItem(`salibandy_reserves_${tId}`);
+                        return;
+                    }
+                    if (tId === currentTeamId && isCurShared) {
                         return;
                     }
                     localStorage.setItem(`salibandy_reserves_${tId}`, JSON.stringify(cloudData.reserves[tId]));
@@ -1459,8 +1509,22 @@
                 });
             }
 
-            loadState();
-            renderAll(true);
+            if (!isCurShared) {
+                loadState();
+                renderAll(true);
+            } else {
+                renderTeamHeader();
+                renderLineupTabs();
+            }
+
+            // Ensure active shared team listener is attached and running
+            const activeTeamObj = teams.find(t => t.id === currentTeamId);
+            const activeShareId = getCanonicalShareId(currentTeamId, activeTeamObj) || currentSharedTeamId;
+            if (activeShareId) {
+                currentSharedTeamId = activeShareId;
+                listenToSharedTeamFirestore(activeShareId);
+            }
+
             updateCloudButtonUI(true);
             setTimeout(() => { isCloudLoading = false; }, 300);
         }, (err) => {
@@ -1699,6 +1763,28 @@
         const teamShareId = params ? params.get('teamShare') : null;
         if (teamShareId) {
             currentSharedTeamId = teamShareId;
+            const normKey = normalizeTeamKey(teamShareId);
+            let matchedTeam = teams.find(t => t.shareId === teamShareId || (normKey && normalizeTeamKey(t.id) === normKey));
+            if (matchedTeam) {
+                currentTeamId = matchedTeam.id;
+                matchedTeam.isShared = true;
+                matchedTeam.cloudSynced = true;
+                matchedTeam.shareId = teamShareId;
+            } else {
+                matchedTeam = {
+                    id: (normKey === 'sekta') ? 'team_sekta' : ((normKey === 'akatemia') ? 'team_akatemia' : ('shared_' + teamShareId)),
+                    name: 'Jaettu joukkue',
+                    shareId: teamShareId,
+                    isShared: true,
+                    cloudSynced: true
+                };
+                teams.push(matchedTeam);
+                currentTeamId = matchedTeam.id;
+            }
+            try {
+                localStorage.setItem('salibandy_teams_v1', JSON.stringify(teams));
+                localStorage.setItem('salibandy_active_team_id', JSON.stringify(currentTeamId));
+            } catch(e) {}
             listenToSharedTeamFirestore(teamShareId);
         } else {
             const curTeam = teams.find(t => t.id === currentTeamId);

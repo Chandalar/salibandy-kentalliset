@@ -7,6 +7,13 @@
     'use strict';
 
     const clientInstanceId = 'adv_' + Date.now() + '_' + Math.random().toString(36).substr(2, 8);
+    const lastPushedSharedPayloadMap = new Map();
+
+    // Test & diagnostic helper
+    if (typeof window !== 'undefined') {
+        window.__getAppState = () => ({ lineups, roster, teams, currentTeamId, clientInstanceId, currentSharedTeamId });
+        window.__appSaveState = (imm) => saveState(imm);
+    }
 
     // ==========================================
     // INITIAL DEFAULT DATA & TEAMS
@@ -578,6 +585,13 @@
         }
     }
 
+    function saveTeamsToStorage() {
+        try {
+            localStorage.setItem('salibandy_teams_v1', JSON.stringify(teams));
+            localStorage.setItem('salibandy_active_team_id', JSON.stringify(currentTeamId));
+        } catch(e) {}
+    }
+
     // Global State
     let deletedTeamIds = loadFromStorage('salibandy_deleted_team_ids', []);
     if (Array.isArray(deletedTeamIds)) {
@@ -1076,6 +1090,32 @@
                 events: teamEvents,
                 deletedPlayerIds: getDeletedPlayerIds(currentTeamId)
             };
+
+            const comparable = {
+                teamName: cleanTeamName,
+                teamMeta: teamMeta,
+                roster: roster,
+                lineupConfigs: lineupConfigs,
+                lineups: lineups,
+                reserves: lineupReserves,
+                drawings: payload.drawings,
+                positions: lineupCourtPositions,
+                balls: lineupBalls,
+                cones: lineupCones,
+                opponents: lineupOpponents,
+                extraPlayers: lineupExtraPlayers,
+                textNotes: lineupTextNotes,
+                gridPaper: lineupGridPaper,
+                pages: lineupPages,
+                events: teamEvents,
+                deletedPlayerIds: payload.deletedPlayerIds
+            };
+            const compStr = JSON.stringify(comparable);
+            if (lastPushedSharedPayloadMap.get(shareId) === compStr) {
+                return; // Skip identical payload write to save quota!
+            }
+            lastPushedSharedPayloadMap.set(shareId, compStr);
+
             const safePayload = JSON.parse(JSON.stringify(payload, (k, v) => (v === undefined ? null : v)));
             safePayload.updatedAt = serverTs;
 
@@ -1109,11 +1149,25 @@
                 document.body.classList.add('viewer-mode');
             }
 
-            const matchedTeam = teams.find(t => t.shareId === teamShareId || normalizeTeamKey(t.id) === normalizeTeamKey(teamShareId));
+            const normKey = normalizeTeamKey(teamShareId);
+            let matchedTeam = teams.find(t => t.shareId === teamShareId || (normKey && normalizeTeamKey(t.id) === normKey));
             if (matchedTeam) {
                 currentTeamId = matchedTeam.id;
+                matchedTeam.isShared = true;
+                matchedTeam.cloudSynced = true;
+                matchedTeam.shareId = teamShareId;
+            } else {
+                matchedTeam = {
+                    id: (normKey === 'sekta') ? 'team_sekta' : ((normKey === 'akatemia') ? 'team_akatemia' : ('shared_' + teamShareId)),
+                    name: 'Jaettu joukkue',
+                    shareId: teamShareId,
+                    isShared: true,
+                    cloudSynced: true
+                };
+                teams.push(matchedTeam);
+                currentTeamId = matchedTeam.id;
             }
-
+            saveTeamsToStorage();
             listenToSharedTeamFirestore(teamShareId);
         } else {
             const curTeam = teams.find(t => t.id === currentTeamId);
@@ -1299,6 +1353,28 @@
             if (data.pages) lineupPages = data.pages;
             if (data.events) teamEvents = data.events;
 
+            // Cache incoming payload so local client doesn't immediately bounce it back
+            const incomingComp = {
+                teamName: cleanSharedName,
+                teamMeta: meta,
+                roster: data.roster || [],
+                lineupConfigs: data.lineupConfigs || [],
+                lineups: data.lineups || {},
+                reserves: data.reserves || {},
+                drawings: data.drawings || {},
+                positions: data.positions || {},
+                balls: data.balls || {},
+                cones: data.cones || {},
+                opponents: data.opponents || {},
+                extraPlayers: data.extraPlayers || {},
+                textNotes: data.textNotes || {},
+                gridPaper: data.gridPaper || {},
+                pages: data.pages || {},
+                events: data.events || [],
+                deletedPlayerIds: data.deletedPlayerIds || []
+            };
+            lastPushedSharedPayloadMap.set(shareId, JSON.stringify(incomingComp));
+
             saveStateLocalOnly();
 
             applyThemeAndSettings();
@@ -1316,7 +1392,7 @@
                 renderCourtBoards();
             }
             updateCloudSyncBadge(true);
-            showToast(`Joukkue '${sharedTeamName}' synkronoitu reaaliajassa! ⚡`);
+            showToast('Valmentajan tekemät muutokset päivitetty! 🔄');
         }, err => {
             console.warn('Shared team listener error:', err);
         });
@@ -2046,17 +2122,23 @@
             }
 
             isCloudLoading = true;
-            let needCloudUpdateBack = false;
 
             if (cloudData.teams && Array.isArray(cloudData.teams)) {
                 const cleanCloudTeams = cloudData.teams.filter(t => t && t.id && !deletedTeamIds.includes(t.id));
                 teams = deduplicateTeams(cleanCloudTeams.concat(teams));
-                needCloudUpdateBack = true;
 
-                if (cloudData.currentTeamId && teams.some(t => t.id === cloudData.currentTeamId)) {
-                    currentTeamId = cloudData.currentTeamId;
-                } else if (!teams.some(t => t.id === currentTeamId)) {
-                    currentTeamId = teams[0].id;
+                // Protect active shared team: don't switch away if currently viewing a shared team
+                const params = (typeof window !== 'undefined' && window.location && window.location.search) ? new URLSearchParams(window.location.search) : null;
+                const urlTeamShare = params ? params.get('teamShare') : null;
+                const curTeamObj = teams.find(t => t.id === currentTeamId);
+                const isViewingShared = !!(urlTeamShare || currentSharedTeamId || (curTeamObj && (curTeamObj.shareId || curTeamObj.isShared)));
+
+                if (!isViewingShared) {
+                    if (cloudData.currentTeamId && teams.some(t => t.id === cloudData.currentTeamId)) {
+                        currentTeamId = cloudData.currentTeamId;
+                    } else if (!teams.some(t => t.id === currentTeamId)) {
+                        currentTeamId = teams[0].id;
+                    }
                 }
             }
 
@@ -2081,7 +2163,6 @@
                     localRoster.forEach(p => {
                         if (!mergedRosterMap[p.id]) {
                             mergedRosterMap[p.id] = p;
-                            needCloudUpdateBack = true;
                         }
                     });
 
@@ -2246,16 +2327,15 @@
 
             updateCloudSyncBadge(true);
 
-            if (needCloudUpdateBack) {
-                const mergedPayload = buildFullCloudPayload();
-                userRef.set(mergedPayload).then(() => {
-                    isCloudLoading = false;
-                }).catch(() => {
-                    isCloudLoading = false;
-                });
-            } else {
-                setTimeout(() => { isCloudLoading = false; }, 300);
+            // Ensure active shared team listener is attached and running
+            const activeTeamObj = teams.find(t => t.id === currentTeamId);
+            const activeShareId = getCanonicalShareId(currentTeamId, activeTeamObj) || currentSharedTeamId;
+            if (activeShareId) {
+                currentSharedTeamId = activeShareId;
+                listenToSharedTeamFirestore(activeShareId);
             }
+
+            setTimeout(() => { isCloudLoading = false; }, 300);
 
         }, (err) => {
             console.warn('Firestore real-time snapshot error:', err);
