@@ -54,11 +54,24 @@
     <div class="event-bar">
         <div class="event-row">
             <select class="event-select" id="simple-event-select"></select>
-            <button class="btn-header highlight" id="btn-open-sync-modal" title="Hae tapahtumat verkosta (Nimenhuuto / myClub)">🔄 Hae</button>
+            <button class="btn-header highlight" id="btn-open-lineup-copy-modal" title="Kopioi tai tallenna kentälliset">📋 Kopioi</button>
+            <button class="btn-header" id="btn-open-sync-modal" title="Hae tapahtumat verkosta (Nimenhuuto / myClub)">🔄 Hae</button>
             <button class="btn-header" id="btn-open-sync-settings" title="Aseta Nimenhuuto/myClub -osoite">⚙️</button>
         </div>
         <div class="stats-bar" id="simple-stats-bar">
             <!-- Dynamic attendance stat chips -->
+        </div>
+    </div>
+
+    <!-- EMPTY EVENT QUICK COPY BANNER -->
+    <div id="simple-empty-event-banner" class="empty-event-banner" style="display: none;">
+        <div class="empty-banner-content">
+            <div class="empty-banner-title">⚡ Tälle ottelulle ei ole vielä kentällisiä:</div>
+            <div class="empty-banner-actions">
+                <button type="button" class="btn-banner-action primary" id="btn-banner-copy-default">📋 Kopioi oletuskentälliset</button>
+                <button type="button" class="btn-banner-action" id="btn-banner-copy-prev">⏮️ Kopioi edellisestä pelistä</button>
+                <button type="button" class="btn-banner-action text-only" id="btn-banner-dismiss">Aloita tyhjästä ✕</button>
+            </div>
         </div>
     </div>
 
@@ -250,6 +263,55 @@
         </div>
     </div>
 
+    <!-- LINEUP COPY & TEMPLATE MODAL -->
+    <div class="simple-modal" id="simple-lineup-copy-modal">
+        <div class="modal-sheet">
+            <div class="modal-header">
+                <div class="modal-title">📋 Kentällisten kopiointi & pohjat</div>
+                <button class="btn-modal-close" id="btn-close-lineup-copy-modal">&times;</button>
+            </div>
+            <div class="modal-body" style="display: flex; flex-direction: column; gap: 10px;">
+                <div id="copy-modal-context-info" style="font-size: 0.85rem; color: var(--text-secondary); background: rgba(255,255,255,0.04); padding: 10px; border-radius: 8px; border: 1px solid var(--border-color);">
+                    Valittu kohde: <strong id="copy-modal-event-name" style="color: #60a5fa;">-</strong>
+                </div>
+
+                <div class="copy-modal-options" style="display: flex; flex-direction: column; gap: 8px;">
+                    <button type="button" class="btn-tool" id="btn-modal-copy-default" style="justify-content: flex-start; padding: 12px; text-align: left; width: 100%;">
+                        <span style="font-size: 1.25rem; margin-right: 8px;">⭐</span>
+                        <div>
+                            <div style="font-weight: 700; color: #fff;">Kopioi oletuskentälliset tälle pelille</div>
+                            <div style="font-size: 0.75rem; color: var(--text-secondary);">Asettaa tälle ottelulle joukkueen peruskokoonpanon</div>
+                        </div>
+                    </button>
+
+                    <button type="button" class="btn-tool" id="btn-modal-copy-prev" style="justify-content: flex-start; padding: 12px; text-align: left; width: 100%;">
+                        <span style="font-size: 1.25rem; margin-right: 8px;">⏮️</span>
+                        <div>
+                            <div style="font-weight: 700; color: #fff;">Kopioi edellisestä pelistä</div>
+                            <div style="font-size: 0.75rem; color: var(--text-secondary);" id="copy-prev-game-name">Kopioi edellisen ottelun kentälliset</div>
+                        </div>
+                    </button>
+
+                    <button type="button" class="btn-tool" id="btn-modal-save-as-default" style="justify-content: flex-start; padding: 12px; text-align: left; width: 100%;">
+                        <span style="font-size: 1.25rem; margin-right: 8px;">💾</span>
+                        <div>
+                            <div style="font-weight: 700; color: #fff;">Tallenna nämä kentälliset oletukseksi</div>
+                            <div style="font-size: 0.75rem; color: var(--text-secondary);">Päivittää nämä kentät joukkueen uudeksi peruspohjaksi</div>
+                        </div>
+                    </button>
+
+                    <button type="button" class="btn-tool danger-text" id="btn-modal-clear-event" style="justify-content: flex-start; padding: 12px; text-align: left; width: 100%; border-color: rgba(239, 68, 68, 0.3);">
+                        <span style="font-size: 1.25rem; margin-right: 8px;">🗑️</span>
+                        <div>
+                            <div style="font-weight: 700; color: #f87171;">Tyhjennä tämän pelin kentälliset</div>
+                            <div style="font-size: 0.75rem; color: var(--text-secondary);">Poistaa kaikki asetetut pelaajat tämän ottelun paikoilta</div>
+                        </div>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- TOAST NOTIFICATION -->
     <div class="simple-toast" id="simple-toast"></div>
 
@@ -257,9 +319,9 @@
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
-    <!-- Firebase Config & Simple Engine (v80.0) -->
-    <script src="firebase-config.js?v=80.0"></script>
-    <script src="simple.js?v=80.0"></script>
+    <!-- Firebase Config & Simple Engine (v81.0) -->
+    <script src="firebase-config.js?v=81.0"></script>
+    <script src="simple.js?v=81.0"></script>
 
     <!-- Service Worker Registration for Instant Updates -->
     <script>

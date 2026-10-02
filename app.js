@@ -2522,6 +2522,15 @@
             localStorage.setItem(`salibandy_grid_paper_${currentTeamId}`, JSON.stringify(lineupGridPaper));
             localStorage.setItem(`salibandy_pages_${currentTeamId}`, JSON.stringify(lineupPages));
             localStorage.setItem(`salibandy_events_${currentTeamId}`, JSON.stringify(teamEvents));
+            let curEvLineups = loadFromStorage(`salibandy_event_lineups_${currentTeamId}`, {});
+            let curDefLineups = loadFromStorage(`salibandy_default_lineups_${currentTeamId}`, null);
+            if (activeEventId === '__default__') {
+                curDefLineups = JSON.parse(JSON.stringify(lineups));
+                localStorage.setItem(`salibandy_default_lineups_${currentTeamId}`, JSON.stringify(curDefLineups));
+            } else if (activeEventId) {
+                curEvLineups[activeEventId] = JSON.parse(JSON.stringify(lineups));
+                localStorage.setItem(`salibandy_event_lineups_${currentTeamId}`, JSON.stringify(curEvLineups));
+            }
             if (activeEventId) {
                 localStorage.setItem(`salibandy_active_event_id_${currentTeamId}`, JSON.stringify(activeEventId));
             }
@@ -7173,6 +7182,15 @@
         [select, importSelect].forEach(sel => {
             if (!sel) return;
             sel.innerHTML = '';
+
+            if (sel === select) {
+                const defOpt = document.createElement('option');
+                defOpt.value = '__default__';
+                defOpt.textContent = '⭐ Oletuskentälliset (Peruspohja)';
+                if (activeEventId === '__default__') defOpt.selected = true;
+                sel.appendChild(defOpt);
+            }
+
             teamEvents.forEach(ev => {
                 const opt = document.createElement('option');
                 opt.value = ev.id;
@@ -10581,9 +10599,28 @@ If number is not visible, provide a number or null. Only return the JSON array.`
 
         // LIVE ATTENDANCE & NIMENHUUTO EVENTS
         document.getElementById('live-event-select')?.addEventListener('change', (e) => {
-            activeEventId = e.target.value;
+            const targetId = e.target.value;
+            let curEvLineups = loadFromStorage(`salibandy_event_lineups_${currentTeamId}`, {});
+            let curDefLineups = loadFromStorage(`salibandy_default_lineups_${currentTeamId}`, null);
+            if (activeEventId === '__default__') {
+                curDefLineups = JSON.parse(JSON.stringify(lineups));
+                localStorage.setItem(`salibandy_default_lineups_${currentTeamId}`, JSON.stringify(curDefLineups));
+            } else if (activeEventId) {
+                curEvLineups[activeEventId] = JSON.parse(JSON.stringify(lineups));
+                localStorage.setItem(`salibandy_event_lineups_${currentTeamId}`, JSON.stringify(curEvLineups));
+            }
+
+            activeEventId = targetId;
+            if (activeEventId === '__default__') {
+                if (curDefLineups) lineups = curDefLineups;
+            } else if (activeEventId && curEvLineups[activeEventId]) {
+                lineups = curEvLineups[activeEventId];
+            } else if (curDefLineups) {
+                lineups = JSON.parse(JSON.stringify(curDefLineups));
+            }
             saveState();
             renderLiveView();
+            renderAllLineups();
         });
 
         document.getElementById('live-roster-search')?.addEventListener('input', (e) => {

@@ -17,6 +17,11 @@
     let currentTeamId = null;
     let roster = [];
     let lineups = {};
+    let defaultLineups = {};
+    let defaultReserves = {};
+    let eventLineups = {}; // Map of eventId -> canonical lineups object
+    let eventReserves = {}; // Map of eventId -> reserves object
+    let dismissedEmptyBannerEvents = new Set();
     let lineupConfigs = [];
     let teamEvents = [];
     let activeEventId = null;
@@ -33,6 +38,74 @@
     let draggedSlotData = null; // { type: 'simple-slot', sourceLineup, sourcePos, playerId }
     let draggedRosterPlayerId = null;
     let lastLocalMutationAt = 0;
+
+    function createEmptyCanonicalLineups() {
+        const empty = {};
+        SIMPLE_LINEUP_CONFIGS.forEach(cfg => {
+            empty[cfg.id] = (cfg.group === '6v5')
+                ? { VP: '', OP: '', VH: '', KH: '', OH: '', '6P': '', VM: '' }
+                : { MV: '', VP: '', OP: '', VH: '', KH: '', OH: '' };
+        });
+        empty['yv'] = { ...empty['yv1'] };
+        empty['av'] = { ...empty['av1'] };
+        empty['6v5'] = { VP: '', OP: '', VH: '', KH: '', OH: '', VM: '' };
+        return empty;
+    }
+
+    function isLineupEmpty(l) {
+        if (!l || typeof l !== 'object') return true;
+        return !Object.values(l).some(line => {
+            if (!line || typeof line !== 'object') return false;
+            return Object.values(line).some(pid => typeof pid === 'string' && pid.trim().length > 0);
+        });
+    }
+
+    function ensureCanonicalLineups(targetLineups) {
+        if (!targetLineups || typeof targetLineups !== 'object') return;
+        SIMPLE_LINEUP_CONFIGS.forEach(cfg => {
+            const is6v5 = cfg.group === '6v5';
+            if (!targetLineups[cfg.id]) {
+                targetLineups[cfg.id] = is6v5 
+                    ? { VP: '', OP: '', VH: '', KH: '', OH: '', '6P': '', VM: '' }
+                    : { MV: '', VP: '', OP: '', VH: '', KH: '', OH: '' };
+            }
+        });
+        if (targetLineups['yv1']) targetLineups['yv'] = { ...targetLineups['yv1'] };
+        if (targetLineups['av1']) targetLineups['av'] = { ...targetLineups['av1'] };
+        if (targetLineups['6v5_1']) {
+            targetLineups['6v5'] = {
+                VP: targetLineups['6v5_1'].VP || '',
+                OP: targetLineups['6v5_1'].OP || '',
+                VH: targetLineups['6v5_1'].VH || '',
+                KH: targetLineups['6v5_1'].KH || '',
+                OH: targetLineups['6v5_1'].OH || '',
+                VM: targetLineups['6v5_1']['6P'] || targetLineups['6v5_1']['VM'] || ''
+            };
+        }
+    }
+
+    function purgeDeletedPlayers(targetLineups, targetReserves, deletedList) {
+        if (!deletedList || deletedList.length === 0) return;
+        if (targetLineups && typeof targetLineups === 'object') {
+            Object.keys(targetLineups).forEach(k => {
+                const line = targetLineups[k];
+                if (line && typeof line === 'object') {
+                    Object.keys(line).forEach(pos => {
+                        if (deletedList.includes(line[pos])) line[pos] = '';
+                    });
+                }
+            });
+        }
+        if (targetReserves && typeof targetReserves === 'object') {
+            Object.keys(targetReserves).forEach(k => {
+                if (Array.isArray(targetReserves[k])) {
+                    targetReserves[k] = targetReserves[k].filter(id => !deletedList.includes(id));
+                } else if (targetReserves[k] && Array.isArray(targetReserves[k].general)) {
+                    targetReserves[k].general = targetReserves[k].general.filter(id => !deletedList.includes(id));
+                }
+            });
+        }
+    }
 
     function extractReservesArray(res) {
         if (!res) return [];
@@ -122,7 +195,7 @@
 
     // Test & diagnostic helper
     if (typeof window !== 'undefined') {
-        window.__getSimpleState = () => ({ lineups, roster, teams, currentTeamId, clientInstanceId, currentSharedTeamId });
+        window.__getSimpleState = () => ({ lineups, roster, teams, currentTeamId, clientInstanceId, currentSharedTeamId, defaultLineups, eventLineups, activeEventId });
         window.__simpleSaveState = (imm) => saveState(imm);
     }
 
@@ -793,123 +866,10 @@
                 localStorage.setItem('salibandy_roster_initialized_' + currentTeamId, '1');
             }
 
-            const rawLineups = localStorage.getItem('salibandy_lineups_' + currentTeamId);
-            lineups = rawLineups ? JSON.parse(rawLineups) : {};
-            
-            const rawReserves = localStorage.getItem('salibandy_reserves_' + currentTeamId);
-            lineupReserves = rawReserves ? JSON.parse(rawReserves) : {};
-
-            // Purge any deleted players from lineups and reserves
-            if (deleted.length > 0 && lineups) {
-                Object.keys(lineups).forEach(k => {
-                    Object.keys(lineups[k] || {}).forEach(pos => {
-                        if (deleted.includes(lineups[k][pos])) lineups[k][pos] = '';
-                    });
-                });
-            }
-            if (deleted.length > 0 && lineupReserves) {
-                Object.keys(lineupReserves).forEach(k => {
-                    if (Array.isArray(lineupReserves[k])) {
-                        lineupReserves[k] = lineupReserves[k].filter(id => !deleted.includes(id));
-                    } else if (lineupReserves[k] && Array.isArray(lineupReserves[k].general)) {
-                        lineupReserves[k].general = lineupReserves[k].general.filter(id => !deleted.includes(id));
-                    }
-                });
-            }
-
-            // Ensure all canonical lineups exist
-            SIMPLE_LINEUP_CONFIGS.forEach(cfg => {
-                const is6v5 = cfg.group === '6v5';
-                if (!lineups[cfg.id]) {
-                    lineups[cfg.id] = is6v5 
-                        ? { VP: '', OP: '', VH: '', KH: '', OH: '', '6P': '' }
-                        : { MV: '', VP: '', OP: '', VH: '', KH: '', OH: '' };
-                }
-            });
-
-            // Backwards compatibility migration from single 'yv', 'av', '6v5'
-            if (lineups['yv'] && !Object.values(lineups['yv1'] || {}).some(Boolean)) {
-                lineups['yv1'] = { ...lineups['yv'] };
-            }
-            if (lineups['av'] && !Object.values(lineups['av1'] || {}).some(Boolean)) {
-                lineups['av1'] = { ...lineups['av'] };
-            }
-            if (lineups['6v5'] && !Object.values(lineups['6v5_1'] || {}).some(Boolean)) {
-                lineups['6v5_1'] = {
-                    VP: lineups['6v5'].VP || '',
-                    OP: lineups['6v5'].OP || '',
-                    VH: lineups['6v5'].VH || '',
-                    KH: lineups['6v5'].KH || '',
-                    OH: lineups['6v5'].OH || '',
-                    '6P': lineups['6v5']['6P'] || lineups['6v5']['VM'] || ''
-                };
-            }
-
-            if (lineupReserves['yv'] && !lineupReserves['yv1']) lineupReserves['yv1'] = extractReservesArray(lineupReserves['yv']);
-            if (lineupReserves['av'] && !lineupReserves['av1']) lineupReserves['av1'] = extractReservesArray(lineupReserves['av']);
-            if (lineupReserves['6v5'] && !lineupReserves['6v5_1']) lineupReserves['6v5_1'] = extractReservesArray(lineupReserves['6v5']);
-
-            // Only seed initial starters if team lineups have NEVER been initialized by the user!
-            const isLineupsInit = localStorage.getItem('salibandy_lineups_initialized_' + currentTeamId);
-            const isAnyAssigned = Object.values(lineups).some(l => Object.values(l).some(Boolean));
-            if (!isLineupsInit && !isAnyAssigned && roster.length >= 12 && isSektaTeam) {
-                lineups['1'] = { MV: 'p_mv23', VP: 'p_19', OP: 'p_20', VH: 'p_11', KH: 'p_42', OH: 'p_64' };
-                lineups['2'] = { MV: 'p_mv45', VP: 'p_71', OP: 'p_4', VH: 'p_21', KH: 'p_55', OH: 'p_2' };
-                if (!lineupReserves['1']) lineupReserves['1'] = ['p_88'];
-                localStorage.setItem('salibandy_lineups_' + currentTeamId, JSON.stringify(lineups));
-                localStorage.setItem('salibandy_lineups_initialized_' + currentTeamId, '1');
-            } else if (!isLineupsInit && !isAnyAssigned && isAkatemiaTeam) {
-                const altKeys = ['salibandy_lineups_team_akatemia', 'salibandy_lineups_team_fbc_akatemia', 'salibandy_lineups_team_1786787084772'];
-                for (const k of altKeys) {
-                    if (k === 'salibandy_lineups_' + currentTeamId) continue;
-                    const alt = localStorage.getItem(k);
-                    if (alt) {
-                        try {
-                            const parsed = JSON.parse(alt);
-                            if (parsed && parsed['1'] && Object.values(parsed['1']).some(Boolean)) {
-                                lineups = parsed;
-                                break;
-                            }
-                        } catch(e){}
-                    }
-                }
-                if (!Object.values(lineups['1'] || {}).some(Boolean)) {
-                    lineups['1'] = {
-                        MV: 'p_ocr_1786787489945_1',
-                        VP: 'p_ocr_1786787489945_7',
-                        OP: 'p_ocr_1786787489945_8',
-                        VH: 'p_ocr_1786787489945_0',
-                        KH: 'p_ocr_1786787489945_2',
-                        OH: 'p_ocr_1786787489945_6'
-                    };
-                    lineups['2'] = {
-                        MV: '',
-                        VP: 'p_ocr_1786787489945_3',
-                        OP: 'p_ocr_1786787489945_4',
-                        VH: 'p_ocr_1786787489945_5',
-                        KH: 'p_ocr_1786787489945_9',
-                        OH: 'p_ocr_1786787489945_10'
-                    };
-                    lineups['yv1'] = {
-                        MV: '',
-                        VP: 'p_ocr_1786787489945_7',
-                        OP: 'p_ocr_1786787489945_8',
-                        VH: 'p_ocr_1786787489945_0',
-                        KH: 'p_ocr_1786787489945_2',
-                        OH: 'p_ocr_1786787489945_6'
-                    };
-                    if (!lineupReserves['1']) lineupReserves['1'] = ['p_1789731527753'];
-                }
-                localStorage.setItem('salibandy_lineups_' + currentTeamId, JSON.stringify(lineups));
-                localStorage.setItem('salibandy_lineups_initialized_' + currentTeamId, '1');
-            } else if (isAnyAssigned) {
-                localStorage.setItem('salibandy_lineups_initialized_' + currentTeamId, '1');
-            }
-
             // In Simple mode: ONLY canonical lineups exist (1-4, 2x YV, 2x AV, 2x 6vs5).
-            // Drawing boards and tactical custom tabs are excluded.
             lineupConfigs = SIMPLE_LINEUP_CONFIGS;
 
+            // 1. Load team events
             const rawEvents = localStorage.getItem('salibandy_events_' + currentTeamId);
             teamEvents = rawEvents ? JSON.parse(rawEvents) : [];
             const isDummy = (evs) => !Array.isArray(evs) || evs.length === 0 || (evs.length === 1 && (evs[0].id === 'default_event_1' || (evs[0].title || '').includes('Seuraava')));
@@ -967,22 +927,158 @@
                 } catch(e){}
             }
 
+            // 2. Resolve activeEventId (supports '__default__' or event id)
             let rawActiveEvent = localStorage.getItem('salibandy_active_event_id_' + currentTeamId);
             if (!rawActiveEvent && isSektaTeam) {
                 rawActiveEvent = localStorage.getItem('salibandy_active_event_id_team_sekta') || localStorage.getItem('salibandy_active_event_id_default_team');
             }
             try {
                 const parsedAct = rawActiveEvent ? JSON.parse(rawActiveEvent) : null;
-                activeEventId = (parsedAct && teamEvents.some(e => e.id === parsedAct)) ? parsedAct : (teamEvents[0]?.id || null);
+                if (parsedAct === '__default__') {
+                    activeEventId = '__default__';
+                } else if (parsedAct && teamEvents.some(e => e.id === parsedAct)) {
+                    activeEventId = parsedAct;
+                } else if (teamEvents.length > 0) {
+                    activeEventId = teamEvents[0].id;
+                } else {
+                    activeEventId = '__default__';
+                }
             } catch(e) {
-                activeEventId = teamEvents[0]?.id || null;
-            }
-            if (!activeEventId && teamEvents.length > 0) {
-                activeEventId = teamEvents[0].id;
+                activeEventId = teamEvents[0]?.id || '__default__';
             }
             try {
                 localStorage.setItem('salibandy_active_event_id_' + currentTeamId, JSON.stringify(activeEventId));
             } catch(e){}
+
+            // 3. Load Default Lineups & Default Reserves
+            const rawDefaultLineups = localStorage.getItem('salibandy_default_lineups_' + currentTeamId);
+            if (rawDefaultLineups) {
+                try { defaultLineups = JSON.parse(rawDefaultLineups); } catch(e) { defaultLineups = {}; }
+            } else {
+                const rawLegacyLineups = localStorage.getItem('salibandy_lineups_' + currentTeamId);
+                if (rawLegacyLineups) {
+                    try { defaultLineups = JSON.parse(rawLegacyLineups); } catch(e) { defaultLineups = {}; }
+                } else {
+                    defaultLineups = {};
+                }
+            }
+
+            const rawDefaultReserves = localStorage.getItem('salibandy_default_reserves_' + currentTeamId);
+            if (rawDefaultReserves) {
+                try { defaultReserves = JSON.parse(rawDefaultReserves); } catch(e) { defaultReserves = {}; }
+            } else {
+                const rawLegacyReserves = localStorage.getItem('salibandy_reserves_' + currentTeamId);
+                if (rawLegacyReserves) {
+                    try { defaultReserves = JSON.parse(rawLegacyReserves); } catch(e) { defaultReserves = {}; }
+                } else {
+                    defaultReserves = {};
+                }
+            }
+
+            ensureCanonicalLineups(defaultLineups);
+            purgeDeletedPlayers(defaultLineups, defaultReserves, deleted);
+
+            // Seed initial starters if default lineups have never been initialized
+            const isDefInit = localStorage.getItem('salibandy_default_lineups_initialized_' + currentTeamId);
+            const isAnyDefAssigned = Object.values(defaultLineups).some(l => Object.values(l || {}).some(Boolean));
+            if (!isDefInit && !isAnyDefAssigned && roster.length >= 12 && isSektaTeam) {
+                defaultLineups['1'] = { MV: 'p_mv23', VP: 'p_19', OP: 'p_20', VH: 'p_11', KH: 'p_42', OH: 'p_64' };
+                defaultLineups['2'] = { MV: 'p_mv45', VP: 'p_71', OP: 'p_4', VH: 'p_21', KH: 'p_55', OH: 'p_2' };
+                if (!defaultReserves['1']) defaultReserves['1'] = ['p_88'];
+                localStorage.setItem('salibandy_default_lineups_' + currentTeamId, JSON.stringify(defaultLineups));
+                localStorage.setItem('salibandy_default_lineups_initialized_' + currentTeamId, '1');
+            } else if (!isDefInit && !isAnyDefAssigned && isAkatemiaTeam) {
+                const altKeys = ['salibandy_default_lineups_team_akatemia', 'salibandy_lineups_team_akatemia', 'salibandy_lineups_team_fbc_akatemia', 'salibandy_lineups_team_1786787084772'];
+                for (const k of altKeys) {
+                    if (k === 'salibandy_default_lineups_' + currentTeamId || k === 'salibandy_lineups_' + currentTeamId) continue;
+                    const alt = localStorage.getItem(k);
+                    if (alt) {
+                        try {
+                            const parsed = JSON.parse(alt);
+                            if (parsed && parsed['1'] && Object.values(parsed['1']).some(Boolean)) {
+                                defaultLineups = parsed;
+                                break;
+                            }
+                        } catch(e){}
+                    }
+                }
+                if (!Object.values(defaultLineups['1'] || {}).some(Boolean)) {
+                    defaultLineups['1'] = {
+                        MV: 'p_ocr_1786787489945_1',
+                        VP: 'p_ocr_1786787489945_7',
+                        OP: 'p_ocr_1786787489945_8',
+                        VH: 'p_ocr_1786787489945_0',
+                        KH: 'p_ocr_1786787489945_2',
+                        OH: 'p_ocr_1786787489945_6'
+                    };
+                    defaultLineups['2'] = {
+                        MV: '',
+                        VP: 'p_ocr_1786787489945_3',
+                        OP: 'p_ocr_1786787489945_4',
+                        VH: 'p_ocr_1786787489945_5',
+                        KH: 'p_ocr_1786787489945_9',
+                        OH: 'p_ocr_1786787489945_10'
+                    };
+                    defaultLineups['yv1'] = {
+                        MV: '',
+                        VP: 'p_ocr_1786787489945_7',
+                        OP: 'p_ocr_1786787489945_8',
+                        VH: 'p_ocr_1786787489945_0',
+                        KH: 'p_ocr_1786787489945_2',
+                        OH: 'p_ocr_1786787489945_6'
+                    };
+                    if (!defaultReserves['1']) defaultReserves['1'] = ['p_1789731527753'];
+                }
+                localStorage.setItem('salibandy_default_lineups_' + currentTeamId, JSON.stringify(defaultLineups));
+                localStorage.setItem('salibandy_default_lineups_initialized_' + currentTeamId, '1');
+            }
+
+            // 4. Load Event Lineups & Event Reserves
+            const rawEventLineups = localStorage.getItem('salibandy_event_lineups_' + currentTeamId);
+            if (rawEventLineups) {
+                try { eventLineups = JSON.parse(rawEventLineups); } catch(e) { eventLineups = {}; }
+            } else {
+                eventLineups = {};
+                // Smooth migration: seed current/first event with defaultLineups if populated
+                if (teamEvents.length > 0 && isAnyDefAssigned) {
+                    eventLineups[teamEvents[0].id] = JSON.parse(JSON.stringify(defaultLineups));
+                }
+            }
+
+            const rawEventReserves = localStorage.getItem('salibandy_event_reserves_' + currentTeamId);
+            if (rawEventReserves) {
+                try { eventReserves = JSON.parse(rawEventReserves); } catch(e) { eventReserves = {}; }
+            } else {
+                eventReserves = {};
+                if (teamEvents.length > 0 && defaultReserves) {
+                    eventReserves[teamEvents[0].id] = JSON.parse(JSON.stringify(defaultReserves));
+                }
+            }
+
+            // Ensure canonical configs & purge deleted players for each event
+            Object.keys(eventLineups).forEach(eid => {
+                if (eventLineups[eid]) {
+                    ensureCanonicalLineups(eventLineups[eid]);
+                    purgeDeletedPlayers(eventLineups[eid], eventReserves[eid] || {}, deleted);
+                }
+            });
+
+            // 5. Bind current active lineups and reserves
+            if (activeEventId === '__default__') {
+                lineups = defaultLineups;
+                lineupReserves = defaultReserves;
+            } else if (activeEventId) {
+                if (!eventLineups[activeEventId]) {
+                    eventLineups[activeEventId] = createEmptyCanonicalLineups();
+                    eventReserves[activeEventId] = {};
+                }
+                lineups = eventLineups[activeEventId];
+                lineupReserves = eventReserves[activeEventId] || {};
+            } else {
+                lineups = defaultLineups;
+                lineupReserves = defaultReserves;
+            }
+            ensureCanonicalLineups(lineups);
 
             // Auto-fetch upcoming events in background silently if team has eventsUrl and stale (> 2 min)
             const teamUrl = curTeam ? (curTeam.eventsUrl || curTeam.nimenhuutoUrl || curTeam.myclubUrl || '') : '';
@@ -1025,12 +1121,24 @@
                 };
             }
 
+            if (activeEventId === '__default__') {
+                defaultLineups = lineups;
+                defaultReserves = lineupReserves;
+            } else if (activeEventId) {
+                eventLineups[activeEventId] = lineups;
+                eventReserves[activeEventId] = lineupReserves;
+            }
+
             localStorage.setItem('salibandy_teams_v1', JSON.stringify(teams));
             localStorage.setItem('salibandy_active_team_id', JSON.stringify(currentTeamId));
             localStorage.setItem('salibandy_roster_' + currentTeamId, JSON.stringify(roster));
             localStorage.setItem('salibandy_lineups_' + currentTeamId, JSON.stringify(lineups));
             localStorage.setItem('salibandy_reserves_' + currentTeamId, JSON.stringify(lineupReserves));
             localStorage.setItem('salibandy_events_' + currentTeamId, JSON.stringify(teamEvents));
+            localStorage.setItem('salibandy_default_lineups_' + currentTeamId, JSON.stringify(defaultLineups));
+            localStorage.setItem('salibandy_default_reserves_' + currentTeamId, JSON.stringify(defaultReserves));
+            localStorage.setItem('salibandy_event_lineups_' + currentTeamId, JSON.stringify(eventLineups));
+            localStorage.setItem('salibandy_event_reserves_' + currentTeamId, JSON.stringify(eventReserves));
             localStorage.setItem('salibandy_roster_initialized_' + currentTeamId, '1');
             localStorage.setItem('salibandy_lineups_initialized_' + currentTeamId, '1');
             if (activeEventId) {
@@ -1042,6 +1150,10 @@
                 localStorage.setItem('salibandy_lineups_' + altKey, JSON.stringify(lineups));
                 localStorage.setItem('salibandy_reserves_' + altKey, JSON.stringify(lineupReserves));
                 localStorage.setItem('salibandy_events_' + altKey, JSON.stringify(teamEvents));
+                localStorage.setItem('salibandy_default_lineups_' + altKey, JSON.stringify(defaultLineups));
+                localStorage.setItem('salibandy_default_reserves_' + altKey, JSON.stringify(defaultReserves));
+                localStorage.setItem('salibandy_event_lineups_' + altKey, JSON.stringify(eventLineups));
+                localStorage.setItem('salibandy_event_reserves_' + altKey, JSON.stringify(eventReserves));
                 localStorage.setItem('salibandy_roster_initialized_' + altKey, '1');
                 localStorage.setItem('salibandy_lineups_initialized_' + altKey, '1');
                 if (activeEventId) {
@@ -1052,6 +1164,10 @@
                 altKeys.forEach(ak => {
                     if (ak !== currentTeamId) {
                         localStorage.setItem('salibandy_events_' + ak, JSON.stringify(teamEvents));
+                        localStorage.setItem('salibandy_default_lineups_' + ak, JSON.stringify(defaultLineups));
+                        localStorage.setItem('salibandy_default_reserves_' + ak, JSON.stringify(defaultReserves));
+                        localStorage.setItem('salibandy_event_lineups_' + ak, JSON.stringify(eventLineups));
+                        localStorage.setItem('salibandy_event_reserves_' + ak, JSON.stringify(eventReserves));
                         if (activeEventId) {
                             localStorage.setItem('salibandy_active_event_id_' + ak, JSON.stringify(activeEventId));
                         }
@@ -1069,6 +1185,10 @@
         const lineupsMap = {};
         const reservesMap = {};
         const eventsMap = {};
+        const defaultLineupsMap = {};
+        const defaultReservesMap = {};
+        const eventLineupsMap = {};
+        const eventReservesMap = {};
 
         teams.forEach(t => {
             if (!t || !t.id || deletedTeamIds.includes(t.id)) return;
@@ -1078,6 +1198,10 @@
             lineupsMap[tId] = (tId === currentTeamId) ? lineups : loadFromStorage(`salibandy_lineups_${tId}`, {});
             reservesMap[tId] = (tId === currentTeamId) ? lineupReserves : loadFromStorage(`salibandy_reserves_${tId}`, {});
             eventsMap[tId] = (tId === currentTeamId) ? teamEvents : loadFromStorage(`salibandy_events_${tId}`, []);
+            defaultLineupsMap[tId] = (tId === currentTeamId) ? defaultLineups : loadFromStorage(`salibandy_default_lineups_${tId}`, {});
+            defaultReservesMap[tId] = (tId === currentTeamId) ? defaultReserves : loadFromStorage(`salibandy_default_reserves_${tId}`, {});
+            eventLineupsMap[tId] = (tId === currentTeamId) ? eventLineups : loadFromStorage(`salibandy_event_lineups_${tId}`, {});
+            eventReservesMap[tId] = (tId === currentTeamId) ? eventReserves : loadFromStorage(`salibandy_event_reserves_${tId}`, {});
         });
 
         const serverTs = (window.firebase && window.firebase.firestore && window.firebase.firestore.FieldValue)
@@ -1091,11 +1215,16 @@
             deletedTeamIds: deletedTeamIds,
             teams: teams.filter(t => t && t.id && !deletedTeamIds.includes(t.id)),
             currentTeamId: currentTeamId,
+            activeEventId: activeEventId,
             rosters: rostersMap,
             lineupConfigs: configsMap,
             lineups: lineupsMap,
             reserves: reservesMap,
-            events: eventsMap
+            events: eventsMap,
+            defaultLineups: defaultLineupsMap,
+            defaultReserves: defaultReservesMap,
+            eventLineups: eventLineupsMap,
+            eventReserves: eventReservesMap
         };
     }
 
@@ -1154,7 +1283,11 @@
                 roster: roster,
                 lineups: lineups,
                 reserves: lineupReserves,
-                events: teamEvents
+                events: teamEvents,
+                defaultLineups: defaultLineups,
+                defaultReserves: defaultReserves,
+                eventLineups: eventLineups,
+                eventReserves: eventReserves
             };
 
             const comparable = {
@@ -1164,7 +1297,9 @@
                 roster: roster,
                 lineups: lineups,
                 reserves: lineupReserves,
-                events: payload.events
+                events: payload.events,
+                defaultLineups: defaultLineups,
+                eventLineups: eventLineups
             };
             const compStr = JSON.stringify(comparable);
             if (lastPushedSharedPayloadMap.get(shareId) === compStr) {
@@ -1301,6 +1436,24 @@
             if (data.roster && Array.isArray(data.roster)) {
                 roster = data.roster.filter(Boolean);
             }
+            if (data.defaultLineups) {
+                defaultLineups = data.defaultLineups;
+                ensureCanonicalLineups(defaultLineups);
+            }
+            if (data.defaultReserves) {
+                defaultReserves = data.defaultReserves;
+            }
+            if (data.eventLineups) {
+                eventLineups = data.eventLineups;
+                Object.keys(eventLineups).forEach(eid => {
+                    if (eventLineups[eid]) ensureCanonicalLineups(eventLineups[eid]);
+                });
+            }
+            if (data.eventReserves) {
+                eventReserves = data.eventReserves;
+            }
+            if (data.events) teamEvents = data.events;
+
             if (data.lineups) {
                 lineups = data.lineups;
                 // Lineup bridging: sync Advanced mode (yv/av/6v5) with Simple mode (yv1/av1/6v5_1)
@@ -1336,14 +1489,7 @@
                         VM: lineups['6v5_1']['6P'] || lineups['6v5_1']['VM'] || ''
                     };
                 }
-                // Ensure all 10 canonical Simple lineups exist
-                SIMPLE_LINEUP_CONFIGS.forEach(cfg => {
-                    if (!lineups[cfg.id]) {
-                        lineups[cfg.id] = cfg.group === '6v5'
-                            ? { VP: '', OP: '', VH: '', KH: '', OH: '', '6P': '' }
-                            : { MV: '', VP: '', OP: '', VH: '', KH: '', OH: '' };
-                    }
-                });
+                ensureCanonicalLineups(lineups);
             }
             if (data.reserves) {
                 lineupReserves = data.reserves;
@@ -1351,7 +1497,16 @@
                 if (lineupReserves['av'] && !lineupReserves['av1']) lineupReserves['av1'] = extractReservesArray(lineupReserves['av']);
                 if (lineupReserves['6v5'] && !lineupReserves['6v5_1']) lineupReserves['6v5_1'] = extractReservesArray(lineupReserves['6v5']);
             }
-            if (data.events) teamEvents = data.events;
+
+            // Sync active view pointer
+            if (activeEventId === '__default__') {
+                lineups = defaultLineups;
+                lineupReserves = defaultReserves;
+            } else if (activeEventId && eventLineups[activeEventId]) {
+                lineups = eventLineups[activeEventId];
+                lineupReserves = eventReserves[activeEventId] || {};
+            }
+            ensureCanonicalLineups(lineups);
 
             // Apply primary color to CSS
             if (foundTeam.primaryColor) {
@@ -1370,7 +1525,9 @@
                 roster: roster,
                 lineups: lineups,
                 reserves: lineupReserves,
-                events: teamEvents
+                events: teamEvents,
+                defaultLineups: defaultLineups,
+                eventLineups: eventLineups
             };
             lastPushedSharedPayloadMap.set(shareId, JSON.stringify(incomingComp));
 
@@ -1513,6 +1670,46 @@
                         return;
                     }
                     localStorage.setItem(`salibandy_events_${tId}`, JSON.stringify(cloudData.events[tId]));
+                });
+            }
+            if (cloudData.defaultLineups) {
+                Object.keys(cloudData.defaultLineups).forEach(tId => {
+                    if (deletedTeamIds.includes(tId)) {
+                        localStorage.removeItem(`salibandy_default_lineups_${tId}`);
+                        return;
+                    }
+                    if (tId === currentTeamId && isCurShared) return;
+                    localStorage.setItem(`salibandy_default_lineups_${tId}`, JSON.stringify(cloudData.defaultLineups[tId]));
+                });
+            }
+            if (cloudData.defaultReserves) {
+                Object.keys(cloudData.defaultReserves).forEach(tId => {
+                    if (deletedTeamIds.includes(tId)) {
+                        localStorage.removeItem(`salibandy_default_reserves_${tId}`);
+                        return;
+                    }
+                    if (tId === currentTeamId && isCurShared) return;
+                    localStorage.setItem(`salibandy_default_reserves_${tId}`, JSON.stringify(cloudData.defaultReserves[tId]));
+                });
+            }
+            if (cloudData.eventLineups) {
+                Object.keys(cloudData.eventLineups).forEach(tId => {
+                    if (deletedTeamIds.includes(tId)) {
+                        localStorage.removeItem(`salibandy_event_lineups_${tId}`);
+                        return;
+                    }
+                    if (tId === currentTeamId && isCurShared) return;
+                    localStorage.setItem(`salibandy_event_lineups_${tId}`, JSON.stringify(cloudData.eventLineups[tId]));
+                });
+            }
+            if (cloudData.eventReserves) {
+                Object.keys(cloudData.eventReserves).forEach(tId => {
+                    if (deletedTeamIds.includes(tId)) {
+                        localStorage.removeItem(`salibandy_event_reserves_${tId}`);
+                        return;
+                    }
+                    if (tId === currentTeamId && isCurShared) return;
+                    localStorage.setItem(`salibandy_event_reserves_${tId}`, JSON.stringify(cloudData.eventReserves[tId]));
                 });
             }
 
@@ -1943,7 +2140,7 @@
         localStorage.setItem(`salibandy_lineups_${newTeamId}`, JSON.stringify(clonedLineups));
 
         // 3. Copy other keys
-        const dataKeys = ['reserves', 'events', 'active_event_id'];
+        const dataKeys = ['reserves', 'events', 'active_event_id', 'default_lineups', 'default_reserves', 'event_lineups', 'event_reserves'];
         dataKeys.forEach(k => {
             try {
                 const val = localStorage.getItem(`salibandy_${k}_${srcId}`);
@@ -2045,6 +2242,10 @@
         localStorage.removeItem(`salibandy_reserves_${deleteId}`);
         localStorage.removeItem(`salibandy_events_${deleteId}`);
         localStorage.removeItem(`salibandy_active_event_id_${deleteId}`);
+        localStorage.removeItem(`salibandy_default_lineups_${deleteId}`);
+        localStorage.removeItem(`salibandy_default_reserves_${deleteId}`);
+        localStorage.removeItem(`salibandy_event_lineups_${deleteId}`);
+        localStorage.removeItem(`salibandy_event_reserves_${deleteId}`);
 
         // 5. Select next team
         const nextTeamId = teams[0].id;
@@ -2304,36 +2505,62 @@
             const isSektaTeam = currentTeamId === 'default_team' || currentTeamId === 'team_sekta' || (curTeam && (curTeam.name || '').toLowerCase().includes('sekta'));
             if (isSektaTeam) {
                 teamEvents = JSON.parse(JSON.stringify(DEFAULT_SEKTA_EVENTS));
-                activeEventId = teamEvents[0]?.id || null;
+                activeEventId = teamEvents[0]?.id || '__default__';
             }
         }
 
-        if (!teamEvents || teamEvents.length === 0) {
-            const opt = document.createElement('option');
-            opt.value = '';
-            opt.textContent = 'Ei tapahtumia (Paina 🔄 Hae)';
-            eventSelect.appendChild(opt);
-            renderStatsBar({});
-            return;
+        // 1. Always provide ⭐ Oletuskentälliset (Peruspohja)
+        const defOpt = document.createElement('option');
+        defOpt.value = '__default__';
+        defOpt.textContent = '⭐ Oletuskentälliset (Peruspohja)';
+        if (activeEventId === '__default__') defOpt.selected = true;
+        eventSelect.appendChild(defOpt);
+
+        if (teamEvents && teamEvents.length > 0) {
+            teamEvents.forEach(ev => {
+                const opt = document.createElement('option');
+                opt.value = ev.id;
+                opt.textContent = `${ev.title} (${ev.date || 'Ei pvm'})`;
+                if (ev.id === activeEventId) opt.selected = true;
+                eventSelect.appendChild(opt);
+            });
         }
 
-        teamEvents.forEach(ev => {
-            const opt = document.createElement('option');
-            opt.value = ev.id;
-            opt.textContent = `${ev.title} (${ev.date || 'Ei pvm'})`;
-            if (ev.id === activeEventId) opt.selected = true;
-            eventSelect.appendChild(opt);
-        });
-
-        const curEvent = teamEvents.find(e => e.id === activeEventId) || teamEvents[0];
-        if (curEvent) {
-            activeEventId = curEvent.id;
-            renderStatsBar(curEvent.attendees || {});
+        if (activeEventId === '__default__') {
+            renderStatsBar({ isDefault: true });
+        } else {
+            const curEvent = teamEvents ? teamEvents.find(e => e.id === activeEventId) : null;
+            if (curEvent) {
+                renderStatsBar(curEvent.attendees || {});
+            } else if (teamEvents && teamEvents.length > 0) {
+                activeEventId = teamEvents[0].id;
+                renderStatsBar(teamEvents[0].attendees || {});
+            } else {
+                renderStatsBar({ isDefault: true });
+            }
         }
+        checkEmptyEventBanner();
     }
 
     function renderStatsBar(attendeesMap) {
         if (!statsBar) return;
+
+        if (attendeesMap && attendeesMap.isDefault) {
+            statsBar.innerHTML = `
+                <div class="stat-chip" style="background: rgba(59, 130, 246, 0.15); color: #93c5fd; border-color: rgba(59, 130, 246, 0.3); cursor: default;">
+                    ⭐ Peruskokoonpano (pohja kaikille peleille)
+                </div>
+                <div class="stat-chip in" data-filter="all" style="cursor: pointer;">
+                    👥 Pelaajia ringissä: ${roster.length}
+                </div>
+            `;
+            statsBar.querySelector('.stat-chip[data-filter="all"]')?.addEventListener('click', () => {
+                activeRosterFilter = 'all';
+                renderRosterList();
+            });
+            return;
+        }
+
         let inCount = 0, outCount = 0, maybeCount = 0, unCount = 0;
 
         roster.forEach(p => {
@@ -2363,6 +2590,197 @@
                 renderRosterList();
             });
         });
+    }
+
+    function checkEmptyEventBanner() {
+        const banner = document.getElementById('simple-empty-event-banner');
+        if (!banner) return;
+        if (activeEventId === '__default__' || !activeEventId || dismissedEmptyBannerEvents.has(activeEventId)) {
+            banner.style.display = 'none';
+            return;
+        }
+        if (isLineupEmpty(lineups)) {
+            banner.style.display = '';
+        } else {
+            banner.style.display = 'none';
+        }
+    }
+
+    function switchEvent(targetEventId) {
+        if (!targetEventId) return;
+
+        // 1. Save current active lineup state before switching
+        if (activeEventId === '__default__') {
+            defaultLineups = lineups;
+            defaultReserves = lineupReserves;
+        } else if (activeEventId) {
+            eventLineups[activeEventId] = lineups;
+            eventReserves[activeEventId] = lineupReserves;
+        }
+
+        // 2. Set new activeEventId
+        activeEventId = targetEventId;
+        try {
+            localStorage.setItem('salibandy_active_event_id_' + currentTeamId, JSON.stringify(activeEventId));
+        } catch(e){}
+
+        // 3. Switch pointer / references
+        if (activeEventId === '__default__') {
+            lineups = defaultLineups;
+            lineupReserves = defaultReserves;
+        } else {
+            if (!eventLineups[activeEventId]) {
+                eventLineups[activeEventId] = createEmptyCanonicalLineups();
+                eventReserves[activeEventId] = {};
+            }
+            lineups = eventLineups[activeEventId];
+            lineupReserves = eventReserves[activeEventId] || {};
+        }
+        ensureCanonicalLineups(lineups);
+
+        saveState();
+        renderAll(true);
+        checkEmptyEventBanner();
+    }
+
+    function copyDefaultLineupsToCurrentEvent() {
+        if (activeEventId === '__default__') {
+            showToast('Olet jo muokkaamassa oletuskentällisiä!', 'warning');
+            return;
+        }
+        lineups = JSON.parse(JSON.stringify(defaultLineups));
+        lineupReserves = JSON.parse(JSON.stringify(defaultReserves || {}));
+        eventLineups[activeEventId] = lineups;
+        eventReserves[activeEventId] = lineupReserves;
+        ensureCanonicalLineups(lineups);
+        saveState();
+        renderAll(true);
+        checkEmptyEventBanner();
+        showToast('⭐ Oletuskentälliset kopioitu tähän otteluun!');
+        closeLineupCopyModal();
+    }
+
+    function copyPreviousEventLineupsToCurrentEvent() {
+        if (activeEventId === '__default__') {
+            showToast('Valitse ensin ottelu pudotusvalikosta kopioidaksesi sille kentälliset.', 'warning');
+            return;
+        }
+
+        let prevEventWithLineup = null;
+        const curIdx = teamEvents.findIndex(e => e.id === activeEventId);
+        if (curIdx > 0) {
+            for (let i = curIdx - 1; i >= 0; i--) {
+                const ev = teamEvents[i];
+                if (ev && eventLineups[ev.id] && !isLineupEmpty(eventLineups[ev.id])) {
+                    prevEventWithLineup = ev;
+                    break;
+                }
+            }
+        }
+        if (!prevEventWithLineup) {
+            for (let i = teamEvents.length - 1; i >= 0; i--) {
+                const ev = teamEvents[i];
+                if (ev && ev.id !== activeEventId && eventLineups[ev.id] && !isLineupEmpty(eventLineups[ev.id])) {
+                    prevEventWithLineup = ev;
+                    break;
+                }
+            }
+        }
+
+        if (prevEventWithLineup) {
+            lineups = JSON.parse(JSON.stringify(eventLineups[prevEventWithLineup.id]));
+            lineupReserves = JSON.parse(JSON.stringify(eventReserves[prevEventWithLineup.id] || {}));
+            eventLineups[activeEventId] = lineups;
+            eventReserves[activeEventId] = lineupReserves;
+            ensureCanonicalLineups(lineups);
+            saveState();
+            renderAll(true);
+            checkEmptyEventBanner();
+            showToast(`⏮️ Kentälliset kopioitu ottelusta: ${prevEventWithLineup.title}!`);
+            closeLineupCopyModal();
+        } else {
+            showToast('Ei aiempia ottelukentällisiä - kopioidaan oletuskentälliset ⭐');
+            copyDefaultLineupsToCurrentEvent();
+        }
+    }
+
+    function saveCurrentEventAsDefault() {
+        defaultLineups = JSON.parse(JSON.stringify(lineups));
+        defaultReserves = JSON.parse(JSON.stringify(lineupReserves || {}));
+        ensureCanonicalLineups(defaultLineups);
+        saveState();
+        showToast('💾 Tämän ottelun kentälliset tallennettu oletuspohjaksi!');
+        closeLineupCopyModal();
+    }
+
+    function clearCurrentLineups() {
+        const isDefault = activeEventId === '__default__';
+        const msg = isDefault
+            ? 'Haluatko varmasti tyhjentää oletuskentälliset kaikista pelaajista?'
+            : 'Haluatko varmasti tyhjentää tämän ottelun kentälliset kaikista pelaajista?';
+        if (!confirm(msg)) return;
+
+        lineups = createEmptyCanonicalLineups();
+        lineupReserves = {};
+        if (isDefault) {
+            defaultLineups = lineups;
+            defaultReserves = lineupReserves;
+        } else if (activeEventId) {
+            eventLineups[activeEventId] = lineups;
+            eventReserves[activeEventId] = lineupReserves;
+        }
+        saveState();
+        renderAll(true);
+        checkEmptyEventBanner();
+        showToast('🗑️ Kentälliset tyhjennetty.');
+        closeLineupCopyModal();
+    }
+
+    function openLineupCopyModal() {
+        const modal = document.getElementById('simple-lineup-copy-modal');
+        if (!modal) return;
+        const nameEl = document.getElementById('copy-modal-event-name');
+        const prevSubEl = document.getElementById('copy-prev-game-name');
+        const isDefault = activeEventId === '__default__';
+        const curEvent = isDefault ? null : teamEvents.find(e => e.id === activeEventId);
+
+        if (nameEl) {
+            nameEl.textContent = isDefault 
+                ? '⭐ Oletuskentälliset (Peruspohja)' 
+                : (curEvent ? `${curEvent.title} (${curEvent.date || 'Ei pvm'})` : 'Valittu ottelu');
+        }
+
+        if (prevSubEl) {
+            let prevEv = null;
+            const curIdx = teamEvents.findIndex(e => e.id === activeEventId);
+            if (curIdx > 0) {
+                for (let i = curIdx - 1; i >= 0; i--) {
+                    if (eventLineups[teamEvents[i]?.id] && !isLineupEmpty(eventLineups[teamEvents[i].id])) {
+                        prevEv = teamEvents[i];
+                        break;
+                    }
+                }
+            }
+            if (!prevEv) {
+                for (let i = teamEvents.length - 1; i >= 0; i--) {
+                    if (teamEvents[i]?.id !== activeEventId && eventLineups[teamEvents[i]?.id] && !isLineupEmpty(eventLineups[teamEvents[i].id])) {
+                        prevEv = teamEvents[i];
+                        break;
+                    }
+                }
+            }
+            if (prevEv) {
+                prevSubEl.textContent = `Kopioi ottelusta: ${prevEv.title}`;
+            } else {
+                prevSubEl.textContent = `Ei aiempia ottelukentällisiä (kopioi oletus)`;
+            }
+        }
+
+        modal.classList.add('active');
+    }
+
+    function closeLineupCopyModal() {
+        document.getElementById('simple-lineup-copy-modal')?.classList.remove('active');
     }
 
     function updateLineupContainerDensity() {
@@ -4147,8 +4565,8 @@
         }
 
         teamEvents = events;
-        if (!teamEvents.some(e => e.id === activeEventId)) {
-            activeEventId = teamEvents[0]?.id || null;
+        if (activeEventId !== '__default__' && !teamEvents.some(e => e.id === activeEventId)) {
+            activeEventId = teamEvents[0]?.id || '__default__';
         }
         if (curTeam) {
             curTeam.eventsUrl = targetUrl;
@@ -4233,7 +4651,9 @@
         const attendeesMap = curEvent ? (curEvent.attendees || {}) : {};
 
         let text = `🏑 ${curTeam.name} - KOKOONPANO\n`;
-        if (curEvent) {
+        if (activeEventId === '__default__') {
+            text += `⭐ Oletuskentälliset (Peruspohja)\n\n`;
+        } else if (curEvent) {
             text += `📅 ${curEvent.title} (${curEvent.date || ''})\n\n`;
         } else {
             text += '\n';
@@ -4776,9 +5196,23 @@ If no number is visible, provide a number or null. Only return the JSON array.`;
 
         // Event change
         eventSelect?.addEventListener('change', (e) => {
-            activeEventId = e.target.value;
-            saveState();
-            scheduleRender({ eventBar: true, cards: true, roster: true });
+            switchEvent(e.target.value);
+        });
+
+        // Lineup copy modal & empty event banner actions
+        document.getElementById('btn-open-lineup-copy-modal')?.addEventListener('click', openLineupCopyModal);
+        document.getElementById('btn-close-lineup-copy-modal')?.addEventListener('click', closeLineupCopyModal);
+        document.getElementById('btn-modal-copy-default')?.addEventListener('click', copyDefaultLineupsToCurrentEvent);
+        document.getElementById('btn-modal-copy-prev')?.addEventListener('click', copyPreviousEventLineupsToCurrentEvent);
+        document.getElementById('btn-modal-save-as-default')?.addEventListener('click', saveCurrentEventAsDefault);
+        document.getElementById('btn-modal-clear-event')?.addEventListener('click', clearCurrentLineups);
+
+        document.getElementById('btn-banner-copy-default')?.addEventListener('click', copyDefaultLineupsToCurrentEvent);
+        document.getElementById('btn-banner-copy-prev')?.addEventListener('click', copyPreviousEventLineupsToCurrentEvent);
+        document.getElementById('btn-banner-dismiss')?.addEventListener('click', () => {
+            if (activeEventId) dismissedEmptyBannerEvents.add(activeEventId);
+            const banner = document.getElementById('simple-empty-event-banner');
+            if (banner) banner.style.display = 'none';
         });
 
         // Open Sync Modal
