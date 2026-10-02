@@ -6037,3 +6037,67 @@ body.mobile-ui {
     }
 }
 
+/* Empty state welcome card when no teams exist */
+.empty-state-welcome-card {
+    text-align: center;
+    padding: 2.5rem 1.5rem;
+    background: rgba(255, 255, 255, 0.03);
+    border: 2px dashed rgba(255, 255, 255, 0.15);
+    border-radius: var(--radius-lg, 12px);
+    margin: 1.5rem auto;
+    max-width: 520px;
+}
+.empty-state-welcome-card .welcome-icon {
+    font-size: 3rem;
+    margin-bottom: 0.75rem;
+}
+.empty-state-welcome-card .welcome-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--text-primary, #ffffff);
+    margin-bottom: 0.5rem;
+}
+.empty-state-welcome-card .welcome-desc {
+    font-size: 0.9rem;
+    color: var(--text-secondary, #94a3b8);
+    line-height: 1.5;
+    margin-bottom: 1.5rem;
+}
+.empty-state-welcome-card .welcome-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+.empty-state-welcome-card .btn-welcome-primary {
+    background: var(--accent, #3b82f6);
+    color: #fff;
+    padding: 10px 18px;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 0.95rem;
+    border: none;
+    cursor: pointer;
+    transition: transform 0.15s, background 0.15s;
+}
+.empty-state-welcome-card .btn-welcome-primary:hover {
+    background: #2563eb;
+    transform: translateY(-1px);
+}
+.empty-state-welcome-card .btn-welcome-secondary {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text-primary, #ffffff);
+    padding: 10px 18px;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 0.95rem;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    cursor: pointer;
+    transition: transform 0.15s, background 0.15s;
+}
+.empty-state-welcome-card .btn-welcome-secondary:hover {
+    background: rgba(255, 255, 255, 0.15);
+    transform: translateY(-1px);
+}
+
+

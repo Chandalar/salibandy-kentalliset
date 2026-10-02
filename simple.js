@@ -339,17 +339,84 @@
     function getCanonicalShareId(teamId, teamObj) {
         if (teamObj && isLocalDraftTeam(teamObj)) return null;
         if (teamObj && teamObj.shareId) return teamObj.shareId;
-        const norm = normalizeTeamKey(teamId, teamObj);
-        if (norm === 'sekta') return 'st_team_sekta';
-        if (norm === 'akatemia') return 'st_team_akatemia';
-        if (norm === 'edustus') return 'st_team_edustus';
-        if (norm === 'junnut') return 'st_team_junnut';
         return null;
+    }
+
+    function getJoinedShareIds() {
+        try {
+            const raw = localStorage.getItem('salibandy_joined_share_ids');
+            return raw ? JSON.parse(raw) : [];
+        } catch(e) {
+            return [];
+        }
+    }
+
+    function addJoinedShareId(shareId) {
+        if (!shareId) return;
+        try {
+            const list = getJoinedShareIds();
+            if (!list.includes(shareId)) {
+                list.push(shareId);
+                localStorage.setItem('salibandy_joined_share_ids', JSON.stringify(list));
+            }
+        } catch(e) {}
+    }
+
+    function hasUserAddedPlayers(teamId) {
+        if (!teamId) return false;
+        try {
+            if (localStorage.getItem('salibandy_user_added_players_' + teamId) === 'true') {
+                return true;
+            }
+            const raw = localStorage.getItem('salibandy_roster_' + teamId);
+            if (!raw) return false;
+            const r = JSON.parse(raw);
+            if (!Array.isArray(r) || r.length === 0) return false;
+            
+            const legacyDefaultIds = ['team_sekta', 'default_team', 'team_akatemia', 'team_edustus', 'team_junnut'];
+            if (!legacyDefaultIds.includes(teamId)) {
+                return true;
+            }
+            // For legacy default IDs, only treat as user players if there is a custom non-default player
+            const legacyNames = ['matias v', 'jussi v', 'sami p', 'mika a', 'aaltonen', 'veikka', 'henri k', 'onni v', 'masto', 'joona r', 'vesa h', 'juki', 'nikou', 'jerker b', 'niko a', 'joni v', 'eino a', 'akseli', 'petri v', 'heikki h', 'jesse', 'ilmari o', 'miika', 'sivil daniel', 'pelllä jooa', 'männistö juho', 'laine nico', 'tiihonen henri', 'sinkkonen aleksi', 'lehtonen elias', 'lehtovirta valtteri', 'vuorenpää vil', 'rantasalo elsa', 'kallio luukas', 'vesku'];
+            return r.some(p => p && p.name && !legacyNames.includes(p.name.trim().toLowerCase()));
+        } catch(e) {
+            return false;
+        }
+    }
+
+    function filterPermittedTeams(teamsList, urlShareId) {
+        if (!Array.isArray(teamsList)) return [];
+        const joinedShareIds = getJoinedShareIds();
+        if (urlShareId) addJoinedShareId(urlShareId);
+
+        return teamsList.filter(t => {
+            if (!t || !t.id) return false;
+            const deletedIds = Array.isArray(deletedTeamIds) ? deletedTeamIds : [];
+            if (deletedIds.includes(t.id)) return false;
+
+            // 1. Has link (URL or joined in past)
+            if (urlShareId && (t.shareId === urlShareId || t.id === 'shared_' + urlShareId)) return true;
+            if (t.shareId && joinedShareIds.includes(t.shareId)) return true;
+            if (t.isJoinedViaLink === true) return true;
+
+            // 2. User created
+            if (t.isUserCreated === true) return true;
+            if (String(t.id).startsWith('local_')) return true;
+            const legacyDefaultIds = ['team_sekta', 'default_team', 'team_akatemia', 'team_edustus', 'team_junnut'];
+            if (!legacyDefaultIds.includes(t.id) && !t.shareId) return true; // custom local team
+
+            // 3. User added players
+            if (hasUserAddedPlayers(t.id)) return true;
+
+            // Otherwise, it was an uninvited legacy default team with no link and no user players
+            return false;
+        });
     }
 
     function deduplicateTeams(rawTeams) {
         if (!Array.isArray(rawTeams) || rawTeams.length === 0) {
-            return JSON.parse(JSON.stringify(DEFAULT_TEAMS));
+            return [];
         }
         const mergedMap = new Map();
         const deletedIds = Array.isArray(deletedTeamIds) ? deletedTeamIds : [];
@@ -362,39 +429,7 @@
 
             if (!mergedMap.has(mapKey)) {
                 const canonTeam = { ...t };
-                if (normKey === 'sekta') {
-                    canonTeam.id = 'team_sekta';
-                    canonTeam.name = 'SekTa';
-                    canonTeam.shareId = 'st_team_sekta';
-                    if (!canonTeam.logo || canonTeam.logo === '🏑' || canonTeam.logo === '??') {
-                        canonTeam.logo = 'sekta-logo.png';
-                        canonTeam.photo = 'sekta-logo.png';
-                    }
-                    if (!canonTeam.primaryColor || canonTeam.primaryColor === '#2563eb') {
-                        canonTeam.primaryColor = '#6b5bd7';
-                        canonTeam.secondaryColor = '#f2a24a';
-                    }
-                    if (!canonTeam.eventsUrl) canonTeam.eventsUrl = 'https://sekta.nimenhuuto.com/events';
-                    if (!canonTeam.nimenhuutoUrl) canonTeam.nimenhuutoUrl = 'https://sekta.nimenhuuto.com/events';
-                } else if (normKey === 'akatemia') {
-                    canonTeam.id = 'team_akatemia';
-                    canonTeam.name = 'FBC Akatemia';
-                    canonTeam.shareId = 'st_team_akatemia';
-                    if (!canonTeam.logo) canonTeam.logo = '🦅';
-                } else if (normKey === 'edustus') {
-                    canonTeam.id = 'team_edustus';
-                    canonTeam.name = 'Edustusjoukkue';
-                    canonTeam.shareId = 'st_team_edustus';
-                } else if (normKey === 'junnut') {
-                    canonTeam.id = 'team_junnut';
-                    canonTeam.name = 'A-Juniorit';
-                    canonTeam.shareId = 'st_team_junnut';
-                } else {
-                    canonTeam.name = cleanName || 'Joukkue';
-                    if (!isLocalDraftTeam(canonTeam) && !canonTeam.shareId) {
-                        canonTeam.shareId = 'st_' + String(canonTeam.id).replace(/[^a-zA-Z0-9_]/g, '');
-                    }
-                }
+                canonTeam.name = cleanName || 'Joukkue';
                 mergedMap.set(mapKey, canonTeam);
             } else {
                 const existing = mergedMap.get(mapKey);
@@ -413,36 +448,13 @@
                     existing.arenaName = t.arena;
                 }
                 if (t.eventsUrl && !existing.eventsUrl) existing.eventsUrl = t.eventsUrl;
-
-                if (t.id !== existing.id) {
-                    try {
-                        const oldRoster = localStorage.getItem(`salibandy_roster_${t.id}`);
-                        const newRoster = localStorage.getItem(`salibandy_roster_${existing.id}`);
-                        if (oldRoster && (!newRoster || newRoster === '[]')) {
-                            localStorage.setItem(`salibandy_roster_${existing.id}`, oldRoster);
-                        }
-                        const oldLineups = localStorage.getItem(`salibandy_lineups_${t.id}`);
-                        const newLineups = localStorage.getItem(`salibandy_lineups_${existing.id}`);
-                        if (oldLineups && !newLineups) {
-                            localStorage.setItem(`salibandy_lineups_${existing.id}`, oldLineups);
-                        }
-                        localStorage.removeItem(`salibandy_roster_${t.id}`);
-                        localStorage.removeItem(`salibandy_lineups_${t.id}`);
-                    } catch(e){}
-                }
+                if (t.shareId && !existing.shareId) existing.shareId = t.shareId;
+                if (t.isUserCreated) existing.isUserCreated = true;
+                if (t.isJoinedViaLink) existing.isJoinedViaLink = true;
             }
         });
 
-        const result = Array.from(mergedMap.values());
-        if (!result.some(t => getTeamCanonicalKey(t) === 'sekta')) {
-            result.unshift(JSON.parse(JSON.stringify(DEFAULT_TEAMS[0])));
-        }
-        if (!result.some(t => getTeamCanonicalKey(t) === 'akatemia')) {
-            const sIdx = result.findIndex(t => getTeamCanonicalKey(t) === 'sekta');
-            if (sIdx !== -1) result.splice(sIdx + 1, 0, JSON.parse(JSON.stringify(DEFAULT_TEAMS[1])));
-            else result.push(JSON.parse(JSON.stringify(DEFAULT_TEAMS[1])));
-        }
-        return result;
+        return Array.from(mergedMap.values());
     }
 
     const CANONICAL_CLOUD_SHARE_IDS = ['st_team_sekta', 'st_team_akatemia', 'st_team_edustus', 'st_team_junnut'];
@@ -454,16 +466,9 @@
         if (team.shareId === null && team.isShared === false) return false;
         if (String(team.id || '').startsWith('local_')) return false;
 
-        if (CANONICAL_CLOUD_TEAM_IDS.includes(team.id)) return true;
-        if (team.shareId && CANONICAL_CLOUD_SHARE_IDS.includes(team.shareId)) return true;
+        if (team.shareId && (team.isShared === true || team.cloudSynced === true || team.isJoinedViaLink === true)) return true;
         if (currentSharedTeamId && (team.shareId === currentSharedTeamId || team.id === 'shared_' + currentSharedTeamId)) return true;
         if (String(team.id).startsWith('shared_')) return true;
-        
-        const nameLow = (team.name || '').toLowerCase();
-        if (nameLow === 'sekta' || nameLow === 'fbc akatemia' || nameLow === 'akatemia' || nameLow === 'edustusjoukkue') {
-            return true;
-        }
-        if (team.isShared === true || team.cloudSynced === true) return true;
         return false;
     }
 
@@ -500,12 +505,7 @@
         }
     }
 
-    const DEFAULT_TEAMS = [
-        { id: 'team_sekta', name: 'SekTa', shareId: 'st_team_sekta', isShared: true, cloudSynced: true, logo: 'sekta-logo.png', photo: 'sekta-logo.png', primaryColor: '#6b5bd7', secondaryColor: '#f2a24a', mvColor: '#10b981', eventsUrl: 'https://sekta.nimenhuuto.com/events', nimenhuutoUrl: 'https://sekta.nimenhuuto.com/events' },
-        { id: 'team_akatemia', name: 'FBC Akatemia', shareId: 'st_team_akatemia', isShared: true, cloudSynced: true, logo: '🦅', primaryColor: '#dc2626', secondaryColor: '#991b1b', mvColor: '#10b981' },
-        { id: 'team_edustus', name: 'Edustusjoukkue', shareId: 'st_team_edustus', isShared: true, cloudSynced: true, logo: '🦁', primaryColor: '#2563eb', secondaryColor: '#1e40af', mvColor: '#10b981' },
-        { id: 'team_junnut', name: 'A-Juniorit', shareId: 'st_team_junnut', isShared: true, cloudSynced: true, logo: '⚡', primaryColor: '#dc2626', secondaryColor: '#991b1b', mvColor: '#eab308' }
-    ];
+    const DEFAULT_TEAMS = [];
 
     const DEFAULT_AKATEMIA_ROSTER = [
         // 🟢 Maalivahdit
@@ -708,37 +708,31 @@
         try {
             const rawDel = localStorage.getItem('salibandy_deleted_team_ids');
             deletedTeamIds = rawDel ? JSON.parse(rawDel) : [];
-            if (Array.isArray(deletedTeamIds)) {
-                deletedTeamIds = deletedTeamIds.filter(id => {
-                    if (!id) return false;
-                    const low = String(id).toLowerCase();
-                    const isSekta = low === 'team_sekta' || low === 'default_team' || low.includes('sekta');
-                    const isAkatemia = low === 'team_akatemia' || low === 'team_fbc_akatemia' || low === 'team_1786787084772' || low.includes('akatemia');
-                    return !isSekta && !isAkatemia;
-                });
-                localStorage.setItem('salibandy_deleted_team_ids', JSON.stringify(deletedTeamIds));
-            }
 
             const rawTeams = localStorage.getItem('salibandy_teams_v1');
             let parsedTeams = null;
             try { parsedTeams = rawTeams ? JSON.parse(rawTeams) : null; } catch(e){}
-            teams = deduplicateTeams(parsedTeams);
-            localStorage.setItem('salibandy_teams_v1', JSON.stringify(teams));
 
             // Check if URL has ?teamShare=
             const urlParams = (typeof window !== 'undefined' && window.location.search) ? new URLSearchParams(window.location.search) : null;
             const urlShareId = urlParams ? urlParams.get('teamShare') : null;
 
+            teams = deduplicateTeams(parsedTeams);
+            teams = filterPermittedTeams(teams, urlShareId);
+            localStorage.setItem('salibandy_teams_v1', JSON.stringify(teams));
+
             if (urlShareId) {
                 currentSharedTeamId = urlShareId;
-                const normKey = normalizeTeamKey(urlShareId);
-                const existing = teams.find(t => t.shareId === urlShareId || (normKey && normalizeTeamKey(t.id) === normKey));
+                addJoinedShareId(urlShareId);
+                const existing = teams.find(t => t.shareId === urlShareId || t.id === 'shared_' + urlShareId);
                 if (existing) {
                     currentTeamId = existing.id;
+                    existing.isJoinedViaLink = true;
                 } else {
-                    const placeholderTeam = { id: 'shared_' + urlShareId, name: '🤝 Jaettu joukkue', shareId: urlShareId };
+                    const placeholderTeam = { id: 'shared_' + urlShareId, name: '🤝 Jaettu joukkue', shareId: urlShareId, isShared: true, cloudSynced: true, isJoinedViaLink: true };
                     teams.push(placeholderTeam);
                     currentTeamId = placeholderTeam.id;
+                    localStorage.setItem('salibandy_teams_v1', JSON.stringify(teams));
                 }
             } else if (targetTeamId && teams.some(t => t.id === targetTeamId)) {
                 currentTeamId = targetTeamId;
@@ -750,19 +744,31 @@
                     currentTeamId = storedId;
                 } else if (currentTeamId && teams.some(t => t.id === currentTeamId)) {
                     // Keep in-memory
-                } else {
+                } else if (teams.length > 0) {
                     currentTeamId = teams[0].id;
+                } else {
+                    currentTeamId = null;
                 }
             }
 
-            if (normalizeTeamKey(currentTeamId) === 'sekta') {
-                currentTeamId = 'team_sekta';
-            } else if (normalizeTeamKey(currentTeamId) === 'akatemia') {
-                currentTeamId = 'team_akatemia';
-            } else if (!teams.some(t => t.id === currentTeamId) || (typeof currentTeamId === 'string' && currentTeamId.startsWith('data:'))) {
-                currentTeamId = teams[0].id;
+            if (currentTeamId) {
+                localStorage.setItem('salibandy_active_team_id', JSON.stringify(currentTeamId));
+            } else {
+                localStorage.removeItem('salibandy_active_team_id');
             }
-            localStorage.setItem('salibandy_active_team_id', JSON.stringify(currentTeamId));
+
+            if (!currentTeamId || teams.length === 0) {
+                roster = [];
+                lineups = createEmptyCanonicalLineups();
+                lineupReserves = {};
+                teamEvents = [];
+                activeEventId = null;
+                defaultLineups = createEmptyCanonicalLineups();
+                defaultReserves = {};
+                eventLineups = {};
+                eventReserves = {};
+                return;
+            }
 
             const curTeam = teams.find(t => t.id === currentTeamId);
             const isSektaTeam = currentTeamId === 'default_team' || currentTeamId === 'team_sekta' || (curTeam && (curTeam.name || '').toLowerCase().includes('sekta'));
@@ -787,83 +793,11 @@
 
             const rawRoster = localStorage.getItem('salibandy_roster_' + currentTeamId);
             roster = rawRoster ? JSON.parse(rawRoster) : [];
-            const isRosterInit = localStorage.getItem('salibandy_roster_initialized_' + currentTeamId);
 
             // Filter out any players that have been deleted
             const deleted = getDeletedPlayerIds(currentTeamId);
             if (Array.isArray(roster) && deleted.length > 0) {
                 roster = roster.filter(p => p && !deleted.includes(p.id));
-            }
-
-            // ONLY provide default SekTa/Akatemia roster if current team has NEVER been initialized
-            if (!isRosterInit && (!roster || roster.length === 0)) {
-                if (isSektaTeam) {
-                    const altRoster1 = localStorage.getItem('salibandy_roster_default_team');
-                    const altRoster2 = localStorage.getItem('salibandy_roster_team_sekta');
-                    if (altRoster1 && JSON.parse(altRoster1).length > 0) {
-                        roster = JSON.parse(altRoster1);
-                    } else if (altRoster2 && JSON.parse(altRoster2).length > 0) {
-                        roster = JSON.parse(altRoster2);
-                    } else {
-                        roster = [
-                            { id: 'p_mv23', name: 'Matias V', number: 23, position: 'MV' },
-                            { id: 'p_mv45', name: 'Jussi V', number: 45, position: 'MV' },
-                            { id: 'p_mv7', name: 'Sami P', number: 7, position: 'MV' },
-                            { id: 'p_mv3', name: 'Mika A', number: 3, position: 'MV' },
-                            { id: 'p_19', name: 'Aaltonen', number: 19, position: 'VP' },
-                            { id: 'p_20', name: 'Veikka', number: 20, position: 'OP' },
-                            { id: 'p_42', name: 'Henri K', number: 42, position: 'KH' },
-                            { id: 'p_64', name: 'Onni V', number: 64, position: 'VH' },
-                            { id: 'p_71', name: 'Masto', number: 71, position: 'VP' },
-                            { id: 'p_4', name: 'Joona R', number: 4, position: 'OP' },
-                            { id: 'p_55', name: 'Vesa H', number: 55, position: 'KH' },
-                            { id: 'p_11', name: 'Juki', number: 11, position: 'VH' },
-                            { id: 'p_2', name: 'Nikou', number: 2, position: 'OH' },
-                            { id: 'p_88', name: 'Jerker B', number: 88, position: 'OH' },
-                            { id: 'p_21', name: 'Niko A', number: 21, position: 'VH' },
-                            { id: 'p_13', name: 'Joni V', number: 13, position: 'OH' },
-                            { id: 'p_10', name: 'Eino A', number: 10, position: 'KH' },
-                            { id: 'p_15', name: 'Akseli', number: 15, position: 'VH' },
-                            { id: 'p_22', name: 'Petri V', number: 22, position: 'VP' },
-                            { id: 'p_87', name: 'Heikki H', number: 87, position: 'OH' },
-                            { id: 'p_44', name: 'Jesse', number: 44, position: 'H' },
-                            { id: 'p_62', name: 'Ilmari O', number: 62, position: 'H' },
-                            { id: 'p_66', name: 'Miika', number: 66, position: 'H' }
-                        ];
-                    }
-                    if (deleted.length > 0) {
-                        roster = roster.filter(p => p && !deleted.includes(p.id));
-                    }
-                    localStorage.setItem('salibandy_roster_' + currentTeamId, JSON.stringify(roster));
-                    localStorage.setItem('salibandy_roster_initialized_' + currentTeamId, '1');
-                } else if (isAkatemiaTeam) {
-                    const altKeys = ['salibandy_roster_team_akatemia', 'salibandy_roster_team_fbc_akatemia', 'salibandy_roster_team_1786787084772'];
-                    for (const k of altKeys) {
-                        if (k === 'salibandy_roster_' + currentTeamId) continue;
-                        const alt = localStorage.getItem(k);
-                        if (alt) {
-                            try {
-                                const parsed = JSON.parse(alt);
-                                if (Array.isArray(parsed) && parsed.length > 0) {
-                                    roster = parsed;
-                                    break;
-                                }
-                            } catch(e){}
-                        }
-                    }
-                    if (!roster || roster.length === 0) {
-                        roster = JSON.parse(JSON.stringify(DEFAULT_AKATEMIA_ROSTER));
-                    }
-                    if (deleted.length > 0) {
-                        roster = roster.filter(p => p && !deleted.includes(p.id));
-                    }
-                    localStorage.setItem('salibandy_roster_' + currentTeamId, JSON.stringify(roster));
-                    localStorage.setItem('salibandy_roster_initialized_' + currentTeamId, '1');
-                } else {
-                    roster = [];
-                }
-            } else if (roster && roster.length > 0) {
-                localStorage.setItem('salibandy_roster_initialized_' + currentTeamId, '1');
             }
 
             // In Simple mode: ONLY canonical lineups exist (1-4, 2x YV, 2x AV, 2x 6vs5).
@@ -872,66 +806,9 @@
             // 1. Load team events
             const rawEvents = localStorage.getItem('salibandy_events_' + currentTeamId);
             teamEvents = rawEvents ? JSON.parse(rawEvents) : [];
-            const isDummy = (evs) => !Array.isArray(evs) || evs.length === 0 || (evs.length === 1 && (evs[0].id === 'default_event_1' || (evs[0].title || '').includes('Seuraava')));
-
-            if (isDummy(teamEvents)) {
-                if (isSektaTeam) {
-                    const altEvents1 = localStorage.getItem('salibandy_events_default_team');
-                    const altEvents2 = localStorage.getItem('salibandy_events_team_sekta');
-                    const p1 = altEvents1 ? JSON.parse(altEvents1) : null;
-                    const p2 = altEvents2 ? JSON.parse(altEvents2) : null;
-                    if (Array.isArray(p1) && !isDummy(p1)) {
-                        teamEvents = p1;
-                    } else if (Array.isArray(p2) && !isDummy(p2)) {
-                        teamEvents = p2;
-                    } else {
-                        teamEvents = JSON.parse(JSON.stringify(DEFAULT_SEKTA_EVENTS));
-                    }
-                    try {
-                        localStorage.setItem('salibandy_events_' + currentTeamId, JSON.stringify(teamEvents));
-                    } catch(e){}
-                } else if (isAkatemiaTeam) {
-                    const altKeys = ['salibandy_events_team_akatemia', 'salibandy_events_team_fbc_akatemia', 'salibandy_events_team_1786787084772'];
-                    for (const ak of altKeys) {
-                        if (ak === 'salibandy_events_' + currentTeamId) continue;
-                        const alt = localStorage.getItem(ak);
-                        if (alt) {
-                            try {
-                                const parsed = JSON.parse(alt);
-                                if (Array.isArray(parsed) && !isDummy(parsed)) {
-                                    teamEvents = parsed;
-                                    break;
-                                }
-                            } catch(e){}
-                        }
-                    }
-                }
-            }
-
-            if (isDummy(teamEvents)) {
-                if (isSektaTeam) {
-                    teamEvents = JSON.parse(JSON.stringify(DEFAULT_SEKTA_EVENTS));
-                } else {
-                    teamEvents = [
-                        {
-                            id: 'event_' + Date.now(),
-                            title: 'Seuraava Tapahtuma',
-                            date: 'Klo 19:00',
-                            location: 'Kotiareena',
-                            attendees: {}
-                        }
-                    ];
-                }
-                try {
-                    localStorage.setItem('salibandy_events_' + currentTeamId, JSON.stringify(teamEvents));
-                } catch(e){}
-            }
 
             // 2. Resolve activeEventId (supports '__default__' or event id)
             let rawActiveEvent = localStorage.getItem('salibandy_active_event_id_' + currentTeamId);
-            if (!rawActiveEvent && isSektaTeam) {
-                rawActiveEvent = localStorage.getItem('salibandy_active_event_id_team_sekta') || localStorage.getItem('salibandy_active_event_id_default_team');
-            }
             try {
                 const parsedAct = rawActiveEvent ? JSON.parse(rawActiveEvent) : null;
                 if (parsedAct === '__default__') {
@@ -978,62 +855,8 @@
             ensureCanonicalLineups(defaultLineups);
             purgeDeletedPlayers(defaultLineups, defaultReserves, deleted);
 
-            // Seed initial starters if default lineups have never been initialized
-            const isDefInit = localStorage.getItem('salibandy_default_lineups_initialized_' + currentTeamId);
-            const isAnyDefAssigned = Object.values(defaultLineups).some(l => Object.values(l || {}).some(Boolean));
-            if (!isDefInit && !isAnyDefAssigned && roster.length >= 12 && isSektaTeam) {
-                defaultLineups['1'] = { MV: 'p_mv23', VP: 'p_19', OP: 'p_20', VH: 'p_11', KH: 'p_42', OH: 'p_64' };
-                defaultLineups['2'] = { MV: 'p_mv45', VP: 'p_71', OP: 'p_4', VH: 'p_21', KH: 'p_55', OH: 'p_2' };
-                if (!defaultReserves['1']) defaultReserves['1'] = ['p_88'];
-                localStorage.setItem('salibandy_default_lineups_' + currentTeamId, JSON.stringify(defaultLineups));
-                localStorage.setItem('salibandy_default_lineups_initialized_' + currentTeamId, '1');
-            } else if (!isDefInit && !isAnyDefAssigned && isAkatemiaTeam) {
-                const altKeys = ['salibandy_default_lineups_team_akatemia', 'salibandy_lineups_team_akatemia', 'salibandy_lineups_team_fbc_akatemia', 'salibandy_lineups_team_1786787084772'];
-                for (const k of altKeys) {
-                    if (k === 'salibandy_default_lineups_' + currentTeamId || k === 'salibandy_lineups_' + currentTeamId) continue;
-                    const alt = localStorage.getItem(k);
-                    if (alt) {
-                        try {
-                            const parsed = JSON.parse(alt);
-                            if (parsed && parsed['1'] && Object.values(parsed['1']).some(Boolean)) {
-                                defaultLineups = parsed;
-                                break;
-                            }
-                        } catch(e){}
-                    }
-                }
-                if (!Object.values(defaultLineups['1'] || {}).some(Boolean)) {
-                    defaultLineups['1'] = {
-                        MV: 'p_ocr_1786787489945_1',
-                        VP: 'p_ocr_1786787489945_7',
-                        OP: 'p_ocr_1786787489945_8',
-                        VH: 'p_ocr_1786787489945_0',
-                        KH: 'p_ocr_1786787489945_2',
-                        OH: 'p_ocr_1786787489945_6'
-                    };
-                    defaultLineups['2'] = {
-                        MV: '',
-                        VP: 'p_ocr_1786787489945_3',
-                        OP: 'p_ocr_1786787489945_4',
-                        VH: 'p_ocr_1786787489945_5',
-                        KH: 'p_ocr_1786787489945_9',
-                        OH: 'p_ocr_1786787489945_10'
-                    };
-                    defaultLineups['yv1'] = {
-                        MV: '',
-                        VP: 'p_ocr_1786787489945_7',
-                        OP: 'p_ocr_1786787489945_8',
-                        VH: 'p_ocr_1786787489945_0',
-                        KH: 'p_ocr_1786787489945_2',
-                        OH: 'p_ocr_1786787489945_6'
-                    };
-                    if (!defaultReserves['1']) defaultReserves['1'] = ['p_1789731527753'];
-                }
-                localStorage.setItem('salibandy_default_lineups_' + currentTeamId, JSON.stringify(defaultLineups));
-                localStorage.setItem('salibandy_default_lineups_initialized_' + currentTeamId, '1');
-            }
-
             // 4. Load Event Lineups & Event Reserves
+            const isAnyDefAssigned = Object.values(defaultLineups).some(l => Object.values(l || {}).some(Boolean));
             const rawEventLineups = localStorage.getItem('salibandy_event_lineups_' + currentTeamId);
             if (rawEventLineups) {
                 try { eventLineups = JSON.parse(rawEventLineups); } catch(e) { eventLineups = {}; }
@@ -1967,20 +1790,22 @@
         const teamShareId = params ? params.get('teamShare') : null;
         if (teamShareId) {
             currentSharedTeamId = teamShareId;
-            const normKey = normalizeTeamKey(teamShareId);
-            let matchedTeam = teams.find(t => t.shareId === teamShareId || (normKey && normalizeTeamKey(t.id) === normKey));
+            addJoinedShareId(teamShareId);
+            let matchedTeam = teams.find(t => t.shareId === teamShareId || t.id === 'shared_' + teamShareId);
             if (matchedTeam) {
                 currentTeamId = matchedTeam.id;
                 matchedTeam.isShared = true;
                 matchedTeam.cloudSynced = true;
+                matchedTeam.isJoinedViaLink = true;
                 matchedTeam.shareId = teamShareId;
             } else {
                 matchedTeam = {
-                    id: (normKey === 'sekta') ? 'team_sekta' : ((normKey === 'akatemia') ? 'team_akatemia' : ('shared_' + teamShareId)),
-                    name: 'Jaettu joukkue',
+                    id: 'shared_' + teamShareId,
+                    name: '🤝 Jaettu joukkue',
                     shareId: teamShareId,
                     isShared: true,
-                    cloudSynced: true
+                    cloudSynced: true,
+                    isJoinedViaLink: true
                 };
                 teams.push(matchedTeam);
                 currentTeamId = matchedTeam.id;
@@ -1992,10 +1817,9 @@
             listenToSharedTeamFirestore(teamShareId);
         } else {
             const curTeam = teams.find(t => t.id === currentTeamId);
-            const shareIdToListen = getCanonicalShareId(currentTeamId, curTeam);
-            if (shareIdToListen) {
-                currentSharedTeamId = shareIdToListen;
-                listenToSharedTeamFirestore(shareIdToListen);
+            if (curTeam && curTeam.shareId && (curTeam.isShared || curTeam.isJoinedViaLink || curTeam.cloudSynced)) {
+                currentSharedTeamId = curTeam.shareId;
+                listenToSharedTeamFirestore(curTeam.shareId);
             }
         }
     }
@@ -2087,7 +1911,7 @@
         renderAll(true);
 
         const selectedTeam = teams.find(t => t.id === currentTeamId);
-        const shareIdToListen = getCanonicalShareId(currentTeamId, selectedTeam);
+        const shareIdToListen = (selectedTeam && selectedTeam.shareId && (selectedTeam.isShared || selectedTeam.isJoinedViaLink || selectedTeam.cloudSynced)) ? selectedTeam.shareId : null;
         if (shareIdToListen) {
             currentSharedTeamId = shareIdToListen;
             listenToSharedTeamFirestore(shareIdToListen);
@@ -2161,48 +1985,102 @@
         showToast(`✨ Luotu oma lokaali kopio: "${newTeamName}"! Voit tehdä muutoksia vapaasti, ne eivät näy muille.`);
     }
 
-    function deleteActiveTeam() {
-        if (teams.length <= 1) {
-            showToast('Et voi poistaa ainoaa joukkuetta.', 'warning');
+    function promptCreateNewTeam() {
+        const name = prompt('Anna uuden joukkueen nimi:');
+        if (name && name.trim()) {
+            createNewTeam(name.trim());
+        }
+    }
+
+    function createNewTeam(cleanName) {
+        saveToStorageLocalOnly();
+        const newTeamId = 'team_' + Date.now();
+        const newTeam = {
+            id: newTeamId,
+            name: cleanName,
+            logo: '🏑',
+            primaryColor: '#2563eb',
+            secondaryColor: '#1e40af',
+            mvColor: '#10b981',
+            isUserCreated: true,
+            isShared: false,
+            cloudSynced: false
+        };
+        teams.push(newTeam);
+        currentTeamId = newTeamId;
+        localStorage.setItem('salibandy_teams_v1', JSON.stringify(teams));
+        localStorage.setItem('salibandy_active_team_id', JSON.stringify(currentTeamId));
+        localStorage.setItem('salibandy_user_added_players_' + newTeamId, 'true');
+
+        roster = [];
+        lineups = createEmptyCanonicalLineups();
+        lineupReserves = {};
+        teamEvents = [];
+        activeEventId = '__default__';
+        defaultLineups = createEmptyCanonicalLineups();
+        defaultReserves = {};
+        eventLineups = {};
+        eventReserves = {};
+
+        saveState();
+        renderAll(true);
+        showToast(`Uusi joukkue '${cleanName}' luotu! 🎉`);
+    }
+
+    function promptJoinTeamByLink() {
+        const input = prompt('Liity jaettuun joukkueeseen:\nSyötä valmentajan jakolinkki tai jakokoodi (esim. https://kokoonpano.web.app/?teamShare=st_team_... tai st_team_...):');
+        if (input && input.trim()) {
+            joinTeamByShareCode(input.trim());
+        }
+    }
+
+    function joinTeamByShareCode(rawInput) {
+        if (!rawInput) return;
+        let shareId = rawInput.trim();
+        try {
+            if (shareId.includes('teamShare=')) {
+                const url = new URL(shareId.startsWith('http') ? shareId : ('https://dummy.local/' + shareId));
+                shareId = url.searchParams.get('teamShare') || shareId;
+            }
+        } catch(e){}
+
+        shareId = shareId.replace(/[^a-zA-Z0-9_-]/g, '');
+        if (!shareId) {
+            showToast('Virheellinen jakolinkki tai koodi.', 'error');
             return;
         }
 
+        addJoinedShareId(shareId);
+        currentSharedTeamId = shareId;
+
+        let existing = teams.find(t => t.shareId === shareId);
+        if (!existing) {
+            existing = {
+                id: 'shared_' + shareId,
+                name: '🤝 Jaettu joukkue',
+                shareId: shareId,
+                isShared: true,
+                cloudSynced: true,
+                isJoinedViaLink: true
+            };
+            teams.push(existing);
+            localStorage.setItem('salibandy_teams_v1', JSON.stringify(teams));
+        }
+        currentTeamId = existing.id;
+        localStorage.setItem('salibandy_active_team_id', JSON.stringify(currentTeamId));
+
+        loadState(currentTeamId);
+        renderAll(true);
+        listenToSharedTeamFirestore(shareId);
+        showToast(`Liitytty joukkueeseen (${shareId})! Ladataan pilvestä... 🔄`);
+    }
+
+    function deleteActiveTeam() {
         const team = teams.find(t => t.id === currentTeamId);
         if (!team) return;
 
-        const isLocalDraft = isLocalDraftTeam(team);
-        const canonKey = getTeamCanonicalKey(team);
-
-        if (isLocalDraft) {
-            if (!confirm(`Haluatko varmasti poistaa lokaalin luonnosjoukkueen '${team.name}' kaikkine pelaajineen ja kentällisineen?`)) {
-                return;
-            }
-        } else if (canonKey === 'sekta') {
-            const otherSekta = teams.filter(t => t.id !== currentTeamId && getTeamCanonicalKey(t) === 'sekta');
-            if (otherSekta.length > 0) {
-                if (!confirm(`Haluatko poistaa tämän ylimääräisen SekTa-joukkueen?`)) {
-                    return;
-                }
-            } else {
-                if (!confirm(`SekTa on pääjoukkue. Haluatko varmasti poistaa sen listalta? (Voit luoda sen tai liittyä siihen myöhemmin uudestaan).`)) {
-                    return;
-                }
-            }
-        } else if (canonKey === 'akatemia') {
-            const otherAkatemia = teams.filter(t => t.id !== currentTeamId && getTeamCanonicalKey(t) === 'akatemia');
-            if (otherAkatemia.length > 0) {
-                if (!confirm(`Haluatko poistaa tämän ylimääräisen Akatemia-joukkueen?`)) {
-                    return;
-                }
-            } else {
-                if (!confirm(`Haluatko varmasti poistaa joukkueen '${team.name}'?`)) {
-                    return;
-                }
-            }
-        } else {
-            if (!confirm(`Haluatko varmasti poistaa joukkueen '${team.name}' kaikkine pelaajineen ja kentällisineen?`)) {
-                return;
-            }
+        if (!confirm(`Haluatko varmasti poistaa joukkueen '${team.name}' kaikkine pelaajineen ja kentällisineen?`)) {
+            return;
         }
 
         const deleteId = currentTeamId;
@@ -2214,26 +2092,21 @@
         }
 
         // 2. Add to deletedTeamIds
-        if (!isLocalDraft) {
-            if (!deletedTeamIds.includes(deleteId)) {
-                deletedTeamIds.push(deleteId);
-            }
-            if (team.shareId) {
-                if (!deletedTeamIds.includes('shared_' + team.shareId)) {
-                    deletedTeamIds.push('shared_' + team.shareId);
-                }
-                if (!deletedTeamIds.includes(team.shareId)) {
-                    deletedTeamIds.push(team.shareId);
-                }
-            }
-            localStorage.setItem('salibandy_deleted_team_ids', JSON.stringify(deletedTeamIds));
+        if (!deletedTeamIds.includes(deleteId)) {
+            deletedTeamIds.push(deleteId);
         }
+        if (team.shareId) {
+            if (!deletedTeamIds.includes('shared_' + team.shareId)) {
+                deletedTeamIds.push('shared_' + team.shareId);
+            }
+            if (!deletedTeamIds.includes(team.shareId)) {
+                deletedTeamIds.push(team.shareId);
+            }
+        }
+        localStorage.setItem('salibandy_deleted_team_ids', JSON.stringify(deletedTeamIds));
 
         // 3. Filter teams
         teams = teams.filter(t => t.id !== deleteId);
-        if (teams.length === 0) {
-            teams = JSON.parse(JSON.stringify(DEFAULT_TEAMS));
-        }
         localStorage.setItem('salibandy_teams_v1', JSON.stringify(teams));
 
         // 4. Remove localStorage items
@@ -2246,8 +2119,18 @@
         localStorage.removeItem(`salibandy_default_reserves_${deleteId}`);
         localStorage.removeItem(`salibandy_event_lineups_${deleteId}`);
         localStorage.removeItem(`salibandy_event_reserves_${deleteId}`);
+        localStorage.removeItem(`salibandy_user_added_players_${deleteId}`);
 
-        // 5. Select next team
+        // 5. Select next team or set to null if no teams left
+        if (teams.length === 0) {
+            currentTeamId = null;
+            localStorage.removeItem('salibandy_active_team_id');
+            loadState();
+            renderAll(true);
+            showToast(`🗑️ Joukkue '${team.name}' poistettu.`);
+            return;
+        }
+
         const nextTeamId = teams[0].id;
         switchTeam(nextTeamId);
 
@@ -2442,6 +2325,46 @@
     function renderTeamHeader() {
         if (!teamSelect) return;
         teamSelect.innerHTML = '';
+
+        if (!teams || teams.length === 0 || !currentTeamId) {
+            const emptyOpt = document.createElement('option');
+            emptyOpt.value = '';
+            emptyOpt.textContent = '(Ei joukkueita)';
+            teamSelect.appendChild(emptyOpt);
+
+            const addOpt = document.createElement('option');
+            addOpt.value = '__new_team__';
+            addOpt.textContent = '➕ Luo uusi joukkue...';
+            teamSelect.appendChild(addOpt);
+
+            const joinOpt = document.createElement('option');
+            joinOpt.value = '__join_team__';
+            joinOpt.textContent = '🔗 Liity linkillä...';
+            teamSelect.appendChild(joinOpt);
+
+            const btnDel = document.getElementById('btn-simple-delete-team');
+            if (btnDel) btnDel.style.display = 'none';
+            const btnCopy = document.getElementById('btn-simple-copy-local');
+            if (btnCopy) btnCopy.style.display = 'none';
+            const btnShare = document.getElementById('btn-simple-share');
+            if (btnShare) btnShare.style.display = 'none';
+            if (teamLogoBadge) {
+                teamLogoBadge.innerHTML = '🏑';
+                teamLogoBadge.style.cursor = 'default';
+                teamLogoBadge.title = 'Ei valittua joukkuetta';
+            }
+            const syncBadge = document.getElementById('simple-team-sync-badge');
+            if (syncBadge) syncBadge.innerHTML = '';
+            return;
+        }
+
+        const btnDel = document.getElementById('btn-simple-delete-team');
+        if (btnDel) btnDel.style.display = '';
+        const btnCopy = document.getElementById('btn-simple-copy-local');
+        if (btnCopy) btnCopy.style.display = '';
+        const btnShare = document.getElementById('btn-simple-share');
+        if (btnShare) btnShare.style.display = '';
+
         const seenKeys = new Set();
         teams.forEach(t => {
             if (!t || !t.id || deletedTeamIds.includes(t.id)) return;
@@ -2469,6 +2392,11 @@
         addOpt.textContent = '➕ Uusi joukkue...';
         teamSelect.appendChild(addOpt);
 
+        const joinOpt = document.createElement('option');
+        joinOpt.value = '__join_team__';
+        joinOpt.textContent = '🔗 Liity linkillä...';
+        teamSelect.appendChild(joinOpt);
+
         const curTeam = teams.find(t => t.id === currentTeamId) || teams[0];
         if (curTeam) {
             if (curTeam.primaryColor) {
@@ -2481,7 +2409,7 @@
             // Update prominent Cloud vs Local indicator badge in header
             renderTeamSyncBadge(curTeam, 'simple-team-sync-badge');
         }
-        if (teamLogoBadge) {
+        if (teamLogoBadge && curTeam) {
             teamLogoBadge.style.cursor = 'pointer';
             teamLogoBadge.title = 'Muokkaa joukkueen ilmettä ja värejä 🎨';
             if (isImageLogo(curTeam.logo)) {
@@ -2500,13 +2428,15 @@
         if (!eventSelect) return;
         eventSelect.innerHTML = '';
 
-        if (!teamEvents || teamEvents.length === 0) {
-            const curTeam = teams.find(t => t.id === currentTeamId);
-            const isSektaTeam = currentTeamId === 'default_team' || currentTeamId === 'team_sekta' || (curTeam && (curTeam.name || '').toLowerCase().includes('sekta'));
-            if (isSektaTeam) {
-                teamEvents = JSON.parse(JSON.stringify(DEFAULT_SEKTA_EVENTS));
-                activeEventId = teamEvents[0]?.id || '__default__';
-            }
+        if (!currentTeamId || !teams || teams.length === 0) {
+            const noOpt = document.createElement('option');
+            noOpt.value = '';
+            noOpt.textContent = '(Ei tapahtumia)';
+            eventSelect.appendChild(noOpt);
+            renderStatsBar({ isEmpty: true });
+            const emptyBanner = document.getElementById('simple-empty-event-banner');
+            if (emptyBanner) emptyBanner.style.display = 'none';
+            return;
         }
 
         // 1. Always provide ⭐ Oletuskentälliset (Peruspohja)
@@ -2796,6 +2726,12 @@
 
     function renderLineupTabs() {
         if (!lineupNavBar) return;
+        if (!currentTeamId || !teams || teams.length === 0) {
+            lineupNavBar.innerHTML = '';
+            lineupNavBar.style.display = 'none';
+            return;
+        }
+        lineupNavBar.style.display = '';
         lineupNavBar.innerHTML = '';
 
         const isAllActive = (activeLineupTab !== 'yv_av' && activeLineupTab !== 'special' && activeLineupTab !== '6v5');
@@ -2911,6 +2847,37 @@
 
     function renderLineupCards() {
         if (!lineupCardContainer) return;
+
+        if (!currentTeamId || !teams || teams.length === 0) {
+            lineupCardContainer.style.display = 'block';
+            lineupCardContainer.innerHTML = `
+                <div class="empty-state-welcome-card">
+                    <div class="welcome-icon">🏑</div>
+                    <h2 class="welcome-title">Tervetuloa Salibandyn Kentälliset -sovellukseen!</h2>
+                    <p class="welcome-desc">Sinulla ei ole vielä yhtään joukkuetta. Aloita luomalla oma joukkueesi tai liity valmentajan jakamaan joukkueeseen jakolinkillä tai koodilla.</p>
+                    <div class="welcome-actions">
+                        <button type="button" class="btn-welcome-primary" id="btn-welcome-new-team">➕ Luo uusi joukkue</button>
+                        <button type="button" class="btn-welcome-secondary" id="btn-welcome-join-team">🔗 Liity jaettuun joukkueeseen</button>
+                    </div>
+                </div>
+            `;
+            document.getElementById('btn-welcome-new-team')?.addEventListener('click', promptCreateNewTeam);
+            document.getElementById('btn-welcome-join-team')?.addEventListener('click', promptJoinTeamByLink);
+
+            if (lineupNavBar) lineupNavBar.style.display = 'none';
+            const rosterCard = rosterListContainer?.closest('.roster-card');
+            if (rosterCard) rosterCard.style.display = 'none';
+            const toolsRow = document.querySelector('.tools-row');
+            if (toolsRow) toolsRow.style.display = 'none';
+            return;
+        } else {
+            if (lineupNavBar) lineupNavBar.style.display = '';
+            const rosterCard = rosterListContainer?.closest('.roster-card');
+            if (rosterCard) rosterCard.style.display = '';
+            const toolsRow = document.querySelector('.tools-row');
+            if (toolsRow) toolsRow.style.display = '';
+        }
+
         if (simpleViewMode === 'rink') {
             lineupCardContainer.style.display = 'none';
             renderSimpleVisualRink();
@@ -3723,6 +3690,9 @@
 
             if (isNew) {
                 roster.push(pData);
+                if (currentTeamId) {
+                    localStorage.setItem('salibandy_user_added_players_' + currentTeamId, 'true');
+                }
                 showToast(`Pelaaja #${pData.number} ${pData.name} lisätty! 🎉`);
             } else {
                 const idx = roster.findIndex(p => p.id === pData.id);
@@ -3740,6 +3710,10 @@
 
     function renderRosterList() {
         if (!rosterListContainer) return;
+        if (!currentTeamId || !teams || teams.length === 0) {
+            rosterListContainer.innerHTML = '';
+            return;
+        }
         rosterListContainer.innerHTML = '';
         updateRosterDensityUI();
 
@@ -5148,45 +5122,16 @@ If no number is visible, provide a number or null. Only return the JSON array.`;
         teamSelect?.addEventListener('change', (e) => {
             const val = e.target.value;
             if (val === '__new_team__') {
-                teamSelect.value = currentTeamId;
-                const name = prompt('Anna uuden joukkueen nimi:');
-                if (name && name.trim()) {
-                    saveToStorageLocalOnly();
-                    const newTeamId = 'team_' + Date.now();
-                    const cleanName = name.trim();
-                    const newTeam = {
-                        id: newTeamId,
-                        name: cleanName,
-                        logo: '🏑',
-                        primaryColor: '#2563eb',
-                        shareId: 'st_' + newTeamId
-                    };
-                    teams.push(newTeam);
-                    currentTeamId = newTeamId;
-                    roster = [];
-                    lineups = {};
-                    SIMPLE_LINEUP_CONFIGS.forEach(cfg => {
-                        lineups[cfg.id] = cfg.group === '6v5'
-                            ? { VP: '', OP: '', VH: '', KH: '', OH: '', '6P': '' }
-                            : { MV: '', VP: '', OP: '', VH: '', KH: '', OH: '' };
-                    });
-                    lineupReserves = {};
-                    teamEvents = [
-                        {
-                            id: 'event_' + Date.now(),
-                            title: 'Seuraava Ottelu',
-                            date: 'Klo 19:00',
-                            location: 'Kotiareena',
-                            attendees: {}
-                        }
-                    ];
-                    activeEventId = teamEvents[0].id;
-                    saveState();
-                    renderAll();
-                    showToast(`Uusi joukkue '${cleanName}' luotu! 🎉`);
-                }
+                teamSelect.value = currentTeamId || '';
+                promptCreateNewTeam();
                 return;
             }
+            if (val === '__join_team__') {
+                teamSelect.value = currentTeamId || '';
+                promptJoinTeamByLink();
+                return;
+            }
+            if (!val) return;
 
             switchTeam(val);
         });
